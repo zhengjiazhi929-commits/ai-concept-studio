@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>客户管理 · 本地演示环境</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">本地演示环境 · 虚构数据</p>
+          <h1>客户管理</h1>
+          <p class="subtitle">用于记录 Agentic Coding 的真实任务过程</p>
+        </div>
+        <label class="role-control">
+          当前角色
+          <select id="roleSelect">
+            <option value="admin">管理员</option>
+            <option value="viewer">普通用户</option>
+          </select>
+        </label>
+      </header>
+
+      <section class="summary-grid" aria-label="客户概览">
+        <article><span>客户总数</span><strong id="customerCount">—</strong></article>
+        <article><span>活跃客户</span><strong id="activeCount">—</strong></article>
+        <article><span>导出状态</span><strong id="exportState">未开始</strong></article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <h2>客户列表</h2>
+            <p>数据仅用于教学演示</p>
+          </div>
+          <button id="exportButton" type="button">批量导出客户</button>
+        </div>
+
+        <div id="exportNotice" class="notice" hidden></div>
+        <a id="downloadLink" class="download-link" hidden>下载脱敏 CSV</a>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>客户</th>
+                <th>公司</th>
+                <th>邮箱</th>
+                <th>手机号</th>
+                <th>状态</th>
+              </tr>
+            </thead>
+            <tbody id="customerRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

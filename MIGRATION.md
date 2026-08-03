@@ -17,6 +17,7 @@
 - 系统代码与界面：`studio`
 - 趋势和采集数据：`studio\data`
 - 已生成视频和预览：`outputs`
+- 黄金样例演示项目的原始 Git 历史备份：`backups\agentic-coding-saas-history.bundle`
 - 项目说明：`README.md`、`studio\README.md`、`studio\SYSTEM-CONTRACT.md`
 
 ## 恢复后检查
