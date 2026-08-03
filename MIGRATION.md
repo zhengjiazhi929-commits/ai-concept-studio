@@ -30,3 +30,7 @@ pnpm test
 ```
 
 测试通过后，再双击启动脚本即可。账号登录状态、浏览器 Cookie 和本机 API Key 不会随压缩包迁移，需要在新电脑上重新登录或配置。
+
+## 云端恢复
+
+当 GitHub 与 OneDrive 备份均已配置后，新电脑优先从 GitHub 私有仓库恢复系统代码，再让 OneDrive 同步成片和素材。`studio/config/cloud-backup.local.json` 包含本机 OneDrive 路径，不上传到 GitHub，需要在新电脑上重新配置。页面显示“代码与视频已云端备份”后，才代表两层备份都已成功。

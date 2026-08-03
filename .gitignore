@@ -11,6 +11,10 @@ outputs/
 .env
 .env.*
 !.env.example
+studio/config/cloud-backup.local.json
+
+# Machine-specific cloud backup state
+studio/data/cloud/backup-status.json
 
 # Operating-system files
 .DS_Store

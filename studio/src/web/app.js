@@ -6,6 +6,7 @@ const state = {
   collector: null,
   trends: null,
   research: null,
+  cloud: null,
   busy: false,
   pollTimer: null
 };
@@ -85,7 +86,8 @@ function showToast(message, tone = "info") {
 
 function renderHeader() {
   const badge = document.querySelector("#systemBadge");
-  badge.innerHTML = `<span></span>${state.config ? "系统已连接 · 数据保存在本机" : "连接失败"}`;
+  const message = state.config ? state.cloud?.summary || "正在检查云端备份" : "连接失败";
+  badge.innerHTML = `<span></span>${escapeHtml(message)}`;
   badge.classList.toggle("offline", !state.config);
 }
 
@@ -448,13 +450,14 @@ function renderAll() {
 
 async function refresh({ quiet = false } = {}) {
   try {
-    const [configBody, episodesBody, eventsBody, collectorBody, trendsBody, researchBody] = await Promise.all([
+    const [configBody, episodesBody, eventsBody, collectorBody, trendsBody, researchBody, cloudBody] = await Promise.all([
       api("/api/config"),
       api("/api/episodes"),
       api("/api/events"),
       api("/api/collector"),
       api("/api/trends"),
-      api("/api/research")
+      api("/api/research"),
+      api("/api/cloud")
     ]);
     state.config = configBody;
     state.episodes = episodesBody.episodes;
@@ -462,6 +465,7 @@ async function refresh({ quiet = false } = {}) {
     state.collector = collectorBody;
     state.trends = trendsBody;
     state.research = researchBody;
+    state.cloud = cloudBody;
     if (state.episodes[0]) {
       state.episode = (await api(`/api/episodes/${state.episodes[0].id}`)).episode;
     } else {

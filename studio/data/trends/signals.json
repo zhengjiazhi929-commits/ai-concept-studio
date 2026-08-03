@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-03T09:05:36.294Z",
+  "updatedAt": "2026-08-03T11:58:05.195Z",
   "importedSnapshots": [
     "public-signal-snapshot-2026-08-03",
     "collector-direct-2026-08-03T08-54-46-177Z",
@@ -9,7 +9,8 @@
     "assisted-smoke-20260803",
     "collector-direct-2026-08-03T08-58-52-061Z",
     "collector-direct-2026-08-03T09-02-41-471Z",
-    "collector-direct-2026-08-03T09-05-35-789Z"
+    "collector-direct-2026-08-03T09-05-35-789Z",
+    "collector-direct-2026-08-03T11-57-53-635Z"
   ],
   "signals": [
     {
@@ -777,7 +778,7 @@
       "title": "【AI前沿访谈】别让 AI 聊完就忘：Agent 记忆工程与持久化架构实战",
       "sourceUrl": "https://www.bilibili.com/video/BV1MBTV6gEso/",
       "publishedAt": "2026-06-28T22:04:24.000Z",
-      "observedAt": "2026-08-03T09:05:35.789Z",
+      "observedAt": "2026-08-03T11:57:53.635Z",
       "datePrecision": "page-date",
       "angle": "mechanism",
       "conceptIds": [
@@ -795,7 +796,7 @@
         "danmaku": 0
       },
       "collector": {
-        "batchId": "collector-direct-2026-08-03T09-05-35-789Z",
+        "batchId": "collector-direct-2026-08-03T11-57-53-635Z",
         "normalization": "taxonomy-alias",
         "confidence": 0.82
       }

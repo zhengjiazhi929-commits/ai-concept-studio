@@ -16,6 +16,7 @@ import {
   readRecentEvents
 } from "../shared/store.mjs";
 import { summarizePipeline } from "../shared/schema.mjs";
+import { getCloudBackupStatus } from "../shared/cloud-backup.mjs";
 import { importGoldenSample } from "./importer.mjs";
 import { approveGate, runAgent, runNextReadyAgent } from "./orchestrator.mjs";
 import {
@@ -127,6 +128,11 @@ async function routeApi(request, response, url) {
       autoPublish: config.autoPublish,
       humanGates: config.humanGates
     });
+    return true;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/cloud") {
+    sendJson(response, 200, await getCloudBackupStatus());
     return true;
   }
 

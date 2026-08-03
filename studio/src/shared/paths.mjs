@@ -36,6 +36,14 @@ export const researchEpisodesRoot = resolve(researchDataRoot, "episodes");
 export const researchInboxRoot = resolve(researchDataRoot, "inbox");
 export const researchLatestRunPath = resolve(researchDataRoot, "latest.json");
 export const researchAssistTaskPath = resolve(researchDataRoot, "assist-task.json");
+export const cloudBackupConfigPath = resolve(studioRoot, "config", "cloud-backup.local.json");
+export const cloudBackupExampleConfigPath = resolve(
+  studioRoot,
+  "config",
+  "cloud-backup.example.json"
+);
+export const cloudDataRoot = resolve(dataRoot, "cloud");
+export const cloudBackupStatusPath = resolve(cloudDataRoot, "backup-status.json");
 
 export function episodeResearchDirectory(episodeId) {
   return ensureInside(researchEpisodesRoot, resolve(researchEpisodesRoot, episodeId));

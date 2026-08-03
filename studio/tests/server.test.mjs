@@ -34,6 +34,11 @@ test("本地控制台 API 和视频分段读取可用", async () => {
     assert.equal(Object.hasOwn(research, "selection"), true);
     assert.equal(Object.hasOwn(research, "pack"), true);
 
+    const cloud = await fetch(`${base}/api/cloud`).then((response) => response.json());
+    assert.equal(typeof cloud.summary, "string");
+    assert.equal(typeof cloud.code.configured, "boolean");
+    assert.equal(typeof cloud.media.configured, "boolean");
+
     const video = await fetch(`${base}/outputs/golden-001/preview-v001.mp4`, {
       headers: { range: "bytes=0-127" }
     });

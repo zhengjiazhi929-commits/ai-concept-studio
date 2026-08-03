@@ -57,3 +57,9 @@
 - 36 秒无旁白视觉验证版已由渲染 Agent 真实生成，H.264、尺寸、帧率、时长、像素格式和文件完整性 QA 全部通过；
 - 本地控制台、8 个 Agent 接口、人工闸门、状态恢复和回归测试已落地；
 - 热点采集、热点发现和 Research Agent v0.1 已接入；下一步是在控制台选择正式候选、完成首个非黄金样例证据包，并把脚本 Agent 升级为基于证据生成。
+
+## 云端备份
+
+系统采用分层备份：代码、配置和小型结构化数据进入 GitHub 私有仓库；成片和素材复制到 OneDrive；API Key、Cookie、依赖和临时文件不上传。控制台顶部会显示当前保护状态。
+
+OneDrive 登录后，将 `studio/config/cloud-backup.example.json` 复制为不会进入 Git 的 `studio/config/cloud-backup.local.json`，并把 `mediaRoot` 改为 OneDrive 内的素材目录。随后在 `studio` 目录运行 `npm run cloud:backup` 完成首次全量复制。之后每次渲染完成，系统会自动复制新成片；也可以随时运行 `npm run cloud:status` 检查状态。

@@ -11,6 +11,7 @@ import {
   episodeOutputDirectory
 } from "../shared/paths.mjs";
 import { readConfig } from "../shared/store.mjs";
+import { backupRenderedFile } from "../shared/cloud-backup.mjs";
 
 let cachedBundle = null;
 
@@ -64,10 +65,16 @@ export async function renderPreview(episode, context = {}) {
     }
   });
 
+  const cloudBackup = await backupRenderedFile(outputPath).catch((error) => ({
+    status: "failed",
+    error: error instanceof Error ? error.message : "云端备份失败"
+  }));
+
   return {
     outputPath,
     relativeOutputPath: relative(workspaceRoot, outputPath).replaceAll("\\", "/"),
-    outputRoot: relative(workspaceRoot, studioOutputRoot).replaceAll("\\", "/")
+    outputRoot: relative(workspaceRoot, studioOutputRoot).replaceAll("\\", "/"),
+    cloudBackup
   };
 }
 
