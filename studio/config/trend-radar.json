@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "timezone": "Asia/Shanghai",
+  "windows": {
+    "fastDays": 7,
+    "primaryDays": 14,
+    "extendedDays": 30
+  },
+  "hardGates": {
+    "primaryCreatorCount": 3,
+    "extendedCreatorCount": 5,
+    "fastCreatorCount": 2,
+    "fastRelativePerformance": 1.8,
+    "maxEventShare": 0.5
+  },
+  "scoreWeights": {
+    "creatorCoverage": 35,
+    "audienceFit": 20,
+    "relativePerformance": 20,
+    "velocity": 15,
+    "questionDensity": 10
+  },
+  "thresholds": {
+    "formalCandidate": 70,
+    "continueWatching": 60
+  },
+  "allowedAngles": [
+    "definition",
+    "mechanism",
+    "tutorial",
+    "benchmark",
+    "comparison",
+    "product-decision",
+    "news"
+  ],
+  "notes": [
+    "同一个 coverageGroup 只计为一个独立创作者。",
+    "缺失互动数据不猜测；总分只对可用维度归一化，并单独显示置信度。",
+    "竞品内容只用于热度判断，技术事实必须由 Research Agent 回到一手资料核验。"
+  ]
+}

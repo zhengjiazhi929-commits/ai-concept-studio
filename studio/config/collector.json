@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "timeoutMs": 12000,
+  "retryCount": 1,
+  "retryBackoffMs": 350,
+  "maxConcurrency": 4,
+  "lookbackDays": 45,
+  "sourceFreshnessDays": 7,
+  "maxResponseBytes": 2500000,
+  "refreshRadarAfterCollection": true,
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+  "directAdapters": {
+    "bilibili": true,
+    "genericMetadata": true,
+    "douyin": false
+  },
+  "notes": [
+    "只读取无需登录的公开页面，不保存 Cookie、账号或密钥。",
+    "抖音页面无法由普通请求稳定读取作品列表时，必须标记为需要 Codex 辅助，不得伪装成功。",
+    "采集到的竞品内容只是热度信号，技术事实仍需 Research Agent 回到一手资料核验。"
+  ]
+}

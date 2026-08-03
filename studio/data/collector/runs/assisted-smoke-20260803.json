@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "assisted-smoke-20260803",
+  "agentId": "creator-signal-collector",
+  "mode": "codex-assisted-import",
+  "method": "Codex 公开页面核对；用于验证抖音辅助采集导入链路",
+  "status": "complete",
+  "startedAt": "2026-08-03T17:00:00+08:00",
+  "finishedAt": "2026-08-03T08:58:51.436Z",
+  "summary": {
+    "configuredSources": 2,
+    "directSuccess": 0,
+    "assistedRequired": 0,
+    "assistedSuccess": 2,
+    "failed": 0,
+    "observationsFound": 2,
+    "accepted": 2,
+    "pendingReview": 0,
+    "ignored": 0,
+    "signalsAdded": 0,
+    "signalsUpdated": 2,
+    "signalsUnchanged": 0
+  },
+  "sourceResults": [
+    {
+      "creatorId": "douyin-qiu-shui",
+      "status": "assisted_success",
+      "reason": null,
+      "observationCount": 1
+    },
+    {
+      "creatorId": "douyin-ya-hui-pm",
+      "status": "assisted_success",
+      "reason": null,
+      "observationCount": 1
+    }
+  ],
+  "pendingReview": [],
+  "radarRefresh": {
+    "status": "complete",
+    "runId": "trend-2026-08-03T08-58-51-459Z"
+  }
+}

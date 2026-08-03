@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "taskId": "assist-collector-direct-2026-08-03T09-05-35-789Z",
+  "createdAt": "2026-08-03T09:05:35.789Z",
+  "purpose": "使用 Codex 读取普通程序无法稳定提取的公开创作者作品列表",
+  "rules": [
+    "只读取公开页面，不登录账号、不使用 Cookie。",
+    "记录作品标题、来源链接和可核对的发布时间；没有互动数据就保持为空。",
+    "竞品内容只作为热度信号，不作为技术事实来源。"
+  ],
+  "tasks": [
+    {
+      "creatorId": "douyin-user-reference-ai-model-learning",
+      "name": "AI大模型学习（用户参考账号）",
+      "platform": "douyin",
+      "profileUrl": "https://www.douyin.com/user/MS4wLjABAAAALc4kETj5YEPPpJXumFbEKsrihV9MQCdEtP4p8im0w2g",
+      "suggestedSearchQuery": "site:jingxuan.douyin.com/m/video \"AI大模型学习（用户参考账号）\" AI",
+      "latestSignalAt": "2026-07-30T00:00:00+08:00",
+      "priority": "normal"
+    },
+    {
+      "creatorId": "douyin-qiu-shui",
+      "name": "我叫秋水",
+      "platform": "douyin",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7610025599746264339",
+      "suggestedSearchQuery": "site:jingxuan.douyin.com/m/video \"我叫秋水\" AI",
+      "latestSignalAt": "2026-08-03T00:00:00+08:00",
+      "priority": "normal"
+    },
+    {
+      "creatorId": "douyin-ai-model-learning",
+      "name": "Ai大模型学习",
+      "platform": "douyin",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7649325778957585727",
+      "suggestedSearchQuery": "site:jingxuan.douyin.com/m/video \"Ai大模型学习\" AI",
+      "latestSignalAt": "2026-07-10T00:00:00+08:00",
+      "priority": "high"
+    },
+    {
+      "creatorId": "douyin-llm-project-practice",
+      "name": "大模型项目实战",
+      "platform": "douyin",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7659339584513379630",
+      "suggestedSearchQuery": "site:jingxuan.douyin.com/m/video \"大模型项目实战\" AI",
+      "latestSignalAt": "2026-07-30T00:00:00+08:00",
+      "priority": "normal"
+    },
+    {
+      "creatorId": "douyin-sherry",
+      "name": "Sherry小水",
+      "platform": "douyin",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7629765089143670080",
+      "suggestedSearchQuery": "site:jingxuan.douyin.com/m/video \"Sherry小水\" AI",
+      "latestSignalAt": "2026-07-25T00:00:00+08:00",
+      "priority": "high"
+    },
+    {
+      "creatorId": "douyin-ning",
+      "name": "Ning好",
+      "platform": "douyin",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7646442018788478208",
+      "suggestedSearchQuery": "site:jingxuan.douyin.com/m/video \"Ning好\" AI",
+      "latestSignalAt": "2026-08-03T00:00:00+08:00",
+      "priority": "normal"
+    },
+    {
+      "creatorId": "douyin-ai-wind-vane",
+      "name": "AI风向标",
+      "platform": "douyin",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7655645706144779572",
+      "suggestedSearchQuery": "site:jingxuan.douyin.com/m/video \"AI风向标\" AI",
+      "latestSignalAt": "2026-08-03T00:00:00+08:00",
+      "priority": "normal"
+    },
+    {
+      "creatorId": "douyin-na-xing",
+      "name": "拿幸·AI启示录",
+      "platform": "douyin",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7660745998112722222",
+      "suggestedSearchQuery": "site:jingxuan.douyin.com/m/video \"拿幸·AI启示录\" AI",
+      "latestSignalAt": "2026-08-03T00:00:00+08:00",
+      "priority": "normal"
+    },
+    {
+      "creatorId": "douyin-peoples-park-ai",
+      "name": "人民公园说AI",
+      "platform": "douyin",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7660912883055856915",
+      "suggestedSearchQuery": "site:jingxuan.douyin.com/m/video \"人民公园说AI\" AI",
+      "latestSignalAt": "2026-08-03T00:00:00+08:00",
+      "priority": "normal"
+    },
+    {
+      "creatorId": "douyin-du-yu-ai",
+      "name": "杜雨说AI",
+      "platform": "douyin",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7665614335116332330",
+      "suggestedSearchQuery": "site:jingxuan.douyin.com/m/video \"杜雨说AI\" AI",
+      "latestSignalAt": "2026-08-03T00:00:00+08:00",
+      "priority": "normal"
+    },
+    {
+      "creatorId": "douyin-old-mai",
+      "name": "大模型老迈",
+      "platform": "douyin",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7665665833837940003",
+      "suggestedSearchQuery": "site:jingxuan.douyin.com/m/video \"大模型老迈\" AI",
+      "latestSignalAt": "2026-07-30T00:00:00+08:00",
+      "priority": "normal"
+    },
+    {
+      "creatorId": "douyin-ming-jie",
+      "name": "鸣姐.AI进阶",
+      "platform": "douyin",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7620785929350925631",
+      "suggestedSearchQuery": "site:jingxuan.douyin.com/m/video \"鸣姐.AI进阶\" AI",
+      "latestSignalAt": "2026-07-14T00:00:00+08:00",
+      "priority": "high"
+    },
+    {
+      "creatorId": "douyin-howoneai",
+      "name": "HowOneAI-余一",
+      "platform": "douyin",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7636811401314572666",
+      "suggestedSearchQuery": "site:jingxuan.douyin.com/m/video \"HowOneAI-余一\" AI",
+      "latestSignalAt": "2026-07-31T00:00:00+08:00",
+      "priority": "normal"
+    },
+    {
+      "creatorId": "douyin-ya-hui-pm",
+      "name": "亚慧AI产品经理",
+      "platform": "douyin",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7594508930187268794",
+      "suggestedSearchQuery": "site:jingxuan.douyin.com/m/video \"亚慧AI产品经理\" AI",
+      "latestSignalAt": "2026-08-03T00:00:00+08:00",
+      "priority": "normal"
+    },
+    {
+      "creatorId": "douyin-mindsleap",
+      "name": "MindsLeap商业观察",
+      "platform": "douyin",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7652402236571569427",
+      "suggestedSearchQuery": "site:jingxuan.douyin.com/m/video \"MindsLeap商业观察\" AI",
+      "latestSignalAt": "2026-07-28T00:00:00+08:00",
+      "priority": "normal"
+    }
+  ],
+  "outputTemplate": {
+    "schemaVersion": 1,
+    "batchId": "assisted-20260803",
+    "observedAt": "2026-08-03T09:05:35.789Z",
+    "method": "Codex 公开页面核对",
+    "observations": []
+  }
+}

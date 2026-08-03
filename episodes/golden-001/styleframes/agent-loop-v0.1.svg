@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1020"/>
+      <stop offset="1" stop-color="#111A31"/>
+    </linearGradient>
+    <linearGradient id="blueGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4DA3FF"/>
+      <stop offset="1" stop-color="#7BC7FF"/>
+    </linearGradient>
+    <filter id="glowBlue" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="14" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#000000" flood-opacity="0.38"/>
+    </filter>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L8,3 z" fill="#4DA3FF"/>
+    </marker>
+    <style>
+      .cn { font-family: "HarmonyOS Sans SC", "Microsoft YaHei", sans-serif; }
+      .en { font-family: Inter, Arial, sans-serif; }
+      .label { fill:#A8B1C7; font-size:27px; font-weight:600; letter-spacing:2px; }
+      .nodeTitle { fill:#F5F7FB; font-size:29px; font-weight:700; }
+      .nodeSub { fill:#A8B1C7; font-size:21px; font-weight:500; }
+    </style>
+  </defs>
+
+  <rect width="1080" height="1920" fill="url(#bg)"/>
+  <circle cx="100" cy="300" r="330" fill="#4DA3FF" opacity="0.055"/>
+  <circle cx="900" cy="1180" r="360" fill="#B7F34A" opacity="0.035"/>
+
+  <!-- top identity -->
+  <g transform="translate(72 112)">
+    <rect x="0" y="0" width="228" height="48" rx="24" fill="#151D32" stroke="#29324A"/>
+    <circle cx="27" cy="24" r="7" fill="#B7F34A"/>
+    <text x="49" y="32" class="en label" font-size="20">AI CONCEPT 001</text>
+    <text x="0" y="130" class="en" fill="#F5F7FB" font-size="84" font-weight="800">Agentic</text>
+    <text x="0" y="214" class="en" fill="#F5F7FB" font-size="84" font-weight="800">Coding</text>
+    <text x="4" y="262" class="cn" fill="#A8B1C7" font-size="34" font-weight="600">智能体式编程</text>
+  </g>
+
+  <!-- chapter cue -->
+  <g transform="translate(72 430)">
+    <rect x="0" y="0" width="250" height="54" rx="16" fill="#4DA3FF" opacity="0.14"/>
+    <text x="20" y="36" class="cn" fill="#7BC7FF" font-size="27" font-weight="700">核心机制 · Agent Loop</text>
+  </g>
+
+  <!-- main card -->
+  <g filter="url(#softShadow)">
+    <rect x="72" y="516" width="828" height="786" rx="36" fill="#151D32" stroke="#29324A" stroke-width="2"/>
+  </g>
+
+  <!-- orbit -->
+  <path d="M486 695 C650 695 763 800 763 908 C763 1050 643 1143 486 1143 C322 1143 209 1037 209 908 C209 788 321 695 486 695 Z"
+        fill="none" stroke="#29324A" stroke-width="4" stroke-dasharray="10 12"/>
+  <path d="M486 695 C650 695 763 800 763 908" fill="none" stroke="#4DA3FF" stroke-width="7" marker-end="url(#arrowBlue)" filter="url(#glowBlue)"/>
+  <path d="M763 908 C763 1050 643 1143 486 1143" fill="none" stroke="#4DA3FF" stroke-width="7" marker-end="url(#arrowBlue)" opacity="0.75"/>
+
+  <!-- center -->
+  <circle cx="486" cy="914" r="126" fill="#0B1020" stroke="#4DA3FF" stroke-width="3"/>
+  <circle cx="486" cy="914" r="103" fill="#4DA3FF" opacity="0.08"/>
+  <text x="486" y="891" text-anchor="middle" class="cn" fill="#F5F7FB" font-size="30" font-weight="700">任务正在推进</text>
+  <text x="486" y="936" text-anchor="middle" class="en" fill="#7BC7FF" font-size="22" font-weight="700" letter-spacing="2">WORKING</text>
+  <rect x="414" y="965" width="144" height="8" rx="4" fill="#29324A"/>
+  <rect x="414" y="965" width="92" height="8" rx="4" fill="#B7F34A"/>
+
+  <!-- nodes -->
+  <g transform="translate(438 633)">
+    <rect x="0" y="0" width="96" height="68" rx="20" fill="#1D2A48" stroke="#4DA3FF"/>
+    <text x="48" y="31" text-anchor="middle" class="cn nodeTitle">目标</text>
+    <text x="48" y="54" text-anchor="middle" class="en nodeSub">GOAL</text>
+  </g>
+  <g transform="translate(684 735)">
+    <rect x="0" y="0" width="128" height="72" rx="22" fill="#1D2A48" stroke="#4DA3FF"/>
+    <text x="64" y="32" text-anchor="middle" class="cn nodeTitle">读取环境</text>
+    <text x="64" y="57" text-anchor="middle" class="en nodeSub">OBSERVE</text>
+  </g>
+  <g transform="translate(717 933)">
+    <rect x="0" y="0" width="112" height="72" rx="22" fill="#1D2A48" stroke="#4DA3FF"/>
+    <text x="56" y="32" text-anchor="middle" class="cn nodeTitle">行动</text>
+    <text x="56" y="57" text-anchor="middle" class="en nodeSub">ACT</text>
+  </g>
+  <g transform="translate(424 1110)">
+    <rect x="0" y="0" width="124" height="72" rx="22" fill="#251C2D" stroke="#FF6577" stroke-width="2"/>
+    <circle cx="16" cy="17" r="6" fill="#FF6577"/>
+    <text x="62" y="32" text-anchor="middle" class="cn nodeTitle">反馈</text>
+    <text x="62" y="57" text-anchor="middle" class="en nodeSub">FEEDBACK</text>
+  </g>
+  <g transform="translate(151 929)">
+    <rect x="0" y="0" width="118" height="72" rx="22" fill="#1D2A48" stroke="#4DA3FF"/>
+    <text x="59" y="32" text-anchor="middle" class="cn nodeTitle">修正</text>
+    <text x="59" y="57" text-anchor="middle" class="en nodeSub">REPLAN</text>
+  </g>
+  <g transform="translate(158 728)">
+    <rect x="0" y="0" width="118" height="72" rx="22" fill="#1F2B21" stroke="#B7F34A"/>
+    <text x="59" y="32" text-anchor="middle" class="cn nodeTitle">验收</text>
+    <text x="59" y="57" text-anchor="middle" class="en nodeSub">VERIFY</text>
+  </g>
+
+  <!-- task token -->
+  <g transform="translate(120 1210)">
+    <rect x="0" y="0" width="730" height="58" rx="18" fill="#0B1020" stroke="#29324A"/>
+    <rect x="0" y="0" width="488" height="58" rx="18" fill="#4DA3FF" opacity="0.12"/>
+    <text x="22" y="38" class="cn" fill="#A8B1C7" font-size="25">TASK 01</text>
+    <text x="162" y="38" class="cn" fill="#F5F7FB" font-size="25" font-weight="700">批量导出客户</text>
+    <text x="700" y="38" text-anchor="end" class="en" fill="#B7F34A" font-size="22" font-weight="700">67%</text>
+  </g>
+
+  <!-- big takeaway -->
+  <g transform="translate(72 1384)">
+    <text x="0" y="0" class="cn" fill="#A8B1C7" font-size="31" font-weight="600">真正的分水岭</text>
+    <text x="0" y="76" class="cn" fill="#F5F7FB" font-size="58" font-weight="800">会写代码</text>
+    <text x="292" y="76" class="cn" fill="#FF6577" font-size="58" font-weight="800">≠</text>
+    <text x="366" y="76" class="cn" fill="#B7F34A" font-size="58" font-weight="800">会交付任务</text>
+    <rect x="0" y="118" width="828" height="2" fill="#29324A"/>
+    <text x="0" y="180" class="cn" fill="#F5F7FB" font-size="44" font-weight="650">环境、闭环和验收，缺一不可。</text>
+  </g>
+
+  <!-- footer / subtitle safe position -->
+  <g transform="translate(72 1660)">
+    <rect x="0" y="0" width="828" height="92" rx="24" fill="#0B1020" opacity="0.88" stroke="#29324A"/>
+    <text x="414" y="58" text-anchor="middle" class="cn" fill="#F5F7FB" font-size="43" font-weight="650">执行反馈，会进入 Agent 的下一轮判断</text>
+  </g>
+
+  <text x="72" y="1838" class="cn" fill="#65708B" font-size="22">视觉样张 v0.1 · 9:16 · 教学示意</text>
+</svg>

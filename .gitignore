@@ -1,0 +1,17 @@
+# Dependencies and temporary files
+studio/node_modules/
+studio/tmp/
+studio/data/logs/*.ndjson
+*.log
+
+# Generated videos are included in migration backups, but not in Git history
+outputs/
+
+# Local credentials
+.env
+.env.*
+!.env.example
+
+# Operating-system files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "batchId": "assisted-smoke-20260803",
+  "observedAt": "2026-08-03T17:00:00+08:00",
+  "method": "Codex 公开页面核对；用于验证抖音辅助采集导入链路",
+  "observations": [
+    {
+      "id": "qs-20260803-agent-skill",
+      "creatorId": "douyin-qiu-shui",
+      "title": "一次性讲清 AI Agent 的 Skills",
+      "sourceUrl": "https://jingxuan.douyin.com/m/video/7610025599746264339",
+      "publishedAt": "2026-08-03T00:00:00+08:00",
+      "datePrecision": "relative-day-estimate",
+      "angle": "definition",
+      "conceptIds": ["agent-skill", "model-context-protocol"]
+    },
+    {
+      "id": "yh-20260803-skill-distill",
+      "creatorId": "douyin-ya-hui-pm",
+      "title": "经验：我如何从 AI 聊天中蒸馏，优化 Skill",
+      "sourceUrl": "https://jingxuan.douyin.com/m/video/7594508930187268794",
+      "publishedAt": "2026-08-03T00:00:00+08:00",
+      "datePrecision": "relative-day-estimate",
+      "angle": "tutorial",
+      "conceptIds": ["agent-skill"]
+    }
+  ]
+}

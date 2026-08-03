@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "id": "collector-direct-2026-08-03T09-01-22-474Z",
+  "agentId": "creator-signal-collector",
+  "mode": "direct-public-pages",
+  "status": "complete",
+  "startedAt": "2026-08-03T09:01:22.474Z",
+  "finishedAt": "2026-08-03T09:01:33.103Z",
+  "summary": {
+    "configuredSources": 18,
+    "directSuccess": 0,
+    "assistedRequired": 15,
+    "failed": 3,
+    "observationsFound": 0,
+    "accepted": 0,
+    "pendingReview": 0,
+    "ignored": 0,
+    "signalsAdded": 0,
+    "signalsUpdated": 0,
+    "signalsUnchanged": 0
+  },
+  "sourceResults": [
+    {
+      "creatorId": "douyin-user-reference-ai-model-learning",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-qiu-shui",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-ai-model-learning",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-llm-project-practice",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-sherry",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-ning",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-ai-wind-vane",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-na-xing",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-peoples-park-ai",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-du-yu-ai",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-old-mai",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-ming-jie",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-howoneai",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-ya-hui-pm",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-mindsleap",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "bilibili-feiman-ai",
+      "status": "failed",
+      "reason": "request-failed",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "bilibili-ai-frontier-interview",
+      "status": "failed",
+      "reason": "request-failed",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "bilibili-shangguigu",
+      "status": "failed",
+      "reason": "request-failed",
+      "httpStatus": null,
+      "observationCount": 0
+    }
+  ],
+  "pendingReview": [],
+  "ignoredObservations": [],
+  "radarRefresh": {
+    "status": "skipped"
+  }
+}

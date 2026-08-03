@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f4f4f1" />
+    <title>AI Concept Studio</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="masthead">
+        <div>
+          <p class="eyebrow">本地视频生产系统 · v0.1</p>
+          <h1>AI Concept Studio</h1>
+          <p class="lede">把热门 AI 概念变成有证据、可审批、能真正导出的视频。</p>
+        </div>
+        <div class="system-badge" id="systemBadge"><span></span>正在连接系统</div>
+      </header>
+
+      <main>
+        <section class="hero-grid">
+          <article class="panel episode-panel" id="episodePanel">
+            <div class="empty-state">
+              <p class="section-label">第一期</p>
+              <h2>正在读取黄金样例</h2>
+              <p>系统会把已经确认的 Agentic Coding 内容导入为可执行任务。</p>
+            </div>
+          </article>
+          <article class="panel preview-panel" id="previewPanel">
+            <div class="preview-placeholder">
+              <span>9:16</span>
+              <strong>等待生成视觉验证版</strong>
+              <small>视频会保存在本地 outputs 目录</small>
+            </div>
+          </article>
+        </section>
+
+        <section class="section-block collector-section">
+          <div class="section-heading">
+            <div>
+              <p class="section-label">创作者信号采集</p>
+              <h2>先更新观察源，再让热点雷达重新判断</h2>
+            </div>
+            <div class="action-row">
+              <button class="primary" data-action="run-collector">运行信号采集 Agent</button>
+            </div>
+          </div>
+          <div id="collectorStatus" class="collector-status">
+            <div class="empty-line">正在读取观察源状态</div>
+          </div>
+        </section>
+
+        <section class="section-block trend-section">
+          <div class="section-heading">
+            <div>
+              <p class="section-label">热点概念雷达</p>
+              <h2>先看创作者共振，再决定讲哪个技术概念</h2>
+            </div>
+            <div class="action-row">
+              <button class="primary" data-action="run-trends">运行热点发现 Agent</button>
+            </div>
+          </div>
+          <div id="trendRadar" class="trend-radar">
+            <div class="empty-line">正在读取近期创作者信号</div>
+          </div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-heading">
+            <div>
+              <p class="section-label">生产流水线</p>
+              <h2>每一步都有状态、证据和人工闸门</h2>
+            </div>
+            <div class="action-row">
+              <button class="secondary" data-action="import">重新同步黄金样例</button>
+              <button class="primary" data-action="run-next">运行下一步</button>
+            </div>
+          </div>
+          <div class="pipeline" id="pipeline"></div>
+        </section>
+
+        <section class="workspace-grid">
+          <article class="panel agents-panel">
+            <div class="panel-title">
+              <div>
+                <p class="section-label">Agent 控制台</p>
+                <h2>模块运行状态</h2>
+              </div>
+            </div>
+            <div id="agents" class="agent-list"></div>
+          </article>
+
+          <article class="panel events-panel">
+            <div class="panel-title">
+              <div>
+                <p class="section-label">可追溯记录</p>
+                <h2>最近发生了什么</h2>
+              </div>
+              <button class="text-button" data-action="refresh">刷新</button>
+            </div>
+            <div id="events" class="event-list"></div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

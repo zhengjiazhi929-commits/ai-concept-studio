@@ -1,0 +1,73 @@
+import { appendFile, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import {
+  configPath,
+  episodeDataDirectory,
+  episodeDataPath,
+  episodesDataRoot,
+  logsRoot
+} from "./paths.mjs";
+import { validateEpisode } from "./schema.mjs";
+
+export async function readConfig() {
+  return JSON.parse(await readFile(configPath, "utf8"));
+}
+
+export async function readEpisode(episodeId) {
+  const episode = JSON.parse(await readFile(episodeDataPath(episodeId), "utf8"));
+  const validation = validateEpisode(episode);
+  if (!validation.valid) {
+    throw new Error(`Invalid episode ${episodeId}: ${validation.errors.join("; ")}`);
+  }
+  return episode;
+}
+
+export async function writeEpisode(episode) {
+  const validation = validateEpisode(episode);
+  if (!validation.valid) throw new Error(validation.errors.join("; "));
+
+  const directory = episodeDataDirectory(episode.id);
+  await mkdir(directory, { recursive: true });
+  const destination = episodeDataPath(episode.id);
+  const temporary = `${destination}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(episode, null, 2)}\n`, "utf8");
+  await rename(temporary, destination);
+  return destination;
+}
+
+export async function listEpisodes() {
+  await mkdir(episodesDataRoot, { recursive: true });
+  const entries = await readdir(episodesDataRoot, { withFileTypes: true });
+  const episodes = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    try {
+      episodes.push(await readEpisode(entry.name));
+    } catch {
+      // A partially written or invalid episode is excluded from the dashboard.
+    }
+  }
+  return episodes.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export async function appendEvent(event) {
+  await mkdir(logsRoot, { recursive: true });
+  const record = { at: new Date().toISOString(), ...event };
+  await appendFile(resolve(logsRoot, "events.ndjson"), `${JSON.stringify(record)}\n`, "utf8");
+  return record;
+}
+
+export async function readRecentEvents(limit = 80) {
+  try {
+    const content = await readFile(resolve(logsRoot, "events.ndjson"), "utf8");
+    return content
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .slice(-limit)
+      .map((line) => JSON.parse(line))
+      .reverse();
+  } catch {
+    return [];
+  }
+}

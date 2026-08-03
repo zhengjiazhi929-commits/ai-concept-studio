@@ -1,0 +1,462 @@
+{
+  "schemaVersion": 1,
+  "id": "golden-001",
+  "title": "Agentic Coding 到底是什么？",
+  "concept": "Agentic Coding",
+  "audience": "理解 AI 基础概念、关注产品落地的 AI 产品经理及技术邻近人群",
+  "thesis": "AI 编程的工作单位正在从代码片段转向可验证的任务。",
+  "status": "in_production",
+  "createdAt": "2026-07-31T00:00:00.000Z",
+  "updatedAt": "2026-08-03T07:46:01.752Z",
+  "previewMode": "visual-proof",
+  "approvals": {
+    "topic": {
+      "status": "approved",
+      "at": "2026-07-31"
+    },
+    "facts": {
+      "status": "approved",
+      "at": "2026-07-31"
+    },
+    "script": {
+      "status": "approved",
+      "at": "2026-08-03"
+    },
+    "visual": {
+      "status": "approved",
+      "at": "2026-08-03",
+      "choice": "B-real-product-documentary"
+    },
+    "voice": {
+      "status": "pending",
+      "at": null
+    },
+    "final": {
+      "status": "pending",
+      "at": null
+    }
+  },
+  "pipeline": [
+    {
+      "id": "trend",
+      "label": "热点发现",
+      "agent": "trend-agent",
+      "gate": "topic",
+      "status": "complete",
+      "mode": "imported-approved-artifact",
+      "lastRunAt": "2026-08-03T07:45:00.110Z",
+      "message": null
+    },
+    {
+      "id": "research",
+      "label": "研究与事实",
+      "agent": "research-agent",
+      "gate": "facts",
+      "status": "complete",
+      "mode": "imported-approved-artifact",
+      "lastRunAt": "2026-08-03T07:45:00.110Z",
+      "message": null
+    },
+    {
+      "id": "script",
+      "label": "脚本",
+      "agent": "script-agent",
+      "gate": "script",
+      "status": "complete",
+      "mode": "imported-approved-artifact",
+      "lastRunAt": "2026-08-03T07:45:00.110Z",
+      "message": null
+    },
+    {
+      "id": "storyboard",
+      "label": "分镜",
+      "agent": "storyboard-agent",
+      "gate": "visual",
+      "status": "complete",
+      "mode": "imported-approved-artifact",
+      "lastRunAt": "2026-08-03T07:45:00.110Z",
+      "message": null
+    },
+    {
+      "id": "assets",
+      "label": "素材",
+      "agent": "asset-agent",
+      "gate": null,
+      "status": "complete",
+      "mode": "imported-approved-artifact",
+      "lastRunAt": "2026-08-03T07:45:00.110Z",
+      "message": null
+    },
+    {
+      "id": "voice",
+      "label": "旁白",
+      "agent": "voice-agent",
+      "gate": "voice",
+      "status": "pending",
+      "mode": null,
+      "lastRunAt": null,
+      "message": "等待选择本人录音、授权音色或通用自然音色"
+    },
+    {
+      "id": "render",
+      "label": "视频渲染",
+      "agent": "render-agent",
+      "gate": null,
+      "status": "complete",
+      "mode": null,
+      "lastRunAt": "2026-08-03T07:45:44.115Z",
+      "message": "视觉验证版 MP4 已生成",
+      "startedAt": "2026-08-03T07:45:16.360Z",
+      "progress": 1,
+      "artifacts": [
+        "C:\\Users\\User\\Documents\\Codex\\2026-07-28\\wo\\outputs\\studio\\golden-001\\preview-v001.mp4"
+      ],
+      "findings": [],
+      "requiresApproval": null
+    },
+    {
+      "id": "qa",
+      "label": "质量检查",
+      "agent": "qa-agent",
+      "gate": "final",
+      "status": "complete",
+      "mode": null,
+      "lastRunAt": "2026-08-03T07:46:01.752Z",
+      "message": "预览视频技术 QA 全部通过",
+      "startedAt": "2026-08-03T07:46:01.701Z",
+      "progress": 1,
+      "artifacts": [
+        "C:\\Users\\User\\Documents\\Codex\\2026-07-28\\wo\\outputs\\studio\\golden-001\\preview-qa.json"
+      ],
+      "findings": [
+        {
+          "id": "width",
+          "label": "竖屏宽度",
+          "passed": true,
+          "actual": 540,
+          "expected": 540
+        },
+        {
+          "id": "height",
+          "label": "竖屏高度",
+          "passed": true,
+          "actual": 960,
+          "expected": 960
+        },
+        {
+          "id": "fps",
+          "label": "帧率",
+          "passed": true,
+          "actual": 15,
+          "expected": 15
+        },
+        {
+          "id": "duration",
+          "label": "时长",
+          "passed": true,
+          "actual": 36.053333,
+          "expected": 36
+        },
+        {
+          "id": "codec",
+          "label": "视频编码",
+          "passed": true,
+          "actual": "h264",
+          "expected": "h264"
+        },
+        {
+          "id": "pixel-format",
+          "label": "像素格式",
+          "passed": true,
+          "actual": "yuv420p",
+          "expected": "yuv420p"
+        },
+        {
+          "id": "file-size",
+          "label": "文件有效",
+          "passed": true,
+          "actual": 3356003,
+          "expected": "> 50000 bytes"
+        },
+        {
+          "id": "scenes",
+          "label": "场景完整",
+          "passed": true,
+          "actual": 6,
+          "expected": ">= 6"
+        }
+      ],
+      "requiresApproval": null
+    }
+  ],
+  "sourceDocs": [
+    {
+      "path": "docs/05-visual-system.md",
+      "bytes": 11778,
+      "sha256": "a43d623ae39b530f400c2a0251e376cf9319c955db60b9e75afa145e3c893318"
+    },
+    {
+      "path": "episodes/golden-001/01-topic-card.md",
+      "bytes": 3925,
+      "sha256": "0ec9a6058dd204558108ebb2befcad6caf6c1f60f6b434df42e1a1357c7e8b1e"
+    },
+    {
+      "path": "episodes/golden-001/02-source-register.md",
+      "bytes": 4718,
+      "sha256": "bd5443866cd0bde0a861cf5c2d676171030626c7bf23d3e67d0a292e5cc1a36b"
+    },
+    {
+      "path": "episodes/golden-001/03-claim-ledger.md",
+      "bytes": 4170,
+      "sha256": "2b4408c974da11392e92170a9373551f79660b9ba3f58634fd4ea724c0406b96"
+    },
+    {
+      "path": "episodes/golden-001/07-script.md",
+      "bytes": 12493,
+      "sha256": "730aa3916485ad50334a8735327bd6ddf6d51ba598d166652f6ac60a540cef9e"
+    },
+    {
+      "path": "episodes/golden-001/08-storyboard.md",
+      "bytes": 34996,
+      "sha256": "9af156a15003bc866acb6ecbad2f94d74176ff1f7ff83a1a6a04d570f2d72ea7"
+    },
+    {
+      "path": "episodes/golden-001/09-production-manifest.md",
+      "bytes": 28352,
+      "sha256": "a4efb1dcb830a79494ccdf6008986fb0b7fe28ef5eef1a7aef91ea0420d3466e"
+    }
+  ],
+  "assets": [
+    {
+      "id": "demo-baseline-export-failed",
+      "type": "image",
+      "path": "episodes/golden-001/demo-baseline-export-failed.png",
+      "source": "episodes/golden-001/production/captures/screen-selects/demo-baseline-export-failed.png",
+      "privacy": "fictional-data",
+      "verified": true
+    },
+    {
+      "id": "demo-viewer-denied",
+      "type": "image",
+      "path": "episodes/golden-001/demo-viewer-denied.png",
+      "source": "episodes/golden-001/production/captures/screen-selects/demo-viewer-denied.png",
+      "privacy": "fictional-data",
+      "verified": true
+    },
+    {
+      "id": "demo-admin-export-complete",
+      "type": "image",
+      "path": "episodes/golden-001/demo-admin-export-complete.png",
+      "source": "episodes/golden-001/production/captures/screen-selects/demo-admin-export-complete.png",
+      "privacy": "fictional-data",
+      "verified": true
+    },
+    {
+      "id": "demo-final-before-export",
+      "type": "image",
+      "path": "episodes/golden-001/demo-final-before-export.png",
+      "source": "episodes/golden-001/production/captures/screen-selects/demo-final-before-export.png",
+      "privacy": "fictional-data",
+      "verified": true
+    }
+  ],
+  "voice": {
+    "status": "unconfigured",
+    "mode": null,
+    "audioPath": null,
+    "note": "视觉验证版允许无旁白；正式低清样片必须先通过声音审批。"
+  },
+  "render": {
+    "width": 540,
+    "height": 960,
+    "fps": 15,
+    "durationSeconds": 36,
+    "compositionId": "ConceptPreview",
+    "outputPath": "outputs/studio/golden-001/preview-v001.mp4",
+    "status": "complete",
+    "progress": 1,
+    "renderedAt": "2026-08-03T07:45:44.114Z",
+    "muted": true
+  },
+  "scenes": [
+    {
+      "id": "S01",
+      "start": 0,
+      "end": 5,
+      "type": "title",
+      "kicker": "AI 概念拆解",
+      "title": "Agentic Coding\n到底是什么？",
+      "subtitle": "不是让 AI 多写几行代码"
+    },
+    {
+      "id": "S02",
+      "start": 5,
+      "end": 11,
+      "type": "evidence",
+      "asset": "episodes/golden-001/demo-baseline-export-failed.png",
+      "label": "BEFORE｜真实失败",
+      "title": "旧接口返回了 CSV\n页面却无法完成任务",
+      "subtitle": "代码存在，不等于任务完成"
+    },
+    {
+      "id": "S03",
+      "start": 11,
+      "end": 17,
+      "type": "statement",
+      "index": "01",
+      "title": "工作单位变了",
+      "statement": "生成代码片段\n↓\n交付可验证任务",
+      "subtitle": "目标、环境、行动、反馈、验收"
+    },
+    {
+      "id": "S04",
+      "start": 17,
+      "end": 23,
+      "type": "evidence",
+      "asset": "episodes/golden-001/demo-viewer-denied.png",
+      "label": "权限验证｜viewer 403",
+      "title": "普通用户必须被拒绝",
+      "subtitle": "权限结果是完成证据的一部分"
+    },
+    {
+      "id": "S05",
+      "start": 23,
+      "end": 30,
+      "type": "evidence",
+      "asset": "episodes/golden-001/demo-admin-export-complete.png",
+      "label": "AFTER｜真实验收",
+      "title": "管理员异步导出完成",
+      "subtitle": "测试、状态、下载与脱敏全部可检查"
+    },
+    {
+      "id": "S06",
+      "start": 30,
+      "end": 36,
+      "type": "summary",
+      "kicker": "一句话记住",
+      "title": "Agentic Coding 的核心",
+      "statement": "AI 开始负责把任务\n持续推进到可验收结果",
+      "subtitle": "模型能力 × 工具 × 环境 × 反馈 × 边界"
+    }
+  ],
+  "subtitles": [
+    {
+      "start": 0,
+      "end": 5,
+      "text": "Agentic Coding 到底是什么？"
+    },
+    {
+      "start": 5,
+      "end": 11,
+      "text": "同样是写代码，为什么一种方式还没有完成任务？"
+    },
+    {
+      "start": 11,
+      "end": 17,
+      "text": "关键变化，是 AI 承担的工作单位变大了。"
+    },
+    {
+      "start": 17,
+      "end": 23,
+      "text": "它不仅修改文件，还要验证权限和业务规则。"
+    },
+    {
+      "start": 23,
+      "end": 30,
+      "text": "测试、状态和最终结果共同构成完成证据。"
+    },
+    {
+      "start": 30,
+      "end": 36,
+      "text": "从生成代码，到持续推进一个可验证任务。"
+    }
+  ],
+  "qa": {
+    "status": "passed",
+    "reportPath": "outputs/studio/golden-001/preview-qa.json",
+    "checks": [
+      {
+        "id": "width",
+        "label": "竖屏宽度",
+        "passed": true,
+        "actual": 540,
+        "expected": 540
+      },
+      {
+        "id": "height",
+        "label": "竖屏高度",
+        "passed": true,
+        "actual": 960,
+        "expected": 960
+      },
+      {
+        "id": "fps",
+        "label": "帧率",
+        "passed": true,
+        "actual": 15,
+        "expected": 15
+      },
+      {
+        "id": "duration",
+        "label": "时长",
+        "passed": true,
+        "actual": 36.053333,
+        "expected": 36
+      },
+      {
+        "id": "codec",
+        "label": "视频编码",
+        "passed": true,
+        "actual": "h264",
+        "expected": "h264"
+      },
+      {
+        "id": "pixel-format",
+        "label": "像素格式",
+        "passed": true,
+        "actual": "yuv420p",
+        "expected": "yuv420p"
+      },
+      {
+        "id": "file-size",
+        "label": "文件有效",
+        "passed": true,
+        "actual": 3356003,
+        "expected": "> 50000 bytes"
+      },
+      {
+        "id": "scenes",
+        "label": "场景完整",
+        "passed": true,
+        "actual": 6,
+        "expected": ">= 6"
+      }
+    ],
+    "checkedAt": "2026-08-03T07:46:01.751Z"
+  },
+  "history": [
+    {
+      "at": "2026-08-03T07:45:00.110Z",
+      "type": "import",
+      "message": "从黄金样例文档和真实浏览器素材导入"
+    },
+    {
+      "at": "2026-08-03T07:45:44.115Z",
+      "type": "agent-run",
+      "agentId": "render-agent",
+      "status": "complete",
+      "message": "视觉验证版 MP4 已生成"
+    },
+    {
+      "at": "2026-08-03T07:46:01.752Z",
+      "type": "agent-run",
+      "agentId": "qa-agent",
+      "status": "complete",
+      "message": "预览视频技术 QA 全部通过"
+    }
+  ],
+  "system": {
+    "studioRoot": "studio",
+    "importedBy": "golden-sample-importer-v0.1"
+  }
+}

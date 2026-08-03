@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <defs>
+    <pattern id="paperDots" width="18" height="18" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="4" r="0.8" fill="#171717" opacity="0.055"/>
+      <circle cx="13" cy="12" r="0.6" fill="#171717" opacity="0.035"/>
+    </pattern>
+    <filter id="paperShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#171717" flood-opacity="0.12"/>
+    </filter>
+    <marker id="blackArrow" markerWidth="12" markerHeight="12" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L0,8 L10,4 Z" fill="#171717"/>
+    </marker>
+    <style>
+      .cn { font-family:"Microsoft YaHei","Noto Sans CJK SC",sans-serif; }
+      .en { font-family:Arial,Inter,sans-serif; }
+      .mono { font-family:"Cascadia Mono","Courier New",monospace; }
+      .small { font-size:24px; fill:#5C5A55; }
+      .cardTitle { font-size:31px; fill:#171717; font-weight:800; }
+      .cardSub { font-size:22px; fill:#5C5A55; font-weight:500; }
+    </style>
+  </defs>
+
+  <rect width="1080" height="1920" fill="#F3EFE5"/>
+  <rect width="1080" height="1920" fill="url(#paperDots)"/>
+
+  <!-- masthead -->
+  <rect x="0" y="0" width="1080" height="18" fill="#171717"/>
+  <g transform="translate(70 88)">
+    <text x="0" y="0" class="cn" fill="#171717" font-size="27" font-weight="800" letter-spacing="2">AI 概念编辑部</text>
+    <text x="828" y="0" text-anchor="end" class="en" fill="#5C5A55" font-size="22">ISSUE 001</text>
+    <line x1="0" y1="28" x2="828" y2="28" stroke="#171717" stroke-width="3"/>
+  </g>
+
+  <!-- title -->
+  <g transform="translate(70 180)">
+    <rect x="0" y="0" width="235" height="43" fill="#D94A3A"/>
+    <text x="16" y="31" class="en" fill="#FFFFFF" font-size="22" font-weight="800" letter-spacing="1.5">AGENTIC CODING</text>
+    <text x="0" y="122" class="cn" fill="#171717" font-size="76" font-weight="900">AI 不再只写代码</text>
+    <text x="0" y="214" class="cn" fill="#171717" font-size="76" font-weight="900">它开始推进任务</text>
+    <path d="M6 240 C218 228 422 252 704 234" fill="none" stroke="#D94A3A" stroke-width="9" stroke-linecap="round"/>
+    <text x="0" y="292" class="cn" fill="#5C5A55" font-size="30" font-weight="600">把一句需求，变成一项有证据的交付。</text>
+  </g>
+
+  <!-- editorial task wall -->
+  <g transform="translate(70 540)">
+    <text x="0" y="0" class="cn" fill="#171717" font-size="32" font-weight="900">任务墙 / 一次 Agentic Coding 循环</text>
+    <text x="828" y="0" text-anchor="end" class="en small">PROCESS NOTES</text>
+    <line x1="0" y1="26" x2="828" y2="26" stroke="#171717" stroke-width="2"/>
+
+    <!-- arrows behind cards -->
+    <path d="M172 127 C225 127 244 127 292 127" fill="none" stroke="#171717" stroke-width="4" marker-end="url(#blackArrow)"/>
+    <path d="M468 127 C521 127 540 127 588 127" fill="none" stroke="#171717" stroke-width="4" marker-end="url(#blackArrow)"/>
+    <path d="M710 171 C710 225 710 248 710 292" fill="none" stroke="#171717" stroke-width="4" marker-end="url(#blackArrow)"/>
+    <path d="M588 340 C532 340 516 340 468 340" fill="none" stroke="#171717" stroke-width="4" marker-end="url(#blackArrow)"/>
+    <path d="M292 340 C236 340 220 340 172 340" fill="none" stroke="#171717" stroke-width="4" marker-end="url(#blackArrow)"/>
+
+    <!-- cards -->
+    <g transform="translate(0 72) rotate(-1 85 55)" filter="url(#paperShadow)">
+      <rect width="170" height="112" fill="#FFFDF7" stroke="#171717" stroke-width="2"/>
+      <text x="18" y="43" class="cn cardTitle">01 收到任务</text>
+      <text x="18" y="78" class="cn cardSub">批量导出客户</text>
+    </g>
+    <g transform="translate(296 72) rotate(1.2 85 55)" filter="url(#paperShadow)">
+      <rect width="170" height="112" fill="#FFFDF7" stroke="#171717" stroke-width="2"/>
+      <text x="18" y="43" class="cn cardTitle">02 看项目</text>
+      <text x="18" y="78" class="cn cardSub">权限 · 数据 · 规则</text>
+    </g>
+    <g transform="translate(592 72) rotate(-0.8 85 55)" filter="url(#paperShadow)">
+      <rect width="170" height="112" fill="#FFFDF7" stroke="#171717" stroke-width="2"/>
+      <text x="18" y="43" class="cn cardTitle">03 动手改</text>
+      <text x="18" y="78" class="cn cardSub">接口 · 测试 · 页面</text>
+    </g>
+    <g transform="translate(592 288) rotate(0.7 85 55)" filter="url(#paperShadow)">
+      <rect width="170" height="112" fill="#FFFDF7" stroke="#171717" stroke-width="2"/>
+      <text x="18" y="43" class="cn cardTitle">04 跑测试</text>
+      <text x="18" y="78" class="cn cardSub">读取执行结果</text>
+    </g>
+    <g transform="translate(296 288) rotate(-1.1 85 55)" filter="url(#paperShadow)">
+      <rect width="170" height="112" fill="#FFFDF7" stroke="#171717" stroke-width="2"/>
+      <text x="18" y="43" class="cn cardTitle">05 修问题</text>
+      <text x="18" y="78" class="cn cardSub">根据反馈调整</text>
+    </g>
+    <g transform="translate(0 288) rotate(0.8 85 55)" filter="url(#paperShadow)">
+      <rect width="170" height="112" fill="#F4D94E" stroke="#171717" stroke-width="2"/>
+      <text x="18" y="43" class="cn cardTitle">06 交证据</text>
+      <text x="18" y="78" class="cn cardSub">Diff · 测试 · 风险</text>
+    </g>
+
+    <!-- rejection stamp -->
+    <g transform="translate(610 226) rotate(-7)">
+      <rect width="180" height="64" fill="none" stroke="#D94A3A" stroke-width="5"/>
+      <text x="90" y="44" text-anchor="middle" class="cn" fill="#D94A3A" font-size="30" font-weight="900">测试未通过</text>
+    </g>
+    <path d="M686 274 C610 245 546 238 472 288" fill="none" stroke="#D94A3A" stroke-width="6" stroke-linecap="round" marker-end="url(#blackArrow)"/>
+    <text x="510" y="247" class="cn" fill="#D94A3A" font-size="24" font-weight="800" transform="rotate(-5 510 247)">不是重试，是先找原因</text>
+  </g>
+
+  <!-- evidence clipping -->
+  <g transform="translate(70 1090)" filter="url(#paperShadow)">
+    <rect width="828" height="310" fill="#FFFDF7" stroke="#171717" stroke-width="2"/>
+    <rect width="828" height="46" fill="#171717"/>
+    <circle cx="25" cy="23" r="6" fill="#D94A3A"/>
+    <circle cx="47" cy="23" r="6" fill="#F4D94E"/>
+    <text x="80" y="31" class="en" fill="#FFFFFF" font-size="19" font-weight="700">教学案例 / 示意界面</text>
+    <text x="24" y="94" class="mono" fill="#5C5A55" font-size="21">TASK  /  EXPORT CUSTOMERS</text>
+    <text x="24" y="140" class="cn" fill="#171717" font-size="31" font-weight="800">普通用户导出权限测试</text>
+    <rect x="24" y="174" width="480" height="54" fill="#F3EFE5"/>
+    <text x="42" y="210" class="mono" fill="#D94A3A" font-size="23" font-weight="700">FAIL   expected 403, received 200</text>
+    <line x1="548" y1="86" x2="548" y2="258" stroke="#D8D1C3" stroke-width="2"/>
+    <text x="579" y="121" class="cn" fill="#171717" font-size="25" font-weight="800">下一步</text>
+    <text x="579" y="164" class="cn" fill="#5C5A55" font-size="23">查看权限中间件</text>
+    <text x="579" y="204" class="cn" fill="#5C5A55" font-size="23">修改并重新验证</text>
+    <path d="M579 240 L762 240" stroke="#D94A3A" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <!-- takeaway -->
+  <g transform="translate(70 1490)">
+    <text x="0" y="0" class="cn" fill="#5C5A55" font-size="27" font-weight="700">这一期只记住一句</text>
+    <text x="0" y="76" class="cn" fill="#171717" font-size="60" font-weight="900">会写代码，不等于</text>
+    <rect x="0" y="112" width="364" height="24" fill="#F4D94E" transform="rotate(-2 0 112)"/>
+    <text x="10" y="150" class="cn" fill="#171717" font-size="60" font-weight="900">会交付任务。</text>
+    <text x="0" y="220" class="cn" fill="#5C5A55" font-size="31">看它如何推进、如何停下、拿什么证明完成。</text>
+  </g>
+
+  <g transform="translate(70 1810)">
+    <line x1="0" y1="0" x2="828" y2="0" stroke="#171717" stroke-width="2"/>
+    <text x="0" y="42" class="cn" fill="#5C5A55" font-size="21">方向 A · 杂志 / 知识编辑部 · 视觉候选 v0.2</text>
+  </g>
+</svg>

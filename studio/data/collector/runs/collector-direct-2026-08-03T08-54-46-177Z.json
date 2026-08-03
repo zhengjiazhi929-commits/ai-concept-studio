@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "id": "collector-direct-2026-08-03T08-54-46-177Z",
+  "agentId": "creator-signal-collector",
+  "mode": "direct-public-pages",
+  "status": "complete",
+  "startedAt": "2026-08-03T08:54:46.177Z",
+  "finishedAt": "2026-08-03T08:54:59.330Z",
+  "summary": {
+    "configuredSources": 18,
+    "directSuccess": 3,
+    "assistedRequired": 11,
+    "failed": 4,
+    "observationsFound": 3,
+    "accepted": 1,
+    "pendingReview": 0,
+    "ignored": 2,
+    "signalsAdded": 1,
+    "signalsUpdated": 0,
+    "signalsUnchanged": 0
+  },
+  "sourceResults": [
+    {
+      "creatorId": "douyin-user-reference-ai-model-learning",
+      "status": "failed",
+      "reason": "request-failed",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-qiu-shui",
+      "status": "failed",
+      "reason": "request-failed",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-ai-model-learning",
+      "status": "failed",
+      "reason": "request-failed",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-llm-project-practice",
+      "status": "failed",
+      "reason": "request-failed",
+      "httpStatus": null,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-sherry",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": 200,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-ning",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": 200,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-ai-wind-vane",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": 200,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-na-xing",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": 200,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-peoples-park-ai",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": 200,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-du-yu-ai",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": 200,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-old-mai",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": 200,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-ming-jie",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": 200,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-howoneai",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": 200,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-ya-hui-pm",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": 200,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "douyin-mindsleap",
+      "status": "assisted_required",
+      "reason": "client-rendered-list-needs-codex",
+      "httpStatus": 200,
+      "observationCount": 0
+    },
+    {
+      "creatorId": "bilibili-feiman-ai",
+      "status": "success",
+      "reason": null,
+      "httpStatus": 200,
+      "observationCount": 1
+    },
+    {
+      "creatorId": "bilibili-ai-frontier-interview",
+      "status": "success",
+      "reason": null,
+      "httpStatus": 200,
+      "observationCount": 1
+    },
+    {
+      "creatorId": "bilibili-shangguigu",
+      "status": "success",
+      "reason": null,
+      "httpStatus": 200,
+      "observationCount": 1
+    }
+  ],
+  "pendingReview": [],
+  "radarRefresh": {
+    "status": "complete",
+    "runId": "trend-2026-08-03T08-54-59-323Z"
+  }
+}

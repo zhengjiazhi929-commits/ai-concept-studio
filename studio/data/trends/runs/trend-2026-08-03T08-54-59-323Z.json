@@ -1,0 +1,2641 @@
+{
+  "schemaVersion": 1,
+  "id": "trend-2026-08-03T08-54-59-323Z",
+  "agentId": "trend-radar-agent",
+  "status": "complete",
+  "generatedAt": "2026-08-03T08:54:59.323Z",
+  "sourceSnapshotIds": [
+    "public-signal-snapshot-2026-08-03",
+    "collector-direct-2026-08-03T08-54-46-177Z"
+  ],
+  "selectedCandidateId": null,
+  "selectedAt": null,
+  "summary": {
+    "signalCount": 52,
+    "creatorCount": 18,
+    "mappedSignalCount": 51,
+    "unmappedSignalCount": 1,
+    "formalCandidateCount": 5,
+    "continueWatchingCount": 0,
+    "alreadyCoveredCount": 1
+  },
+  "candidates": [
+    {
+      "id": "agent-skill",
+      "concept": "Agent Skill",
+      "parent": "Agent 工程栈",
+      "recommendedTitle": "Agent Skill 到底是什么？它不是 Prompt，也不是 MCP",
+      "recommendedPool": "formal_candidate",
+      "selectionStatus": "not_selected",
+      "score": {
+        "score": 97,
+        "rawScore": 68,
+        "availablePoints": 70,
+        "components": {
+          "creatorCoverage": {
+            "score": 35,
+            "max": 35,
+            "available": true
+          },
+          "audienceFit": {
+            "score": 18,
+            "max": 20,
+            "available": true
+          },
+          "relativePerformance": {
+            "score": null,
+            "max": 20,
+            "available": false
+          },
+          "velocity": {
+            "score": 15,
+            "max": 15,
+            "available": true
+          },
+          "questionDensity": {
+            "score": null,
+            "max": 10,
+            "available": false
+          }
+        },
+        "metricsCoverage": 0.7,
+        "performanceSampleCount": 0,
+        "questionSampleCount": 0
+      },
+      "confidence": {
+        "level": "medium",
+        "value": 0.73,
+        "datePrecision": 0.77
+      },
+      "heatGate": {
+        "passed": true,
+        "fastGatePassed": false,
+        "creators7": 6,
+        "creators14": 6,
+        "creators30": 7,
+        "platforms": [
+          "douyin",
+          "bilibili"
+        ],
+        "weightedCreatorCoverage": 7.8
+      },
+      "conceptIndependence": {
+        "passed": true,
+        "checks": [
+          {
+            "id": "brand-independent",
+            "passed": true
+          },
+          {
+            "id": "cross-product-examples",
+            "passed": true
+          },
+          {
+            "id": "product-decisions",
+            "passed": true
+          },
+          {
+            "id": "primary-source-plan",
+            "passed": true
+          }
+        ]
+      },
+      "eventShare": 0,
+      "eventDominated": false,
+      "reasons": [
+        "14 天内 6 个独立创作者覆盖",
+        "缺少相对爆款数据，未猜测播放表现",
+        "缺少评论问题密度，未猜测用户疑问"
+      ],
+      "productDecisions": [
+        "何时沉淀过程知识",
+        "Skill 与工具、MCP、Sub-agent 的分工",
+        "版本、权限和供应链治理"
+      ],
+      "primarySources": [
+        {
+          "label": "Agent Skills specification",
+          "url": "https://agentskills.io/specification"
+        },
+        {
+          "label": "Agent Skills research",
+          "url": "https://arxiv.org/abs/2602.12430"
+        }
+      ],
+      "creatorEvidence": [
+        {
+          "id": "bilibili-shangguigu",
+          "coverageGroup": "shangguigu",
+          "name": "尚硅谷",
+          "platform": "bilibili",
+          "category": "head-education",
+          "weight": 1.2,
+          "audienceFit": 0.8
+        },
+        {
+          "id": "douyin-qiu-shui",
+          "coverageGroup": "qiu-shui",
+          "name": "我叫秋水",
+          "platform": "douyin",
+          "category": "agent-product",
+          "weight": 1.2,
+          "audienceFit": 1
+        },
+        {
+          "id": "douyin-ya-hui-pm",
+          "coverageGroup": "ya-hui-pm",
+          "name": "亚慧AI产品经理",
+          "platform": "douyin",
+          "category": "target-reference",
+          "weight": 1.2,
+          "audienceFit": 1
+        },
+        {
+          "id": "douyin-user-reference-ai-model-learning",
+          "coverageGroup": "ai-model-learning-reference",
+          "name": "AI大模型学习（用户参考账号）",
+          "platform": "douyin",
+          "category": "target-reference",
+          "weight": 1.2,
+          "audienceFit": 1
+        },
+        {
+          "id": "douyin-old-mai",
+          "coverageGroup": "old-mai",
+          "name": "大模型老迈",
+          "platform": "douyin",
+          "category": "agent-education",
+          "weight": 1,
+          "audienceFit": 0.85
+        },
+        {
+          "id": "douyin-llm-project-practice",
+          "coverageGroup": "llm-project-practice",
+          "name": "大模型项目实战",
+          "platform": "douyin",
+          "category": "engineering",
+          "weight": 1,
+          "audienceFit": 0.9
+        },
+        {
+          "id": "douyin-ai-model-learning",
+          "coverageGroup": "ai-model-learning-secondary",
+          "name": "Ai大模型学习",
+          "platform": "douyin",
+          "category": "agent-education",
+          "weight": 1,
+          "audienceFit": 0.9
+        }
+      ],
+      "signalCount": 12,
+      "evidenceSignals": [
+        {
+          "id": "qs-20260803-agent-skill",
+          "creatorId": "douyin-qiu-shui",
+          "creatorName": "我叫秋水",
+          "platform": "douyin",
+          "title": "一次性讲清 AI Agent 的 Skills",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7610025599746264339",
+          "publishedAt": "2026-08-03T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "definition",
+          "event": null
+        },
+        {
+          "id": "yh-20260803-skill-distill",
+          "creatorId": "douyin-ya-hui-pm",
+          "creatorName": "亚慧AI产品经理",
+          "platform": "douyin",
+          "title": "经验：我如何从 AI 聊天中蒸馏，优化 Skill",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7594508930187268794",
+          "publishedAt": "2026-08-03T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "tutorial",
+          "event": null
+        },
+        {
+          "id": "qs-20260731-cli-mcp-skill",
+          "creatorId": "douyin-qiu-shui",
+          "creatorName": "我叫秋水",
+          "platform": "douyin",
+          "title": "CLI、MCP、Skill，到底什么时候用哪个？",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7610025599746264339",
+          "publishedAt": "2026-07-31T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "product-decision",
+          "event": null
+        },
+        {
+          "id": "oldmai-20260730-agent-learning",
+          "creatorId": "douyin-old-mai",
+          "creatorName": "大模型老迈",
+          "platform": "douyin",
+          "title": "假如你从 7 月 25 号开始学 AI Agent",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7665665833837940003",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "tutorial",
+          "event": null
+        },
+        {
+          "id": "ref-20260730-mcp-cli",
+          "creatorId": "douyin-user-reference-ai-model-learning",
+          "creatorName": "AI大模型学习（用户参考账号）",
+          "platform": "douyin",
+          "title": "MCP vs CLI",
+          "sourceUrl": "https://www.douyin.com/video/7658654947852029210",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "observation-window",
+          "angle": "comparison",
+          "event": null
+        },
+        {
+          "id": "ref-20260730-skill",
+          "creatorId": "douyin-user-reference-ai-model-learning",
+          "creatorName": "AI大模型学习（用户参考账号）",
+          "platform": "douyin",
+          "title": "Skill 架构以及 Skill 与 MCP",
+          "sourceUrl": "https://www.douyin.com/video/7651613998131006774",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "observation-window",
+          "angle": "mechanism",
+          "event": null
+        },
+        {
+          "id": "bili-20260730-vibe-course",
+          "creatorId": "bilibili-shangguigu",
+          "creatorName": "尚硅谷",
+          "platform": "bilibili",
+          "title": "Vibe Coding 系统课程：Claude Code、Codex、Skills、MCP 与记忆",
+          "sourceUrl": "https://www.bilibili.com/video/BV1RPET6tEp2/",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "observation-window",
+          "angle": "tutorial",
+          "event": null
+        },
+        {
+          "id": "qs-20260728-skill-subagent",
+          "creatorId": "douyin-qiu-shui",
+          "creatorName": "我叫秋水",
+          "platform": "douyin",
+          "title": "搞懂 Skill 和 Sub Agent 的区别和使用场景",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7610025599746264339",
+          "publishedAt": "2026-07-28T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "comparison",
+          "event": null
+        },
+        {
+          "id": "lmp-20260728-massive-skills",
+          "creatorId": "douyin-llm-project-practice",
+          "creatorName": "大模型项目实战",
+          "platform": "douyin",
+          "title": "Agent 如何加载海量 Skill",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7659339584513379630",
+          "publishedAt": "2026-07-28T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "mechanism",
+          "event": null
+        },
+        {
+          "id": "qs-20260725-mcp-skills",
+          "creatorId": "douyin-qiu-shui",
+          "creatorName": "我叫秋水",
+          "platform": "douyin",
+          "title": "做 AI Agent，先分清 MCP 和 Skills",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7610025599746264339",
+          "publishedAt": "2026-07-25T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "comparison",
+          "event": null
+        }
+      ],
+      "productionState": "new",
+      "rank": 1
+    },
+    {
+      "id": "context-engineering-memory",
+      "concept": "Context Engineering 与 Agent Memory",
+      "parent": "Agent 工程栈",
+      "recommendedTitle": "上下文越长，Agent 就越聪明吗？Context Engineering 真正在设计什么？",
+      "recommendedPool": "formal_candidate",
+      "selectionStatus": "not_selected",
+      "score": {
+        "score": 96,
+        "rawScore": 67,
+        "availablePoints": 70,
+        "components": {
+          "creatorCoverage": {
+            "score": 35,
+            "max": 35,
+            "available": true
+          },
+          "audienceFit": {
+            "score": 18,
+            "max": 20,
+            "available": true
+          },
+          "relativePerformance": {
+            "score": null,
+            "max": 20,
+            "available": false
+          },
+          "velocity": {
+            "score": 14,
+            "max": 15,
+            "available": true
+          },
+          "questionDensity": {
+            "score": null,
+            "max": 10,
+            "available": false
+          }
+        },
+        "metricsCoverage": 0.7,
+        "performanceSampleCount": 0,
+        "questionSampleCount": 0
+      },
+      "confidence": {
+        "level": "medium",
+        "value": 0.71,
+        "datePrecision": 0.71
+      },
+      "heatGate": {
+        "passed": true,
+        "fastGatePassed": false,
+        "creators7": 7,
+        "creators14": 7,
+        "creators30": 8,
+        "platforms": [
+          "douyin",
+          "bilibili"
+        ],
+        "weightedCreatorCoverage": 8.8
+      },
+      "conceptIndependence": {
+        "passed": true,
+        "checks": [
+          {
+            "id": "brand-independent",
+            "passed": true
+          },
+          {
+            "id": "cross-product-examples",
+            "passed": true
+          },
+          {
+            "id": "product-decisions",
+            "passed": true
+          },
+          {
+            "id": "primary-source-plan",
+            "passed": true
+          }
+        ]
+      },
+      "eventShare": 0,
+      "eventDominated": false,
+      "reasons": [
+        "14 天内 7 个独立创作者覆盖",
+        "缺少相对爆款数据，未猜测播放表现",
+        "缺少评论问题密度，未猜测用户疑问"
+      ],
+      "productDecisions": [
+        "什么应该写入记忆",
+        "召回、压缩、更新与遗忘",
+        "记忆污染和隐私治理"
+      ],
+      "primarySources": [
+        {
+          "label": "AWS Agent memory engineering",
+          "url": "https://aws.amazon.com/cn/blogs/china/agent-system-engineering-practice/"
+        },
+        {
+          "label": "AgentCore Memory documentation",
+          "url": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html"
+        }
+      ],
+      "creatorEvidence": [
+        {
+          "id": "bilibili-shangguigu",
+          "coverageGroup": "shangguigu",
+          "name": "尚硅谷",
+          "platform": "bilibili",
+          "category": "head-education",
+          "weight": 1.2,
+          "audienceFit": 0.8
+        },
+        {
+          "id": "douyin-qiu-shui",
+          "coverageGroup": "qiu-shui",
+          "name": "我叫秋水",
+          "platform": "douyin",
+          "category": "agent-product",
+          "weight": 1.2,
+          "audienceFit": 1
+        },
+        {
+          "id": "douyin-ya-hui-pm",
+          "coverageGroup": "ya-hui-pm",
+          "name": "亚慧AI产品经理",
+          "platform": "douyin",
+          "category": "target-reference",
+          "weight": 1.2,
+          "audienceFit": 1
+        },
+        {
+          "id": "douyin-user-reference-ai-model-learning",
+          "coverageGroup": "ai-model-learning-reference",
+          "name": "AI大模型学习（用户参考账号）",
+          "platform": "douyin",
+          "category": "target-reference",
+          "weight": 1.2,
+          "audienceFit": 1
+        },
+        {
+          "id": "douyin-old-mai",
+          "coverageGroup": "old-mai",
+          "name": "大模型老迈",
+          "platform": "douyin",
+          "category": "agent-education",
+          "weight": 1,
+          "audienceFit": 0.85
+        },
+        {
+          "id": "douyin-llm-project-practice",
+          "coverageGroup": "llm-project-practice",
+          "name": "大模型项目实战",
+          "platform": "douyin",
+          "category": "engineering",
+          "weight": 1,
+          "audienceFit": 0.9
+        },
+        {
+          "id": "bilibili-feiman-ai",
+          "coverageGroup": "feiman-ai",
+          "name": "费曼学AI",
+          "platform": "bilibili",
+          "category": "agent-education",
+          "weight": 1,
+          "audienceFit": 0.9
+        },
+        {
+          "id": "bilibili-ai-frontier-interview",
+          "coverageGroup": "ai-frontier-interview",
+          "name": "AI前沿访谈",
+          "platform": "bilibili",
+          "category": "longform-interview",
+          "weight": 1,
+          "audienceFit": 0.9
+        }
+      ],
+      "signalCount": 9,
+      "evidenceSignals": [
+        {
+          "id": "yh-20260730-harness-context",
+          "creatorId": "douyin-ya-hui-pm",
+          "creatorName": "亚慧AI产品经理",
+          "platform": "douyin",
+          "title": "AI 产品面试：Harness 工程 vs 上下文工程是什么",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7594508930187268794",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "comparison",
+          "event": null
+        },
+        {
+          "id": "oldmai-20260730-agent-learning",
+          "creatorId": "douyin-old-mai",
+          "creatorName": "大模型老迈",
+          "platform": "douyin",
+          "title": "假如你从 7 月 25 号开始学 AI Agent",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7665665833837940003",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "tutorial",
+          "event": null
+        },
+        {
+          "id": "ref-20260730-memory",
+          "creatorId": "douyin-user-reference-ai-model-learning",
+          "creatorName": "AI大模型学习（用户参考账号）",
+          "platform": "douyin",
+          "title": "生产级 Agent 记忆系统",
+          "sourceUrl": "https://www.douyin.com/video/7664586374086954294",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "observation-window",
+          "angle": "mechanism",
+          "event": null
+        },
+        {
+          "id": "bili-20260730-agent-memory",
+          "creatorId": "bilibili-feiman-ai",
+          "creatorName": "费曼学AI",
+          "platform": "bilibili",
+          "title": "Agent 记忆系统：上下文、Agent Loop、Harness 与 RAG",
+          "sourceUrl": "https://www.bilibili.com/video/BV1uiEM6xE9s/",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "observation-window",
+          "angle": "mechanism",
+          "event": null
+        },
+        {
+          "id": "bili-20260730-memory-engineering",
+          "creatorId": "bilibili-ai-frontier-interview",
+          "creatorName": "AI前沿访谈",
+          "platform": "bilibili",
+          "title": "Agent 记忆工程：长短期记忆、持久化架构与 LangGraph",
+          "sourceUrl": "https://www.bilibili.com/video/BV1MBTV6gEso/",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "observation-window",
+          "angle": "mechanism",
+          "event": null
+        },
+        {
+          "id": "bili-20260730-vibe-course",
+          "creatorId": "bilibili-shangguigu",
+          "creatorName": "尚硅谷",
+          "platform": "bilibili",
+          "title": "Vibe Coding 系统课程：Claude Code、Codex、Skills、MCP 与记忆",
+          "sourceUrl": "https://www.bilibili.com/video/BV1RPET6tEp2/",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "observation-window",
+          "angle": "tutorial",
+          "event": null
+        },
+        {
+          "id": "lmp-20260728-massive-skills",
+          "creatorId": "douyin-llm-project-practice",
+          "creatorName": "大模型项目实战",
+          "platform": "douyin",
+          "title": "Agent 如何加载海量 Skill",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7659339584513379630",
+          "publishedAt": "2026-07-28T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "mechanism",
+          "event": null
+        },
+        {
+          "id": "lmp-20260727-memory-pollution",
+          "creatorId": "douyin-llm-project-practice",
+          "creatorName": "大模型项目实战",
+          "platform": "douyin",
+          "title": "Agent 记忆污染该如何处理",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7659339584513379630",
+          "publishedAt": "2026-07-27T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "mechanism",
+          "event": null
+        },
+        {
+          "id": "qs-20260717-second-brain",
+          "creatorId": "douyin-qiu-shui",
+          "creatorName": "我叫秋水",
+          "platform": "douyin",
+          "title": "如何搭建自己的 AI 第二大脑？先把这 5 层想清楚",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7610025599746264339",
+          "publishedAt": "2026-07-17T00:00:00+08:00",
+          "datePrecision": "page-date",
+          "angle": "mechanism",
+          "event": null
+        }
+      ],
+      "productionState": "new",
+      "rank": 2
+    },
+    {
+      "id": "model-context-protocol",
+      "concept": "Model Context Protocol（MCP）",
+      "parent": "Agent 工程栈",
+      "recommendedTitle": "MCP 到底解决什么问题？它为什么不是另一个 API 名字",
+      "recommendedPool": "formal_candidate",
+      "selectionStatus": "not_selected",
+      "score": {
+        "score": 96,
+        "rawScore": 67,
+        "availablePoints": 70,
+        "components": {
+          "creatorCoverage": {
+            "score": 34,
+            "max": 35,
+            "available": true
+          },
+          "audienceFit": {
+            "score": 18,
+            "max": 20,
+            "available": true
+          },
+          "relativePerformance": {
+            "score": null,
+            "max": 20,
+            "available": false
+          },
+          "velocity": {
+            "score": 15,
+            "max": 15,
+            "available": true
+          },
+          "questionDensity": {
+            "score": null,
+            "max": 10,
+            "available": false
+          }
+        },
+        "metricsCoverage": 0.7,
+        "performanceSampleCount": 0,
+        "questionSampleCount": 0
+      },
+      "confidence": {
+        "level": "medium",
+        "value": 0.7,
+        "datePrecision": 0.69
+      },
+      "heatGate": {
+        "passed": true,
+        "fastGatePassed": false,
+        "creators7": 4,
+        "creators14": 4,
+        "creators30": 4,
+        "platforms": [
+          "douyin",
+          "bilibili"
+        ],
+        "weightedCreatorCoverage": 4.8
+      },
+      "conceptIndependence": {
+        "passed": true,
+        "checks": [
+          {
+            "id": "brand-independent",
+            "passed": true
+          },
+          {
+            "id": "cross-product-examples",
+            "passed": true
+          },
+          {
+            "id": "product-decisions",
+            "passed": true
+          },
+          {
+            "id": "primary-source-plan",
+            "passed": true
+          }
+        ]
+      },
+      "eventShare": 0,
+      "eventDominated": false,
+      "reasons": [
+        "14 天内 4 个独立创作者覆盖",
+        "缺少相对爆款数据，未猜测播放表现",
+        "缺少评论问题密度，未猜测用户疑问"
+      ],
+      "productDecisions": [
+        "何时标准化工具连接",
+        "会话与无状态边界",
+        "权限、部署和可观测性"
+      ],
+      "primarySources": [
+        {
+          "label": "MCP specification",
+          "url": "https://modelcontextprotocol.io/specification"
+        }
+      ],
+      "creatorEvidence": [
+        {
+          "id": "douyin-na-xing",
+          "coverageGroup": "na-xing",
+          "name": "拿幸·AI启示录",
+          "platform": "douyin",
+          "category": "head-longform",
+          "weight": 1.2,
+          "audienceFit": 0.85
+        },
+        {
+          "id": "bilibili-shangguigu",
+          "coverageGroup": "shangguigu",
+          "name": "尚硅谷",
+          "platform": "bilibili",
+          "category": "head-education",
+          "weight": 1.2,
+          "audienceFit": 0.8
+        },
+        {
+          "id": "douyin-qiu-shui",
+          "coverageGroup": "qiu-shui",
+          "name": "我叫秋水",
+          "platform": "douyin",
+          "category": "agent-product",
+          "weight": 1.2,
+          "audienceFit": 1
+        },
+        {
+          "id": "douyin-user-reference-ai-model-learning",
+          "coverageGroup": "ai-model-learning-reference",
+          "name": "AI大模型学习（用户参考账号）",
+          "platform": "douyin",
+          "category": "target-reference",
+          "weight": 1.2,
+          "audienceFit": 1
+        }
+      ],
+      "signalCount": 7,
+      "evidenceSignals": [
+        {
+          "id": "qs-20260803-agent-skill",
+          "creatorId": "douyin-qiu-shui",
+          "creatorName": "我叫秋水",
+          "platform": "douyin",
+          "title": "一次性讲清 AI Agent 的 Skills",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7610025599746264339",
+          "publishedAt": "2026-08-03T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "definition",
+          "event": null
+        },
+        {
+          "id": "qs-20260731-cli-mcp-skill",
+          "creatorId": "douyin-qiu-shui",
+          "creatorName": "我叫秋水",
+          "platform": "douyin",
+          "title": "CLI、MCP、Skill，到底什么时候用哪个？",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7610025599746264339",
+          "publishedAt": "2026-07-31T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "product-decision",
+          "event": null
+        },
+        {
+          "id": "nx-20260731-stateless-mcp",
+          "creatorId": "douyin-na-xing",
+          "creatorName": "拿幸·AI启示录",
+          "platform": "douyin",
+          "title": "MCP 改为无状态架构，Agent 服务如何弹性扩容",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7660745998112722222",
+          "publishedAt": "2026-07-31T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "mechanism",
+          "event": null
+        },
+        {
+          "id": "ref-20260730-mcp-cli",
+          "creatorId": "douyin-user-reference-ai-model-learning",
+          "creatorName": "AI大模型学习（用户参考账号）",
+          "platform": "douyin",
+          "title": "MCP vs CLI",
+          "sourceUrl": "https://www.douyin.com/video/7658654947852029210",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "observation-window",
+          "angle": "comparison",
+          "event": null
+        },
+        {
+          "id": "ref-20260730-skill",
+          "creatorId": "douyin-user-reference-ai-model-learning",
+          "creatorName": "AI大模型学习（用户参考账号）",
+          "platform": "douyin",
+          "title": "Skill 架构以及 Skill 与 MCP",
+          "sourceUrl": "https://www.douyin.com/video/7651613998131006774",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "observation-window",
+          "angle": "mechanism",
+          "event": null
+        },
+        {
+          "id": "bili-20260730-vibe-course",
+          "creatorId": "bilibili-shangguigu",
+          "creatorName": "尚硅谷",
+          "platform": "bilibili",
+          "title": "Vibe Coding 系统课程：Claude Code、Codex、Skills、MCP 与记忆",
+          "sourceUrl": "https://www.bilibili.com/video/BV1RPET6tEp2/",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "observation-window",
+          "angle": "tutorial",
+          "event": null
+        },
+        {
+          "id": "qs-20260725-mcp-skills",
+          "creatorId": "douyin-qiu-shui",
+          "creatorName": "我叫秋水",
+          "platform": "douyin",
+          "title": "做 AI Agent，先分清 MCP 和 Skills",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7610025599746264339",
+          "publishedAt": "2026-07-25T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "comparison",
+          "event": null
+        }
+      ],
+      "productionState": "new",
+      "rank": 3
+    },
+    {
+      "id": "agent-evaluation",
+      "concept": "Agent Evaluation",
+      "parent": "Agent 工程栈",
+      "recommendedTitle": "Agent 到底怎么验收？为什么 Demo 成功率不等于能上线",
+      "recommendedPool": "formal_candidate",
+      "selectionStatus": "not_selected",
+      "score": {
+        "score": 89,
+        "rawScore": 62,
+        "availablePoints": 70,
+        "components": {
+          "creatorCoverage": {
+            "score": 31,
+            "max": 35,
+            "available": true
+          },
+          "audienceFit": {
+            "score": 19,
+            "max": 20,
+            "available": true
+          },
+          "relativePerformance": {
+            "score": null,
+            "max": 20,
+            "available": false
+          },
+          "velocity": {
+            "score": 12,
+            "max": 15,
+            "available": true
+          },
+          "questionDensity": {
+            "score": null,
+            "max": 10,
+            "available": false
+          }
+        },
+        "metricsCoverage": 0.7,
+        "performanceSampleCount": 0,
+        "questionSampleCount": 0
+      },
+      "confidence": {
+        "level": "medium",
+        "value": 0.76,
+        "datePrecision": 0.84
+      },
+      "heatGate": {
+        "passed": true,
+        "fastGatePassed": false,
+        "creators7": 5,
+        "creators14": 5,
+        "creators30": 6,
+        "platforms": [
+          "douyin"
+        ],
+        "weightedCreatorCoverage": 6.6
+      },
+      "conceptIndependence": {
+        "passed": true,
+        "checks": [
+          {
+            "id": "brand-independent",
+            "passed": true
+          },
+          {
+            "id": "cross-product-examples",
+            "passed": true
+          },
+          {
+            "id": "product-decisions",
+            "passed": true
+          },
+          {
+            "id": "primary-source-plan",
+            "passed": true
+          }
+        ]
+      },
+      "eventShare": 0.13,
+      "eventDominated": false,
+      "reasons": [
+        "14 天内 5 个独立创作者覆盖",
+        "缺少相对爆款数据，未猜测播放表现",
+        "缺少评论问题密度，未猜测用户疑问"
+      ],
+      "productDecisions": [
+        "从回答质量转向任务成功率",
+        "建立真实任务集",
+        "失败分类和人工接管指标"
+      ],
+      "primarySources": [
+        {
+          "label": "OpenAI Evals guide",
+          "url": "https://platform.openai.com/docs/guides/evals"
+        },
+        {
+          "label": "SWE-bench",
+          "url": "https://www.swebench.com/"
+        }
+      ],
+      "creatorEvidence": [
+        {
+          "id": "douyin-na-xing",
+          "coverageGroup": "na-xing",
+          "name": "拿幸·AI启示录",
+          "platform": "douyin",
+          "category": "head-longform",
+          "weight": 1.2,
+          "audienceFit": 0.85
+        },
+        {
+          "id": "douyin-qiu-shui",
+          "coverageGroup": "qiu-shui",
+          "name": "我叫秋水",
+          "platform": "douyin",
+          "category": "agent-product",
+          "weight": 1.2,
+          "audienceFit": 1
+        },
+        {
+          "id": "douyin-ya-hui-pm",
+          "coverageGroup": "ya-hui-pm",
+          "name": "亚慧AI产品经理",
+          "platform": "douyin",
+          "category": "target-reference",
+          "weight": 1.2,
+          "audienceFit": 1
+        },
+        {
+          "id": "douyin-user-reference-ai-model-learning",
+          "coverageGroup": "ai-model-learning-reference",
+          "name": "AI大模型学习（用户参考账号）",
+          "platform": "douyin",
+          "category": "target-reference",
+          "weight": 1.2,
+          "audienceFit": 1
+        },
+        {
+          "id": "douyin-howoneai",
+          "coverageGroup": "howoneai",
+          "name": "HowOneAI-余一",
+          "platform": "douyin",
+          "category": "ai-product",
+          "weight": 1,
+          "audienceFit": 1
+        },
+        {
+          "id": "douyin-mindsleap",
+          "coverageGroup": "mindsleap",
+          "name": "MindsLeap商业观察",
+          "platform": "douyin",
+          "category": "organization-product",
+          "weight": 0.8,
+          "audienceFit": 0.8
+        }
+      ],
+      "signalCount": 8,
+      "evidenceSignals": [
+        {
+          "id": "nx-20260801-agent-self-improvement",
+          "creatorId": "douyin-na-xing",
+          "creatorName": "拿幸·AI启示录",
+          "platform": "douyin",
+          "title": "Harness 脚手架与 AI 自主研发闭环",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7660745998112722222",
+          "publishedAt": "2026-08-01T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "news",
+          "event": "研究人员回归 OpenAI"
+        },
+        {
+          "id": "how-20260731-workflow-lesson",
+          "creatorId": "douyin-howoneai",
+          "creatorName": "HowOneAI-余一",
+          "platform": "douyin",
+          "title": "AI 改造工作流的一手教训：不要脱离真实目标和评估",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7636811401314572666",
+          "publishedAt": "2026-07-31T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "product-decision",
+          "event": null
+        },
+        {
+          "id": "ref-20260730-loop",
+          "creatorId": "douyin-user-reference-ai-model-learning",
+          "creatorName": "AI大模型学习（用户参考账号）",
+          "platform": "douyin",
+          "title": "Loop Engineering",
+          "sourceUrl": "https://www.douyin.com/video/7655651382208351494",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "observation-window",
+          "angle": "mechanism",
+          "event": null
+        },
+        {
+          "id": "yh-20260728-launch-readiness",
+          "creatorId": "douyin-ya-hui-pm",
+          "creatorName": "亚慧AI产品经理",
+          "platform": "douyin",
+          "title": "实操：如何判断 AI 产品是否达到上线要求",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7594508930187268794",
+          "publishedAt": "2026-07-28T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "product-decision",
+          "event": null
+        },
+        {
+          "id": "minds-20260728-private-evals",
+          "creatorId": "douyin-mindsleap",
+          "creatorName": "MindsLeap商业观察",
+          "platform": "douyin",
+          "title": "未来企业的护城河，是私有化评估体系 Private Evals",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7652402236571569427",
+          "publishedAt": "2026-07-28T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "product-decision",
+          "event": null
+        },
+        {
+          "id": "qs-20260715-coding-delivery",
+          "creatorId": "douyin-qiu-shui",
+          "creatorName": "我叫秋水",
+          "platform": "douyin",
+          "title": "AI 把代码写更快了，为什么交付反而没变快？",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7610025599746264339",
+          "publishedAt": "2026-07-15T00:00:00+08:00",
+          "datePrecision": "page-date",
+          "angle": "product-decision",
+          "event": null
+        },
+        {
+          "id": "how-20260715-real-benchmark",
+          "creatorId": "douyin-howoneai",
+          "creatorName": "HowOneAI-余一",
+          "platform": "douyin",
+          "title": "成为 AI 超级个体必须基于真实任务、真实需求做 Benchmark",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7636811401314572666",
+          "publishedAt": "2026-07-15T00:00:00+08:00",
+          "datePrecision": "page-date",
+          "angle": "product-decision",
+          "event": null
+        },
+        {
+          "id": "qs-20260710-multi-agent",
+          "creatorId": "douyin-qiu-shui",
+          "creatorName": "我叫秋水",
+          "platform": "douyin",
+          "title": "为什么一个 AI 不够用，多智能体才更像真正能上线的系统",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7610025599746264339",
+          "publishedAt": "2026-07-10T00:00:00+08:00",
+          "datePrecision": "page-date",
+          "angle": "mechanism",
+          "event": null
+        }
+      ],
+      "productionState": "new",
+      "rank": 4
+    },
+    {
+      "id": "model-selection-task-cost",
+      "concept": "按任务成本选择模型",
+      "parent": "AI 产品架构",
+      "recommendedTitle": "为什么榜单第一的模型，可能不是产品里最好的模型？",
+      "recommendedPool": "formal_candidate",
+      "selectionStatus": "not_selected",
+      "score": {
+        "score": 83,
+        "rawScore": 58,
+        "availablePoints": 70,
+        "components": {
+          "creatorCoverage": {
+            "score": 28,
+            "max": 35,
+            "available": true
+          },
+          "audienceFit": {
+            "score": 15,
+            "max": 20,
+            "available": true
+          },
+          "relativePerformance": {
+            "score": null,
+            "max": 20,
+            "available": false
+          },
+          "velocity": {
+            "score": 15,
+            "max": 15,
+            "available": true
+          },
+          "questionDensity": {
+            "score": null,
+            "max": 10,
+            "available": false
+          }
+        },
+        "metricsCoverage": 0.7,
+        "performanceSampleCount": 0,
+        "questionSampleCount": 0
+      },
+      "confidence": {
+        "level": "medium",
+        "value": 0.75,
+        "datePrecision": 0.8
+      },
+      "heatGate": {
+        "passed": true,
+        "fastGatePassed": false,
+        "creators7": 3,
+        "creators14": 4,
+        "creators30": 4,
+        "platforms": [
+          "douyin"
+        ],
+        "weightedCreatorCoverage": 4.4
+      },
+      "conceptIndependence": {
+        "passed": true,
+        "checks": [
+          {
+            "id": "brand-independent",
+            "passed": true
+          },
+          {
+            "id": "cross-product-examples",
+            "passed": true
+          },
+          {
+            "id": "product-decisions",
+            "passed": true
+          },
+          {
+            "id": "primary-source-plan",
+            "passed": true
+          }
+        ]
+      },
+      "eventShare": 0.33,
+      "eventDominated": false,
+      "reasons": [
+        "14 天内 4 个独立创作者覆盖",
+        "缺少相对爆款数据，未猜测播放表现",
+        "缺少评论问题密度，未猜测用户疑问"
+      ],
+      "productDecisions": [
+        "每个成功任务的总成本",
+        "质量、延迟、失败重试与人工接管",
+        "工作流不同环节的模型路由"
+      ],
+      "primarySources": [
+        {
+          "label": "OpenAI pricing",
+          "url": "https://openai.com/api/pricing/"
+        },
+        {
+          "label": "Anthropic pricing",
+          "url": "https://docs.anthropic.com/en/docs/about-claude/pricing"
+        }
+      ],
+      "creatorEvidence": [
+        {
+          "id": "douyin-du-yu-ai",
+          "coverageGroup": "du-yu-ai",
+          "name": "杜雨说AI",
+          "platform": "douyin",
+          "category": "head-news",
+          "weight": 1.2,
+          "audienceFit": 0.7
+        },
+        {
+          "id": "douyin-na-xing",
+          "coverageGroup": "na-xing",
+          "name": "拿幸·AI启示录",
+          "platform": "douyin",
+          "category": "head-longform",
+          "weight": 1.2,
+          "audienceFit": 0.85
+        },
+        {
+          "id": "douyin-peoples-park-ai",
+          "coverageGroup": "peoples-park-ai",
+          "name": "人民公园说AI",
+          "platform": "douyin",
+          "category": "head-longform",
+          "weight": 1.2,
+          "audienceFit": 0.75
+        },
+        {
+          "id": "douyin-ning",
+          "coverageGroup": "ning",
+          "name": "Ning好",
+          "platform": "douyin",
+          "category": "fast-rising",
+          "weight": 0.8,
+          "audienceFit": 0.7
+        }
+      ],
+      "signalCount": 9,
+      "evidenceSignals": [
+        {
+          "id": "pp-20260803-model-comparison",
+          "creatorId": "douyin-peoples-park-ai",
+          "creatorName": "人民公园说AI",
+          "platform": "douyin",
+          "title": "谁是上半年最佳 AI？中美模型的产品路线比较",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7660912883055856915",
+          "publishedAt": "2026-08-03T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "comparison",
+          "event": null
+        },
+        {
+          "id": "ning-20260803-kimi",
+          "creatorId": "douyin-ning",
+          "creatorName": "Ning好",
+          "platform": "douyin",
+          "title": "实测万亿参数量大模型 Kimi K2.7 Code",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7646442018788478208",
+          "publishedAt": "2026-08-03T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "benchmark",
+          "event": null
+        },
+        {
+          "id": "nx-20260802-model-cost",
+          "creatorId": "douyin-na-xing",
+          "creatorName": "拿幸·AI启示录",
+          "platform": "douyin",
+          "title": "模型降价背后的 GPU 内核优化与任务成本",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7660745998112722222",
+          "publishedAt": "2026-08-02T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "news",
+          "event": "GPT-5.6 价格调整"
+        },
+        {
+          "id": "ning-20260801-anthropic-comparison",
+          "creatorId": "douyin-ning",
+          "creatorName": "Ning好",
+          "platform": "douyin",
+          "title": "Anthropic 最新闭源模型与其他强模型对比",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7646442018788478208",
+          "publishedAt": "2026-08-01T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "benchmark",
+          "event": null
+        },
+        {
+          "id": "ning-20260731-minimax",
+          "creatorId": "douyin-ning",
+          "creatorName": "Ning好",
+          "platform": "douyin",
+          "title": "实测 MiniMax-M3 全模态大模型",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7646442018788478208",
+          "publishedAt": "2026-07-31T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "benchmark",
+          "event": null
+        },
+        {
+          "id": "pp-20260730-super-app",
+          "creatorId": "douyin-peoples-park-ai",
+          "creatorName": "人民公园说AI",
+          "platform": "douyin",
+          "title": "GPT-5.6 变超级 App，中美 AI 产品路线发生什么变化",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7660912883055856915",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "news",
+          "event": "GPT-5.6 发布"
+        },
+        {
+          "id": "ning-20260730-deepseek",
+          "creatorId": "douyin-ning",
+          "creatorName": "Ning好",
+          "platform": "douyin",
+          "title": "实测 DeepSeek-V4 强在哪里",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7646442018788478208",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "benchmark",
+          "event": null
+        },
+        {
+          "id": "ning-20260729-qwen",
+          "creatorId": "douyin-ning",
+          "creatorName": "Ning好",
+          "platform": "douyin",
+          "title": "实测 Qwen 多模态模型与千亿参数模型",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7646442018788478208",
+          "publishedAt": "2026-07-29T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "benchmark",
+          "event": null
+        },
+        {
+          "id": "dy-20260727-kimi-moe",
+          "creatorId": "douyin-du-yu-ai",
+          "creatorName": "杜雨说AI",
+          "platform": "douyin",
+          "title": "2.8 万亿参数 Kimi K3 为什么引发关注",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7665614335116332330",
+          "publishedAt": "2026-07-27T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "news",
+          "event": "Kimi K3 发布"
+        }
+      ],
+      "productionState": "new",
+      "rank": 5
+    },
+    {
+      "id": "rag-engineering",
+      "concept": "RAG Engineering",
+      "parent": "知识系统",
+      "recommendedTitle": "RAG 不是接个向量库：真正决定效果的是哪几层？",
+      "recommendedPool": "observation_pool",
+      "selectionStatus": "not_selected",
+      "score": {
+        "score": 89,
+        "rawScore": 62,
+        "availablePoints": 70,
+        "components": {
+          "creatorCoverage": {
+            "score": 28,
+            "max": 35,
+            "available": true
+          },
+          "audienceFit": {
+            "score": 19,
+            "max": 20,
+            "available": true
+          },
+          "relativePerformance": {
+            "score": null,
+            "max": 20,
+            "available": false
+          },
+          "velocity": {
+            "score": 15,
+            "max": 15,
+            "available": true
+          },
+          "questionDensity": {
+            "score": null,
+            "max": 10,
+            "available": false
+          }
+        },
+        "metricsCoverage": 0.7,
+        "performanceSampleCount": 0,
+        "questionSampleCount": 0
+      },
+      "confidence": {
+        "level": "medium",
+        "value": 0.76,
+        "datePrecision": 0.83
+      },
+      "heatGate": {
+        "passed": false,
+        "fastGatePassed": false,
+        "creators7": 2,
+        "creators14": 2,
+        "creators30": 4,
+        "platforms": [
+          "bilibili",
+          "douyin"
+        ],
+        "weightedCreatorCoverage": 4
+      },
+      "conceptIndependence": {
+        "passed": true,
+        "checks": [
+          {
+            "id": "brand-independent",
+            "passed": true
+          },
+          {
+            "id": "cross-product-examples",
+            "passed": true
+          },
+          {
+            "id": "product-decisions",
+            "passed": true
+          },
+          {
+            "id": "primary-source-plan",
+            "passed": true
+          }
+        ]
+      },
+      "eventShare": 0,
+      "eventDominated": false,
+      "reasons": [
+        "未通过创作者覆盖硬门槛：14 天 2，30 天 4",
+        "缺少相对爆款数据，未猜测播放表现",
+        "缺少评论问题密度，未猜测用户疑问"
+      ],
+      "productDecisions": [
+        "分块、召回和重排",
+        "增量更新",
+        "什么时候不应该用 RAG"
+      ],
+      "primarySources": [
+        {
+          "label": "RAG paper",
+          "url": "https://arxiv.org/abs/2005.11401"
+        }
+      ],
+      "creatorEvidence": [
+        {
+          "id": "douyin-llm-project-practice",
+          "coverageGroup": "llm-project-practice",
+          "name": "大模型项目实战",
+          "platform": "douyin",
+          "category": "engineering",
+          "weight": 1,
+          "audienceFit": 0.9
+        },
+        {
+          "id": "bilibili-feiman-ai",
+          "coverageGroup": "feiman-ai",
+          "name": "费曼学AI",
+          "platform": "bilibili",
+          "category": "agent-education",
+          "weight": 1,
+          "audienceFit": 0.9
+        },
+        {
+          "id": "douyin-ming-jie",
+          "coverageGroup": "ming-jie",
+          "name": "鸣姐.AI进阶",
+          "platform": "douyin",
+          "category": "ai-product",
+          "weight": 1,
+          "audienceFit": 1
+        },
+        {
+          "id": "douyin-ai-model-learning",
+          "coverageGroup": "ai-model-learning-secondary",
+          "name": "Ai大模型学习",
+          "platform": "douyin",
+          "category": "agent-education",
+          "weight": 1,
+          "audienceFit": 0.9
+        }
+      ],
+      "signalCount": 5,
+      "evidenceSignals": [
+        {
+          "id": "bili-20260730-agent-memory",
+          "creatorId": "bilibili-feiman-ai",
+          "creatorName": "费曼学AI",
+          "platform": "bilibili",
+          "title": "Agent 记忆系统：上下文、Agent Loop、Harness 与 RAG",
+          "sourceUrl": "https://www.bilibili.com/video/BV1uiEM6xE9s/",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "observation-window",
+          "angle": "mechanism",
+          "event": null
+        },
+        {
+          "id": "lmp-20260729-rag-hot-update",
+          "creatorId": "douyin-llm-project-practice",
+          "creatorName": "大模型项目实战",
+          "platform": "douyin",
+          "title": "RAG 怎么做热更新？",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7659339584513379630",
+          "publishedAt": "2026-07-29T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "mechanism",
+          "event": null
+        },
+        {
+          "id": "lmp-20260726-multimodal-rag",
+          "creatorId": "douyin-llm-project-practice",
+          "creatorName": "大模型项目实战",
+          "platform": "douyin",
+          "title": "多模态 RAG 图片检索从原理到工程落地",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7659339584513379630",
+          "publishedAt": "2026-07-26T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "mechanism",
+          "event": null
+        },
+        {
+          "id": "aiml-20260710-rag-selection",
+          "creatorId": "douyin-ai-model-learning",
+          "creatorName": "Ai大模型学习",
+          "platform": "douyin",
+          "title": "RAG 方案 17 选 1 怎么挑？",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7649325778957585727",
+          "publishedAt": "2026-07-10T00:00:00+08:00",
+          "datePrecision": "page-date",
+          "angle": "product-decision",
+          "event": null
+        },
+        {
+          "id": "ming-20260708-agent-research",
+          "creatorId": "douyin-ming-jie",
+          "creatorName": "鸣姐.AI进阶",
+          "platform": "douyin",
+          "title": "怎么让智能体找高质量信息源",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7620785929350925631",
+          "publishedAt": "2026-07-08T00:00:00+08:00",
+          "datePrecision": "page-date",
+          "angle": "tutorial",
+          "event": null
+        }
+      ],
+      "productionState": "new",
+      "rank": 6
+    },
+    {
+      "id": "multi-agent",
+      "concept": "Multi-Agent System",
+      "parent": "Agent 工程栈",
+      "recommendedTitle": "为什么一个 Agent 不够用？多智能体系统到底多解决了什么",
+      "recommendedPool": "observation_pool",
+      "selectionStatus": "not_selected",
+      "score": {
+        "score": 63,
+        "rawScore": 44,
+        "availablePoints": 70,
+        "components": {
+          "creatorCoverage": {
+            "score": 14,
+            "max": 35,
+            "available": true
+          },
+          "audienceFit": {
+            "score": 20,
+            "max": 20,
+            "available": true
+          },
+          "relativePerformance": {
+            "score": null,
+            "max": 20,
+            "available": false
+          },
+          "velocity": {
+            "score": 10,
+            "max": 15,
+            "available": true
+          },
+          "questionDensity": {
+            "score": null,
+            "max": 10,
+            "available": false
+          }
+        },
+        "metricsCoverage": 0.7,
+        "performanceSampleCount": 0,
+        "questionSampleCount": 0
+      },
+      "confidence": {
+        "level": "medium",
+        "value": 0.74,
+        "datePrecision": 0.78
+      },
+      "heatGate": {
+        "passed": false,
+        "fastGatePassed": false,
+        "creators7": 2,
+        "creators14": 2,
+        "creators30": 2,
+        "platforms": [
+          "douyin"
+        ],
+        "weightedCreatorCoverage": 2.4
+      },
+      "conceptIndependence": {
+        "passed": true,
+        "checks": [
+          {
+            "id": "brand-independent",
+            "passed": true
+          },
+          {
+            "id": "cross-product-examples",
+            "passed": true
+          },
+          {
+            "id": "product-decisions",
+            "passed": true
+          },
+          {
+            "id": "primary-source-plan",
+            "passed": true
+          }
+        ]
+      },
+      "eventShare": 0,
+      "eventDominated": false,
+      "reasons": [
+        "未通过创作者覆盖硬门槛：14 天 2，30 天 2",
+        "缺少相对爆款数据，未猜测播放表现",
+        "缺少评论问题密度，未猜测用户疑问"
+      ],
+      "productDecisions": [
+        "何时拆角色",
+        "并发、监督和冲突解决",
+        "多 Agent 是否真的优于单 Agent"
+      ],
+      "primarySources": [
+        {
+          "label": "AutoGen research",
+          "url": "https://arxiv.org/abs/2308.08155"
+        }
+      ],
+      "creatorEvidence": [
+        {
+          "id": "douyin-qiu-shui",
+          "coverageGroup": "qiu-shui",
+          "name": "我叫秋水",
+          "platform": "douyin",
+          "category": "agent-product",
+          "weight": 1.2,
+          "audienceFit": 1
+        },
+        {
+          "id": "douyin-user-reference-ai-model-learning",
+          "coverageGroup": "ai-model-learning-reference",
+          "name": "AI大模型学习（用户参考账号）",
+          "platform": "douyin",
+          "category": "target-reference",
+          "weight": 1.2,
+          "audienceFit": 1
+        }
+      ],
+      "signalCount": 3,
+      "evidenceSignals": [
+        {
+          "id": "ref-20260730-agent",
+          "creatorId": "douyin-user-reference-ai-model-learning",
+          "creatorName": "AI大模型学习（用户参考账号）",
+          "platform": "douyin",
+          "title": "一个视频讲透 AI Agent",
+          "sourceUrl": "https://www.douyin.com/video/7662006502680431887",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "observation-window",
+          "angle": "definition",
+          "event": null
+        },
+        {
+          "id": "qs-20260728-skill-subagent",
+          "creatorId": "douyin-qiu-shui",
+          "creatorName": "我叫秋水",
+          "platform": "douyin",
+          "title": "搞懂 Skill 和 Sub Agent 的区别和使用场景",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7610025599746264339",
+          "publishedAt": "2026-07-28T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "comparison",
+          "event": null
+        },
+        {
+          "id": "qs-20260710-multi-agent",
+          "creatorId": "douyin-qiu-shui",
+          "creatorName": "我叫秋水",
+          "platform": "douyin",
+          "title": "为什么一个 AI 不够用，多智能体才更像真正能上线的系统",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7610025599746264339",
+          "publishedAt": "2026-07-10T00:00:00+08:00",
+          "datePrecision": "page-date",
+          "angle": "mechanism",
+          "event": null
+        }
+      ],
+      "productionState": "new",
+      "rank": 7
+    },
+    {
+      "id": "post-training",
+      "concept": "LLM Post-Training",
+      "parent": "模型训练",
+      "recommendedTitle": "模型参数没变，能力为什么还能大涨？后训练到底改变了什么",
+      "recommendedPool": "observation_pool",
+      "selectionStatus": "not_selected",
+      "score": {
+        "score": 59,
+        "rawScore": 41,
+        "availablePoints": 70,
+        "components": {
+          "creatorCoverage": {
+            "score": 13,
+            "max": 35,
+            "available": true
+          },
+          "audienceFit": {
+            "score": 18,
+            "max": 20,
+            "available": true
+          },
+          "relativePerformance": {
+            "score": null,
+            "max": 20,
+            "available": false
+          },
+          "velocity": {
+            "score": 10,
+            "max": 15,
+            "available": true
+          },
+          "questionDensity": {
+            "score": null,
+            "max": 10,
+            "available": false
+          }
+        },
+        "metricsCoverage": 0.7,
+        "performanceSampleCount": 0,
+        "questionSampleCount": 0
+      },
+      "confidence": {
+        "level": "medium",
+        "value": 0.75,
+        "datePrecision": 0.8
+      },
+      "heatGate": {
+        "passed": false,
+        "fastGatePassed": false,
+        "creators7": 2,
+        "creators14": 2,
+        "creators30": 2,
+        "platforms": [
+          "douyin"
+        ],
+        "weightedCreatorCoverage": 2.2
+      },
+      "conceptIndependence": {
+        "passed": true,
+        "checks": [
+          {
+            "id": "brand-independent",
+            "passed": true
+          },
+          {
+            "id": "cross-product-examples",
+            "passed": true
+          },
+          {
+            "id": "product-decisions",
+            "passed": true
+          },
+          {
+            "id": "primary-source-plan",
+            "passed": true
+          }
+        ]
+      },
+      "eventShare": 0.5,
+      "eventDominated": false,
+      "reasons": [
+        "未通过创作者覆盖硬门槛：14 天 2，30 天 2",
+        "缺少相对爆款数据，未猜测播放表现",
+        "缺少评论问题密度，未猜测用户疑问"
+      ],
+      "productDecisions": [
+        "基础能力与行为优化的边界",
+        "数据与奖励设计",
+        "评测漂移"
+      ],
+      "primarySources": [
+        {
+          "label": "InstructGPT paper",
+          "url": "https://arxiv.org/abs/2203.02155"
+        }
+      ],
+      "creatorEvidence": [
+        {
+          "id": "douyin-na-xing",
+          "coverageGroup": "na-xing",
+          "name": "拿幸·AI启示录",
+          "platform": "douyin",
+          "category": "head-longform",
+          "weight": 1.2,
+          "audienceFit": 0.85
+        },
+        {
+          "id": "douyin-llm-project-practice",
+          "coverageGroup": "llm-project-practice",
+          "name": "大模型项目实战",
+          "platform": "douyin",
+          "category": "engineering",
+          "weight": 1,
+          "audienceFit": 0.9
+        }
+      ],
+      "signalCount": 2,
+      "evidenceSignals": [
+        {
+          "id": "nx-20260803-post-training-agent",
+          "creatorId": "douyin-na-xing",
+          "creatorName": "拿幸·AI启示录",
+          "platform": "douyin",
+          "title": "参数架构未改，仅靠后训练提升 Agent 能力",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7660745998112722222",
+          "publishedAt": "2026-08-03T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "news",
+          "event": "DeepSeek V4-Flash 发布"
+        },
+        {
+          "id": "lmp-20260730-sft-rl",
+          "creatorId": "douyin-llm-project-practice",
+          "creatorName": "大模型项目实战",
+          "platform": "douyin",
+          "title": "SFT 之后做 RL，模型为何先变差再变好",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7659339584513379630",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "mechanism",
+          "event": null
+        }
+      ],
+      "productionState": "new",
+      "rank": 8
+    },
+    {
+      "id": "agent-security",
+      "concept": "Agent 权限、安全与沙箱",
+      "parent": "Agent 工程栈",
+      "recommendedTitle": "Agent 为什么必须被关进沙箱？权限边界到底该怎么设计",
+      "recommendedPool": "observation_pool",
+      "selectionStatus": "not_selected",
+      "score": {
+        "score": 56,
+        "rawScore": 39,
+        "availablePoints": 70,
+        "components": {
+          "creatorCoverage": {
+            "score": 14,
+            "max": 35,
+            "available": true
+          },
+          "audienceFit": {
+            "score": 15,
+            "max": 20,
+            "available": true
+          },
+          "relativePerformance": {
+            "score": null,
+            "max": 20,
+            "available": false
+          },
+          "velocity": {
+            "score": 10,
+            "max": 15,
+            "available": true
+          },
+          "questionDensity": {
+            "score": null,
+            "max": 10,
+            "available": false
+          }
+        },
+        "metricsCoverage": 0.7,
+        "performanceSampleCount": 0,
+        "questionSampleCount": 0
+      },
+      "confidence": {
+        "level": "medium",
+        "value": 0.75,
+        "datePrecision": 0.8
+      },
+      "heatGate": {
+        "passed": false,
+        "fastGatePassed": false,
+        "creators7": 2,
+        "creators14": 2,
+        "creators30": 2,
+        "platforms": [
+          "douyin"
+        ],
+        "weightedCreatorCoverage": 2.4
+      },
+      "conceptIndependence": {
+        "passed": true,
+        "checks": [
+          {
+            "id": "brand-independent",
+            "passed": true
+          },
+          {
+            "id": "cross-product-examples",
+            "passed": true
+          },
+          {
+            "id": "product-decisions",
+            "passed": true
+          },
+          {
+            "id": "primary-source-plan",
+            "passed": true
+          }
+        ]
+      },
+      "eventShare": 0.5,
+      "eventDominated": false,
+      "reasons": [
+        "未通过创作者覆盖硬门槛：14 天 2，30 天 2",
+        "缺少相对爆款数据，未猜测播放表现",
+        "缺少评论问题密度，未猜测用户疑问"
+      ],
+      "productDecisions": [
+        "最小权限",
+        "确认与可逆操作",
+        "凭据、网络和文件隔离"
+      ],
+      "primarySources": [
+        {
+          "label": "OWASP Agentic AI threats",
+          "url": "https://genai.owasp.org/"
+        }
+      ],
+      "creatorEvidence": [
+        {
+          "id": "douyin-du-yu-ai",
+          "coverageGroup": "du-yu-ai",
+          "name": "杜雨说AI",
+          "platform": "douyin",
+          "category": "head-news",
+          "weight": 1.2,
+          "audienceFit": 0.7
+        },
+        {
+          "id": "douyin-na-xing",
+          "coverageGroup": "na-xing",
+          "name": "拿幸·AI启示录",
+          "platform": "douyin",
+          "category": "head-longform",
+          "weight": 1.2,
+          "audienceFit": 0.85
+        }
+      ],
+      "signalCount": 2,
+      "evidenceSignals": [
+        {
+          "id": "dy-20260803-agent-sandbox",
+          "creatorId": "douyin-du-yu-ai",
+          "creatorName": "杜雨说AI",
+          "platform": "douyin",
+          "title": "GPT 黑入 Hugging Face：Agent 沙箱和凭据边界",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7665614335116332330",
+          "publishedAt": "2026-08-03T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "news",
+          "event": "模型安全评测事故"
+        },
+        {
+          "id": "nx-20260801-agent-security",
+          "creatorId": "douyin-na-xing",
+          "creatorName": "拿幸·AI启示录",
+          "platform": "douyin",
+          "title": "Agent 拿到权限后的挖矿、勒索与泄密风险",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7660745998112722222",
+          "publishedAt": "2026-08-01T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "mechanism",
+          "event": null
+        }
+      ],
+      "productionState": "new",
+      "rank": 9
+    },
+    {
+      "id": "physical-ai",
+      "concept": "Physical AI",
+      "parent": "机器人与具身智能",
+      "recommendedTitle": "Physical AI 是什么？世界模型、VLA 和机器人“大脑”到底什么关系？",
+      "recommendedPool": "observation_pool",
+      "selectionStatus": "not_selected",
+      "score": {
+        "score": 54,
+        "rawScore": 38,
+        "availablePoints": 70,
+        "components": {
+          "creatorCoverage": {
+            "score": 14,
+            "max": 35,
+            "available": true
+          },
+          "audienceFit": {
+            "score": 14,
+            "max": 20,
+            "available": true
+          },
+          "relativePerformance": {
+            "score": null,
+            "max": 20,
+            "available": false
+          },
+          "velocity": {
+            "score": 10,
+            "max": 15,
+            "available": true
+          },
+          "questionDensity": {
+            "score": null,
+            "max": 10,
+            "available": false
+          }
+        },
+        "metricsCoverage": 0.7,
+        "performanceSampleCount": 0,
+        "questionSampleCount": 0
+      },
+      "confidence": {
+        "level": "medium",
+        "value": 0.75,
+        "datePrecision": 0.8
+      },
+      "heatGate": {
+        "passed": false,
+        "fastGatePassed": false,
+        "creators7": 2,
+        "creators14": 2,
+        "creators30": 2,
+        "platforms": [
+          "douyin"
+        ],
+        "weightedCreatorCoverage": 2.4
+      },
+      "conceptIndependence": {
+        "passed": true,
+        "checks": [
+          {
+            "id": "brand-independent",
+            "passed": true
+          },
+          {
+            "id": "cross-product-examples",
+            "passed": true
+          },
+          {
+            "id": "product-decisions",
+            "passed": true
+          },
+          {
+            "id": "primary-source-plan",
+            "passed": true
+          }
+        ]
+      },
+      "eventShare": 1,
+      "eventDominated": true,
+      "reasons": [
+        "未通过创作者覆盖硬门槛：14 天 2，30 天 2",
+        "事件型内容占 100%，暂不直接立项",
+        "缺少相对爆款数据，未猜测播放表现",
+        "缺少评论问题密度，未猜测用户疑问"
+      ],
+      "productDecisions": [
+        "感知到动作的闭环",
+        "仿真与真实数据",
+        "失败代价和人工接管"
+      ],
+      "primarySources": [
+        {
+          "label": "NVIDIA robotics",
+          "url": "https://www.nvidia.com/en-us/industries/robotics/"
+        }
+      ],
+      "creatorEvidence": [
+        {
+          "id": "douyin-du-yu-ai",
+          "coverageGroup": "du-yu-ai",
+          "name": "杜雨说AI",
+          "platform": "douyin",
+          "category": "head-news",
+          "weight": 1.2,
+          "audienceFit": 0.7
+        },
+        {
+          "id": "douyin-ai-wind-vane",
+          "coverageGroup": "ai-wind-vane",
+          "name": "AI风向标",
+          "platform": "douyin",
+          "category": "head-news",
+          "weight": 1.2,
+          "audienceFit": 0.65
+        }
+      ],
+      "signalCount": 2,
+      "evidenceSignals": [
+        {
+          "id": "dy-20260803-waic",
+          "creatorId": "douyin-du-yu-ai",
+          "creatorName": "杜雨说AI",
+          "platform": "douyin",
+          "title": "从 WAIC 回来，AI 圈的风口转向机器人和 Physical AI",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7665614335116332330",
+          "publishedAt": "2026-08-03T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "news",
+          "event": "WAIC"
+        },
+        {
+          "id": "afv-20260803-waic-roundup",
+          "creatorId": "douyin-ai-wind-vane",
+          "creatorName": "AI风向标",
+          "platform": "douyin",
+          "title": "WAIC 机器人集中亮相与 Physical AI 应用",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7655645706144779572",
+          "publishedAt": "2026-08-03T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "news",
+          "event": "WAIC"
+        }
+      ],
+      "productionState": "new",
+      "rank": 10
+    },
+    {
+      "id": "mixture-of-experts",
+      "concept": "Mixture of Experts（MoE）",
+      "parent": "模型架构",
+      "recommendedTitle": "参数很多为什么还能便宜？MoE 的专家路由到底省了什么",
+      "recommendedPool": "observation_pool",
+      "selectionStatus": "not_selected",
+      "score": {
+        "score": 51,
+        "rawScore": 36,
+        "availablePoints": 70,
+        "components": {
+          "creatorCoverage": {
+            "score": 12,
+            "max": 35,
+            "available": true
+          },
+          "audienceFit": {
+            "score": 14,
+            "max": 20,
+            "available": true
+          },
+          "relativePerformance": {
+            "score": null,
+            "max": 20,
+            "available": false
+          },
+          "velocity": {
+            "score": 10,
+            "max": 15,
+            "available": true
+          },
+          "questionDensity": {
+            "score": null,
+            "max": 10,
+            "available": false
+          }
+        },
+        "metricsCoverage": 0.7,
+        "performanceSampleCount": 0,
+        "questionSampleCount": 0
+      },
+      "confidence": {
+        "level": "medium",
+        "value": 0.75,
+        "datePrecision": 0.8
+      },
+      "heatGate": {
+        "passed": false,
+        "fastGatePassed": false,
+        "creators7": 1,
+        "creators14": 2,
+        "creators30": 2,
+        "platforms": [
+          "douyin"
+        ],
+        "weightedCreatorCoverage": 2
+      },
+      "conceptIndependence": {
+        "passed": true,
+        "checks": [
+          {
+            "id": "brand-independent",
+            "passed": true
+          },
+          {
+            "id": "cross-product-examples",
+            "passed": true
+          },
+          {
+            "id": "product-decisions",
+            "passed": true
+          },
+          {
+            "id": "primary-source-plan",
+            "passed": true
+          }
+        ]
+      },
+      "eventShare": 0.5,
+      "eventDominated": false,
+      "reasons": [
+        "未通过创作者覆盖硬门槛：14 天 2，30 天 2",
+        "缺少相对爆款数据，未猜测播放表现",
+        "缺少评论问题密度，未猜测用户疑问"
+      ],
+      "productDecisions": [
+        "参数规模与实际计算量",
+        "吞吐、显存和延迟",
+        "部署与许可边界"
+      ],
+      "primarySources": [
+        {
+          "label": "Sparsely-Gated MoE paper",
+          "url": "https://arxiv.org/abs/1701.06538"
+        }
+      ],
+      "creatorEvidence": [
+        {
+          "id": "douyin-du-yu-ai",
+          "coverageGroup": "du-yu-ai",
+          "name": "杜雨说AI",
+          "platform": "douyin",
+          "category": "head-news",
+          "weight": 1.2,
+          "audienceFit": 0.7
+        },
+        {
+          "id": "douyin-ning",
+          "coverageGroup": "ning",
+          "name": "Ning好",
+          "platform": "douyin",
+          "category": "fast-rising",
+          "weight": 0.8,
+          "audienceFit": 0.7
+        }
+      ],
+      "signalCount": 2,
+      "evidenceSignals": [
+        {
+          "id": "ning-20260803-kimi",
+          "creatorId": "douyin-ning",
+          "creatorName": "Ning好",
+          "platform": "douyin",
+          "title": "实测万亿参数量大模型 Kimi K2.7 Code",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7646442018788478208",
+          "publishedAt": "2026-08-03T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "benchmark",
+          "event": null
+        },
+        {
+          "id": "dy-20260727-kimi-moe",
+          "creatorId": "douyin-du-yu-ai",
+          "creatorName": "杜雨说AI",
+          "platform": "douyin",
+          "title": "2.8 万亿参数 Kimi K3 为什么引发关注",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7665614335116332330",
+          "publishedAt": "2026-07-27T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "news",
+          "event": "Kimi K3 发布"
+        }
+      ],
+      "productionState": "new",
+      "rank": 11
+    },
+    {
+      "id": "agentic-coding",
+      "concept": "Agentic Coding",
+      "parent": "AI Coding",
+      "recommendedTitle": "Agentic Coding 为什么不是 Vibe Coding 2.0？从写代码到交付任务发生了什么？",
+      "recommendedPool": "already_covered",
+      "selectionStatus": "not_selected",
+      "score": {
+        "score": 97,
+        "rawScore": 68,
+        "availablePoints": 70,
+        "components": {
+          "creatorCoverage": {
+            "score": 35,
+            "max": 35,
+            "available": true
+          },
+          "audienceFit": {
+            "score": 18,
+            "max": 20,
+            "available": true
+          },
+          "relativePerformance": {
+            "score": null,
+            "max": 20,
+            "available": false
+          },
+          "velocity": {
+            "score": 15,
+            "max": 15,
+            "available": true
+          },
+          "questionDensity": {
+            "score": null,
+            "max": 10,
+            "available": false
+          }
+        },
+        "metricsCoverage": 0.7,
+        "performanceSampleCount": 0,
+        "questionSampleCount": 0
+      },
+      "confidence": {
+        "level": "medium",
+        "value": 0.73,
+        "datePrecision": 0.76
+      },
+      "heatGate": {
+        "passed": true,
+        "fastGatePassed": false,
+        "creators7": 9,
+        "creators14": 10,
+        "creators30": 12,
+        "platforms": [
+          "douyin",
+          "bilibili"
+        ],
+        "weightedCreatorCoverage": 13
+      },
+      "conceptIndependence": {
+        "passed": true,
+        "checks": [
+          {
+            "id": "brand-independent",
+            "passed": true
+          },
+          {
+            "id": "cross-product-examples",
+            "passed": true
+          },
+          {
+            "id": "product-decisions",
+            "passed": true
+          },
+          {
+            "id": "primary-source-plan",
+            "passed": true
+          }
+        ]
+      },
+      "eventShare": 0.19,
+      "eventDominated": false,
+      "reasons": [
+        "14 天内 10 个独立创作者覆盖",
+        "缺少相对爆款数据，未猜测播放表现",
+        "缺少评论问题密度，未猜测用户疑问",
+        "该概念已经进入过视频生产，不重复占用新一期推荐位"
+      ],
+      "productDecisions": [
+        "任务授权范围",
+        "完成定义与验收",
+        "人工接管和可逆性"
+      ],
+      "primarySources": [
+        {
+          "label": "OpenAI Codex",
+          "url": "https://developers.openai.com/codex/"
+        },
+        {
+          "label": "Anthropic Claude Code",
+          "url": "https://docs.anthropic.com/en/docs/claude-code/overview"
+        }
+      ],
+      "creatorEvidence": [
+        {
+          "id": "douyin-na-xing",
+          "coverageGroup": "na-xing",
+          "name": "拿幸·AI启示录",
+          "platform": "douyin",
+          "category": "head-longform",
+          "weight": 1.2,
+          "audienceFit": 0.85
+        },
+        {
+          "id": "douyin-peoples-park-ai",
+          "coverageGroup": "peoples-park-ai",
+          "name": "人民公园说AI",
+          "platform": "douyin",
+          "category": "head-longform",
+          "weight": 1.2,
+          "audienceFit": 0.75
+        },
+        {
+          "id": "bilibili-shangguigu",
+          "coverageGroup": "shangguigu",
+          "name": "尚硅谷",
+          "platform": "bilibili",
+          "category": "head-education",
+          "weight": 1.2,
+          "audienceFit": 0.8
+        },
+        {
+          "id": "douyin-qiu-shui",
+          "coverageGroup": "qiu-shui",
+          "name": "我叫秋水",
+          "platform": "douyin",
+          "category": "agent-product",
+          "weight": 1.2,
+          "audienceFit": 1
+        },
+        {
+          "id": "douyin-ya-hui-pm",
+          "coverageGroup": "ya-hui-pm",
+          "name": "亚慧AI产品经理",
+          "platform": "douyin",
+          "category": "target-reference",
+          "weight": 1.2,
+          "audienceFit": 1
+        },
+        {
+          "id": "douyin-user-reference-ai-model-learning",
+          "coverageGroup": "ai-model-learning-reference",
+          "name": "AI大模型学习（用户参考账号）",
+          "platform": "douyin",
+          "category": "target-reference",
+          "weight": 1.2,
+          "audienceFit": 1
+        },
+        {
+          "id": "douyin-old-mai",
+          "coverageGroup": "old-mai",
+          "name": "大模型老迈",
+          "platform": "douyin",
+          "category": "agent-education",
+          "weight": 1,
+          "audienceFit": 0.85
+        },
+        {
+          "id": "bilibili-feiman-ai",
+          "coverageGroup": "feiman-ai",
+          "name": "费曼学AI",
+          "platform": "bilibili",
+          "category": "agent-education",
+          "weight": 1,
+          "audienceFit": 0.9
+        },
+        {
+          "id": "douyin-ming-jie",
+          "coverageGroup": "ming-jie",
+          "name": "鸣姐.AI进阶",
+          "platform": "douyin",
+          "category": "ai-product",
+          "weight": 1,
+          "audienceFit": 1
+        },
+        {
+          "id": "douyin-howoneai",
+          "coverageGroup": "howoneai",
+          "name": "HowOneAI-余一",
+          "platform": "douyin",
+          "category": "ai-product",
+          "weight": 1,
+          "audienceFit": 1
+        },
+        {
+          "id": "douyin-sherry",
+          "coverageGroup": "sherry",
+          "name": "Sherry小水",
+          "platform": "douyin",
+          "category": "ai-tools",
+          "weight": 1,
+          "audienceFit": 0.85
+        },
+        {
+          "id": "douyin-ning",
+          "coverageGroup": "ning",
+          "name": "Ning好",
+          "platform": "douyin",
+          "category": "fast-rising",
+          "weight": 0.8,
+          "audienceFit": 0.7
+        }
+      ],
+      "signalCount": 16,
+      "evidenceSignals": [
+        {
+          "id": "nx-20260803-post-training-agent",
+          "creatorId": "douyin-na-xing",
+          "creatorName": "拿幸·AI启示录",
+          "platform": "douyin",
+          "title": "参数架构未改，仅靠后训练提升 Agent 能力",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7660745998112722222",
+          "publishedAt": "2026-08-03T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "news",
+          "event": "DeepSeek V4-Flash 发布"
+        },
+        {
+          "id": "ning-20260803-kimi",
+          "creatorId": "douyin-ning",
+          "creatorName": "Ning好",
+          "platform": "douyin",
+          "title": "实测万亿参数量大模型 Kimi K2.7 Code",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7646442018788478208",
+          "publishedAt": "2026-08-03T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "benchmark",
+          "event": null
+        },
+        {
+          "id": "nx-20260801-agent-self-improvement",
+          "creatorId": "douyin-na-xing",
+          "creatorName": "拿幸·AI启示录",
+          "platform": "douyin",
+          "title": "Harness 脚手架与 AI 自主研发闭环",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7660745998112722222",
+          "publishedAt": "2026-08-01T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "news",
+          "event": "研究人员回归 OpenAI"
+        },
+        {
+          "id": "how-20260731-workflow-lesson",
+          "creatorId": "douyin-howoneai",
+          "creatorName": "HowOneAI-余一",
+          "platform": "douyin",
+          "title": "AI 改造工作流的一手教训：不要脱离真实目标和评估",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7636811401314572666",
+          "publishedAt": "2026-07-31T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "product-decision",
+          "event": null
+        },
+        {
+          "id": "yh-20260730-harness-context",
+          "creatorId": "douyin-ya-hui-pm",
+          "creatorName": "亚慧AI产品经理",
+          "platform": "douyin",
+          "title": "AI 产品面试：Harness 工程 vs 上下文工程是什么",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7594508930187268794",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "comparison",
+          "event": null
+        },
+        {
+          "id": "pp-20260730-super-app",
+          "creatorId": "douyin-peoples-park-ai",
+          "creatorName": "人民公园说AI",
+          "platform": "douyin",
+          "title": "GPT-5.6 变超级 App，中美 AI 产品路线发生什么变化",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7660912883055856915",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "news",
+          "event": "GPT-5.6 发布"
+        },
+        {
+          "id": "oldmai-20260730-agent-learning",
+          "creatorId": "douyin-old-mai",
+          "creatorName": "大模型老迈",
+          "platform": "douyin",
+          "title": "假如你从 7 月 25 号开始学 AI Agent",
+          "sourceUrl": "https://jingxuan.douyin.com/m/video/7665665833837940003",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "relative-day-estimate",
+          "angle": "tutorial",
+          "event": null
+        },
+        {
+          "id": "ref-20260730-agent",
+          "creatorId": "douyin-user-reference-ai-model-learning",
+          "creatorName": "AI大模型学习（用户参考账号）",
+          "platform": "douyin",
+          "title": "一个视频讲透 AI Agent",
+          "sourceUrl": "https://www.douyin.com/video/7662006502680431887",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "observation-window",
+          "angle": "definition",
+          "event": null
+        },
+        {
+          "id": "ref-20260730-vibe",
+          "creatorId": "douyin-user-reference-ai-model-learning",
+          "creatorName": "AI大模型学习（用户参考账号）",
+          "platform": "douyin",
+          "title": "Vibe Coding 架构",
+          "sourceUrl": "https://www.douyin.com/video/7660139608916184358",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "observation-window",
+          "angle": "mechanism",
+          "event": null
+        },
+        {
+          "id": "ref-20260730-loop",
+          "creatorId": "douyin-user-reference-ai-model-learning",
+          "creatorName": "AI大模型学习（用户参考账号）",
+          "platform": "douyin",
+          "title": "Loop Engineering",
+          "sourceUrl": "https://www.douyin.com/video/7655651382208351494",
+          "publishedAt": "2026-07-30T00:00:00+08:00",
+          "datePrecision": "observation-window",
+          "angle": "mechanism",
+          "event": null
+        }
+      ],
+      "productionState": "already_covered",
+      "rank": 12
+    }
+  ],
+  "unmappedSignals": [
+    {
+      "id": "afv-20260729-ai-jargon",
+      "creatorId": "douyin-ai-wind-vane",
+      "title": "三分钟搞懂 AI 高频黑话"
+    }
+  ]
+}

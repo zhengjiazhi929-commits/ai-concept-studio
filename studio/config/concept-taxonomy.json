@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 1,
+  "concepts": [
+    {
+      "id": "agent-skill",
+      "name": "Agent Skill",
+      "aliases": ["agent skill", "agent skills", "skill 架构", "skills 架构", "skill和sub agent", "skill 和 sub agent", "mcp 和 skills", "mcp与skills", "内容生成 skill", "海量skill", "skill加载"],
+      "parent": "Agent 工程栈",
+      "brandIndependent": true,
+      "crossProductExamples": ["Codex Skills", "Claude Agent Skills"],
+      "productDecisions": ["何时沉淀过程知识", "Skill 与工具、MCP、Sub-agent 的分工", "版本、权限和供应链治理"],
+      "primarySources": [
+        {"label": "Agent Skills specification", "url": "https://agentskills.io/specification"},
+        {"label": "Agent Skills research", "url": "https://arxiv.org/abs/2602.12430"}
+      ],
+      "halfLifeDays": 21,
+      "recommendedTitle": "Agent Skill 到底是什么？它不是 Prompt，也不是 MCP"
+    },
+    {
+      "id": "context-engineering-memory",
+      "name": "Context Engineering 与 Agent Memory",
+      "aliases": ["context engineering", "上下文工程", "agent memory", "agent 记忆", "长期记忆", "记忆污染", "第二大脑", "上下文溢出", "记忆系统"],
+      "parent": "Agent 工程栈",
+      "brandIndependent": true,
+      "crossProductExamples": ["AgentCore Memory", "LangGraph Memory"],
+      "productDecisions": ["什么应该写入记忆", "召回、压缩、更新与遗忘", "记忆污染和隐私治理"],
+      "primarySources": [
+        {"label": "AWS Agent memory engineering", "url": "https://aws.amazon.com/cn/blogs/china/agent-system-engineering-practice/"},
+        {"label": "AgentCore Memory documentation", "url": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html"}
+      ],
+      "halfLifeDays": 21,
+      "recommendedTitle": "上下文越长，Agent 就越聪明吗？Context Engineering 真正在设计什么？"
+    },
+    {
+      "id": "agentic-coding",
+      "name": "Agentic Coding",
+      "aliases": ["agentic coding", "vibe coding", "ai 编程", "ai编程", "codex", "claude code", "代码交付", "完整开发任务", "ai把代码写更快", "ai 开发产品"],
+      "parent": "AI Coding",
+      "brandIndependent": true,
+      "crossProductExamples": ["Codex", "Claude Code"],
+      "productDecisions": ["任务授权范围", "完成定义与验收", "人工接管和可逆性"],
+      "primarySources": [
+        {"label": "OpenAI Codex", "url": "https://developers.openai.com/codex/"},
+        {"label": "Anthropic Claude Code", "url": "https://docs.anthropic.com/en/docs/claude-code/overview"}
+      ],
+      "halfLifeDays": 21,
+      "recommendedTitle": "Agentic Coding 为什么不是 Vibe Coding 2.0？从写代码到交付任务发生了什么？"
+    },
+    {
+      "id": "agent-evaluation",
+      "name": "Agent Evaluation",
+      "aliases": ["agent eval", "agent evaluation", "private evals", "真实任务 benchmark", "上线要求", "上线标准", "任务评估", "验收标准", "评估测试"],
+      "parent": "Agent 工程栈",
+      "brandIndependent": true,
+      "crossProductExamples": ["OpenAI Evals", "SWE-bench"],
+      "productDecisions": ["从回答质量转向任务成功率", "建立真实任务集", "失败分类和人工接管指标"],
+      "primarySources": [
+        {"label": "OpenAI Evals guide", "url": "https://platform.openai.com/docs/guides/evals"},
+        {"label": "SWE-bench", "url": "https://www.swebench.com/"}
+      ],
+      "halfLifeDays": 21,
+      "recommendedTitle": "Agent 到底怎么验收？为什么 Demo 成功率不等于能上线"
+    },
+    {
+      "id": "model-context-protocol",
+      "name": "Model Context Protocol（MCP）",
+      "aliases": ["model context protocol", "mcp", "无状态 mcp", "stateless mcp", "mcp协议", "mcp 协议"],
+      "parent": "Agent 工程栈",
+      "brandIndependent": true,
+      "crossProductExamples": ["Claude MCP clients", "Codex MCP integrations"],
+      "productDecisions": ["何时标准化工具连接", "会话与无状态边界", "权限、部署和可观测性"],
+      "primarySources": [
+        {"label": "MCP specification", "url": "https://modelcontextprotocol.io/specification"}
+      ],
+      "halfLifeDays": 21,
+      "recommendedTitle": "MCP 到底解决什么问题？它为什么不是另一个 API 名字"
+    },
+    {
+      "id": "multi-agent",
+      "name": "Multi-Agent System",
+      "aliases": ["multi-agent", "multi agent", "多智能体", "sub-agent", "sub agent", "并行 agent", "agent团队", "agent 团队"],
+      "parent": "Agent 工程栈",
+      "brandIndependent": true,
+      "crossProductExamples": ["AutoGen", "LangGraph multi-agent"],
+      "productDecisions": ["何时拆角色", "并发、监督和冲突解决", "多 Agent 是否真的优于单 Agent"],
+      "primarySources": [
+        {"label": "AutoGen research", "url": "https://arxiv.org/abs/2308.08155"}
+      ],
+      "halfLifeDays": 21,
+      "recommendedTitle": "为什么一个 Agent 不够用？多智能体系统到底多解决了什么"
+    },
+    {
+      "id": "model-selection-task-cost",
+      "name": "按任务成本选择模型",
+      "aliases": ["模型选型", "模型对比", "模型成本", "任务成本", "哪个模型", "最强模型", "国产模型", "大模型实测", "参数量大模型", "模型分工"],
+      "parent": "AI 产品架构",
+      "brandIndependent": true,
+      "crossProductExamples": ["闭源 API 模型", "开放权重模型"],
+      "productDecisions": ["每个成功任务的总成本", "质量、延迟、失败重试与人工接管", "工作流不同环节的模型路由"],
+      "primarySources": [
+        {"label": "OpenAI pricing", "url": "https://openai.com/api/pricing/"},
+        {"label": "Anthropic pricing", "url": "https://docs.anthropic.com/en/docs/about-claude/pricing"}
+      ],
+      "halfLifeDays": 14,
+      "recommendedTitle": "为什么榜单第一的模型，可能不是产品里最好的模型？"
+    },
+    {
+      "id": "mixture-of-experts",
+      "name": "Mixture of Experts（MoE）",
+      "aliases": ["mixture of experts", "moe", "专家路由", "激活参数", "总参数", "2.8万亿", "万亿参数"],
+      "parent": "模型架构",
+      "brandIndependent": true,
+      "crossProductExamples": ["Mixtral", "Kimi K3"],
+      "productDecisions": ["参数规模与实际计算量", "吞吐、显存和延迟", "部署与许可边界"],
+      "primarySources": [
+        {"label": "Sparsely-Gated MoE paper", "url": "https://arxiv.org/abs/1701.06538"}
+      ],
+      "halfLifeDays": 14,
+      "recommendedTitle": "参数很多为什么还能便宜？MoE 的专家路由到底省了什么"
+    },
+    {
+      "id": "physical-ai",
+      "name": "Physical AI",
+      "aliases": ["physical ai", "具身智能", "世界模型", "vla", "机器人 大脑", "机器人“大脑”", "waic机器人", "waic 机器人"],
+      "parent": "机器人与具身智能",
+      "brandIndependent": true,
+      "crossProductExamples": ["VLA robots", "world-model-based robotics"],
+      "productDecisions": ["感知到动作的闭环", "仿真与真实数据", "失败代价和人工接管"],
+      "primarySources": [
+        {"label": "NVIDIA robotics", "url": "https://www.nvidia.com/en-us/industries/robotics/"}
+      ],
+      "halfLifeDays": 21,
+      "recommendedTitle": "Physical AI 是什么？世界模型、VLA 和机器人“大脑”到底什么关系？"
+    },
+    {
+      "id": "agent-security",
+      "name": "Agent 权限、安全与沙箱",
+      "aliases": ["agent 安全", "agent安全", "沙箱逃逸", "权限自主", "权限", "sandbox", "勒索泄密", "安全边界", "供应链风险"],
+      "parent": "Agent 工程栈",
+      "brandIndependent": true,
+      "crossProductExamples": ["computer-use agents", "coding agents"],
+      "productDecisions": ["最小权限", "确认与可逆操作", "凭据、网络和文件隔离"],
+      "primarySources": [
+        {"label": "OWASP Agentic AI threats", "url": "https://genai.owasp.org/"}
+      ],
+      "halfLifeDays": 21,
+      "recommendedTitle": "Agent 为什么必须被关进沙箱？权限边界到底该怎么设计"
+    },
+    {
+      "id": "full-duplex-voice",
+      "name": "全双工语音 AI",
+      "aliases": ["全双工语音", "full duplex voice", "实时语音", "端到端语音", "打断检测", "gpt-live", "gpt live"],
+      "parent": "多模态交互",
+      "brandIndependent": true,
+      "crossProductExamples": ["OpenAI Realtime", "Gemini Live"],
+      "productDecisions": ["打断、回声消除与轮次判断", "延迟预算", "高风险操作确认"],
+      "primarySources": [
+        {"label": "OpenAI Realtime guide", "url": "https://platform.openai.com/docs/guides/realtime"}
+      ],
+      "halfLifeDays": 21,
+      "recommendedTitle": "全双工语音 AI 是什么？为什么真正的语音 Agent 不该像对讲机？"
+    },
+    {
+      "id": "rag-engineering",
+      "name": "RAG Engineering",
+      "aliases": ["rag", "检索增强", "向量检索", "热更新", "多模态 rag", "图片检索"],
+      "parent": "知识系统",
+      "brandIndependent": true,
+      "crossProductExamples": ["vector RAG", "multimodal RAG"],
+      "productDecisions": ["分块、召回和重排", "增量更新", "什么时候不应该用 RAG"],
+      "primarySources": [
+        {"label": "RAG paper", "url": "https://arxiv.org/abs/2005.11401"}
+      ],
+      "halfLifeDays": 30,
+      "recommendedTitle": "RAG 不是接个向量库：真正决定效果的是哪几层？"
+    },
+    {
+      "id": "post-training",
+      "name": "LLM Post-Training",
+      "aliases": ["post-training", "后训练", "sft", "强化学习", "reinforcement learning", "rl 模型"],
+      "parent": "模型训练",
+      "brandIndependent": true,
+      "crossProductExamples": ["SFT", "RLHF/RLAIF"],
+      "productDecisions": ["基础能力与行为优化的边界", "数据与奖励设计", "评测漂移"],
+      "primarySources": [
+        {"label": "InstructGPT paper", "url": "https://arxiv.org/abs/2203.02155"}
+      ],
+      "halfLifeDays": 14,
+      "recommendedTitle": "模型参数没变，能力为什么还能大涨？后训练到底改变了什么"
+    }
+  ]
+}

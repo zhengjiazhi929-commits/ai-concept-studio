@@ -1,0 +1,204 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-08-03T00:00:00+08:00",
+  "creators": [
+    {
+      "id": "douyin-user-reference-ai-model-learning",
+      "platform": "douyin",
+      "name": "AI大模型学习（用户参考账号）",
+      "category": "target-reference",
+      "weight": 1.2,
+      "audienceFit": 1,
+      "coverageGroup": "ai-model-learning-reference",
+      "profileUrl": "https://www.douyin.com/user/MS4wLjABAAAALc4kETj5YEPPpJXumFbEKsrihV9MQCdEtP4p8im0w2g",
+      "enabled": true
+    },
+    {
+      "id": "douyin-qiu-shui",
+      "platform": "douyin",
+      "name": "我叫秋水",
+      "category": "agent-product",
+      "weight": 1.2,
+      "audienceFit": 1,
+      "coverageGroup": "qiu-shui",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7610025599746264339",
+      "enabled": true
+    },
+    {
+      "id": "douyin-ai-model-learning",
+      "platform": "douyin",
+      "name": "Ai大模型学习",
+      "category": "agent-education",
+      "weight": 1,
+      "audienceFit": 0.9,
+      "coverageGroup": "ai-model-learning-secondary",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7649325778957585727",
+      "enabled": true
+    },
+    {
+      "id": "douyin-llm-project-practice",
+      "platform": "douyin",
+      "name": "大模型项目实战",
+      "category": "engineering",
+      "weight": 1,
+      "audienceFit": 0.9,
+      "coverageGroup": "llm-project-practice",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7659339584513379630",
+      "enabled": true
+    },
+    {
+      "id": "douyin-sherry",
+      "platform": "douyin",
+      "name": "Sherry小水",
+      "category": "ai-tools",
+      "weight": 1,
+      "audienceFit": 0.85,
+      "coverageGroup": "sherry",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7629765089143670080",
+      "enabled": true
+    },
+    {
+      "id": "douyin-ning",
+      "platform": "douyin",
+      "name": "Ning好",
+      "category": "fast-rising",
+      "weight": 0.8,
+      "audienceFit": 0.7,
+      "coverageGroup": "ning",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7646442018788478208",
+      "enabled": true
+    },
+    {
+      "id": "douyin-ai-wind-vane",
+      "platform": "douyin",
+      "name": "AI风向标",
+      "category": "head-news",
+      "weight": 1.2,
+      "audienceFit": 0.65,
+      "coverageGroup": "ai-wind-vane",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7655645706144779572",
+      "enabled": true
+    },
+    {
+      "id": "douyin-na-xing",
+      "platform": "douyin",
+      "name": "拿幸·AI启示录",
+      "category": "head-longform",
+      "weight": 1.2,
+      "audienceFit": 0.85,
+      "coverageGroup": "na-xing",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7660745998112722222",
+      "enabled": true
+    },
+    {
+      "id": "douyin-peoples-park-ai",
+      "platform": "douyin",
+      "name": "人民公园说AI",
+      "category": "head-longform",
+      "weight": 1.2,
+      "audienceFit": 0.75,
+      "coverageGroup": "peoples-park-ai",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7660912883055856915",
+      "enabled": true
+    },
+    {
+      "id": "douyin-du-yu-ai",
+      "platform": "douyin",
+      "name": "杜雨说AI",
+      "category": "head-news",
+      "weight": 1.2,
+      "audienceFit": 0.7,
+      "coverageGroup": "du-yu-ai",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7665614335116332330",
+      "enabled": true
+    },
+    {
+      "id": "douyin-old-mai",
+      "platform": "douyin",
+      "name": "大模型老迈",
+      "category": "agent-education",
+      "weight": 1,
+      "audienceFit": 0.85,
+      "coverageGroup": "old-mai",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7665665833837940003",
+      "enabled": true
+    },
+    {
+      "id": "douyin-ming-jie",
+      "platform": "douyin",
+      "name": "鸣姐.AI进阶",
+      "category": "ai-product",
+      "weight": 1,
+      "audienceFit": 1,
+      "coverageGroup": "ming-jie",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7620785929350925631",
+      "enabled": true
+    },
+    {
+      "id": "douyin-howoneai",
+      "platform": "douyin",
+      "name": "HowOneAI-余一",
+      "category": "ai-product",
+      "weight": 1,
+      "audienceFit": 1,
+      "coverageGroup": "howoneai",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7636811401314572666",
+      "enabled": true
+    },
+    {
+      "id": "douyin-ya-hui-pm",
+      "platform": "douyin",
+      "name": "亚慧AI产品经理",
+      "category": "target-reference",
+      "weight": 1.2,
+      "audienceFit": 1,
+      "coverageGroup": "ya-hui-pm",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7594508930187268794",
+      "enabled": true
+    },
+    {
+      "id": "douyin-mindsleap",
+      "platform": "douyin",
+      "name": "MindsLeap商业观察",
+      "category": "organization-product",
+      "weight": 0.8,
+      "audienceFit": 0.8,
+      "coverageGroup": "mindsleap",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7652402236571569427",
+      "enabled": true
+    },
+    {
+      "id": "bilibili-feiman-ai",
+      "platform": "bilibili",
+      "name": "费曼学AI",
+      "category": "agent-education",
+      "weight": 1,
+      "audienceFit": 0.9,
+      "coverageGroup": "feiman-ai",
+      "profileUrl": "https://www.bilibili.com/video/BV1uiEM6xE9s/",
+      "enabled": true
+    },
+    {
+      "id": "bilibili-ai-frontier-interview",
+      "platform": "bilibili",
+      "name": "AI前沿访谈",
+      "category": "longform-interview",
+      "weight": 1,
+      "audienceFit": 0.9,
+      "coverageGroup": "ai-frontier-interview",
+      "profileUrl": "https://www.bilibili.com/video/BV1MBTV6gEso/",
+      "enabled": true
+    },
+    {
+      "id": "bilibili-shangguigu",
+      "platform": "bilibili",
+      "name": "尚硅谷",
+      "category": "head-education",
+      "weight": 1.2,
+      "audienceFit": 0.8,
+      "coverageGroup": "shangguigu",
+      "profileUrl": "https://www.bilibili.com/video/BV1RPET6tEp2/",
+      "enabled": true
+    }
+  ]
+}

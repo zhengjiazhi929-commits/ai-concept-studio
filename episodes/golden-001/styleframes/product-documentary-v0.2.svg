@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#202124" flood-opacity="0.10"/>
+    </filter>
+    <style>
+      .cn { font-family:"HarmonyOS Sans SC","Microsoft YaHei",sans-serif; }
+      .en { font-family:Inter,Arial,sans-serif; }
+      .mono { font-family:"Cascadia Mono","JetBrains Mono","Courier New",monospace; }
+    </style>
+  </defs>
+
+  <rect width="1080" height="1920" fill="#F7F7F5"/>
+
+  <!-- header -->
+  <g transform="translate(70 92)">
+    <text x="0" y="0" class="cn" fill="#202124" font-size="26" font-weight="800">概念拆解 01</text>
+    <text x="828" y="0" text-anchor="end" class="en" fill="#737773" font-size="21">PRODUCT FIELD NOTES</text>
+    <line x1="0" y1="28" x2="828" y2="28" stroke="#D6D8D4" stroke-width="2"/>
+  </g>
+
+  <!-- title -->
+  <g transform="translate(70 180)">
+    <text x="0" y="0" class="en" fill="#E56B2F" font-size="25" font-weight="800">AGENTIC CODING</text>
+    <text x="0" y="86" class="cn" fill="#202124" font-size="68" font-weight="900">AI 如何把一项任务</text>
+    <text x="0" y="166" class="cn" fill="#202124" font-size="68" font-weight="900">真正向前推进？</text>
+    <text x="0" y="220" class="cn" fill="#737773" font-size="29">用一次“批量导出客户”任务，看完整执行过程。</text>
+  </g>
+
+  <!-- real-workflow UI -->
+  <g transform="translate(70 480)" filter="url(#shadow)">
+    <rect width="828" height="750" rx="18" fill="#FFFFFF" stroke="#D6D8D4" stroke-width="2"/>
+    <rect width="828" height="54" rx="18" fill="#ECEDEA"/>
+    <rect y="36" width="828" height="18" fill="#ECEDEA"/>
+    <circle cx="27" cy="27" r="7" fill="#C94D45"/>
+    <circle cx="51" cy="27" r="7" fill="#D9A63A"/>
+    <circle cx="75" cy="27" r="7" fill="#3E8B57"/>
+    <text x="112" y="35" class="cn" fill="#737773" font-size="20" font-weight="700">教学案例 / 示意界面</text>
+
+    <!-- left timeline -->
+    <g transform="translate(22 88)">
+      <text x="0" y="0" class="cn" fill="#737773" font-size="21" font-weight="700">任务进度</text>
+      <line x1="18" y1="42" x2="18" y2="558" stroke="#D6D8D4" stroke-width="3"/>
+      <g>
+        <circle cx="18" cy="66" r="10" fill="#3E8B57"/>
+        <text x="44" y="74" class="cn" fill="#202124" font-size="22" font-weight="700">理解需求</text>
+      </g>
+      <g transform="translate(0 95)">
+        <circle cx="18" cy="66" r="10" fill="#3E8B57"/>
+        <text x="44" y="74" class="cn" fill="#202124" font-size="22" font-weight="700">检查项目</text>
+      </g>
+      <g transform="translate(0 190)">
+        <circle cx="18" cy="66" r="10" fill="#3E8B57"/>
+        <text x="44" y="74" class="cn" fill="#202124" font-size="22" font-weight="700">修改文件</text>
+      </g>
+      <g transform="translate(0 285)">
+        <circle cx="18" cy="66" r="13" fill="#FFFFFF" stroke="#E56B2F" stroke-width="5"/>
+        <text x="44" y="74" class="cn" fill="#E56B2F" font-size="22" font-weight="900">运行测试</text>
+      </g>
+      <g transform="translate(0 380)">
+        <circle cx="18" cy="66" r="10" fill="#ECEDEA" stroke="#AEB2AC" stroke-width="2"/>
+        <text x="44" y="74" class="cn" fill="#737773" font-size="22">修复问题</text>
+      </g>
+      <g transform="translate(0 475)">
+        <circle cx="18" cy="66" r="10" fill="#ECEDEA" stroke="#AEB2AC" stroke-width="2"/>
+        <text x="44" y="74" class="cn" fill="#737773" font-size="22">提交证据</text>
+      </g>
+    </g>
+
+    <line x1="236" y1="78" x2="236" y2="726" stroke="#ECEDEA" stroke-width="2"/>
+
+    <!-- workspace -->
+    <g transform="translate(260 86)">
+      <text x="0" y="0" class="cn" fill="#202124" font-size="28" font-weight="900">批量导出客户</text>
+      <rect x="340" y="-25" width="168" height="38" rx="19" fill="#FBEDE7"/>
+      <text x="424" y="1" text-anchor="middle" class="cn" fill="#E56B2F" font-size="18" font-weight="800">执行中 · 04/06</text>
+
+      <!-- editor -->
+      <rect x="0" y="34" width="508" height="264" rx="10" fill="#FAFAF8" stroke="#D6D8D4"/>
+      <rect x="0" y="34" width="508" height="38" rx="10" fill="#ECEDEA"/>
+      <rect x="0" y="62" width="508" height="10" fill="#ECEDEA"/>
+      <text x="17" y="60" class="mono" fill="#737773" font-size="17">permissions/export.ts</text>
+      <text x="20" y="105" class="mono" fill="#737773" font-size="18">18</text>
+      <text x="55" y="105" class="mono" fill="#202124" font-size="18">if (!user.isAdmin) return</text>
+      <text x="365" y="105" class="mono" fill="#C94D45" font-size="18">403</text>
+      <rect x="48" y="121" width="438" height="32" fill="#E8F2EB"/>
+      <text x="20" y="144" class="mono" fill="#737773" font-size="18">19</text>
+      <text x="55" y="144" class="mono" fill="#3E8B57" font-size="18">sanitizeCustomerFields(rows)</text>
+      <text x="20" y="184" class="mono" fill="#737773" font-size="18">20</text>
+      <text x="55" y="184" class="mono" fill="#202124" font-size="18">enqueueExportJob(rows)</text>
+      <text x="20" y="224" class="mono" fill="#737773" font-size="18">21</text>
+      <text x="55" y="224" class="mono" fill="#202124" font-size="18">return exportTask.id</text>
+      <rect x="17" y="251" width="150" height="27" rx="5" fill="#ECEDEA"/>
+      <text x="31" y="271" class="cn" fill="#737773" font-size="16">已修改 3 个文件</text>
+
+      <!-- terminal -->
+      <rect x="0" y="318" width="508" height="218" rx="10" fill="#202124"/>
+      <text x="18" y="351" class="mono" fill="#B8BCB7" font-size="17">$ run permission tests</text>
+      <text x="18" y="389" class="mono" fill="#FFFFFF" font-size="18">export as admin</text>
+      <text x="440" y="389" class="mono" fill="#3EAD65" font-size="18">PASS</text>
+      <text x="18" y="427" class="mono" fill="#FFFFFF" font-size="18">export as normal user</text>
+      <text x="440" y="427" class="mono" fill="#EE746D" font-size="18">FAIL</text>
+      <rect x="16" y="447" width="476" height="50" rx="7" fill="#392727"/>
+      <text x="28" y="478" class="mono" fill="#F1A09B" font-size="16">expected 403 · received 200</text>
+      <text x="18" y="522" class="cn" fill="#B8BCB7" font-size="17">系统已读取失败结果，准备检查权限路径…</text>
+
+      <!-- evidence rail -->
+      <g transform="translate(0 562)">
+        <text x="0" y="0" class="cn" fill="#737773" font-size="19" font-weight="700">交付证据</text>
+        <rect x="0" y="18" width="118" height="46" rx="8" fill="#E8F2EB"/>
+        <text x="59" y="48" text-anchor="middle" class="cn" fill="#3E8B57" font-size="18" font-weight="800">Diff 已生成</text>
+        <rect x="130" y="18" width="118" height="46" rx="8" fill="#FBEDE7"/>
+        <text x="189" y="48" text-anchor="middle" class="cn" fill="#E56B2F" font-size="18" font-weight="800">权限待修复</text>
+        <rect x="260" y="18" width="118" height="46" rx="8" fill="#ECEDEA"/>
+        <text x="319" y="48" text-anchor="middle" class="cn" fill="#737773" font-size="18">回归待运行</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- observation -->
+  <g transform="translate(70 1325)">
+    <rect x="0" y="0" width="828" height="116" rx="14" fill="#FFFFFF" stroke="#D6D8D4"/>
+    <rect x="0" y="0" width="10" height="116" rx="5" fill="#E56B2F"/>
+    <text x="32" y="43" class="cn" fill="#202124" font-size="25" font-weight="900">正在发生什么？</text>
+    <text x="32" y="82" class="cn" fill="#737773" font-size="24">测试结果回到执行流程，触发下一次修改。</text>
+  </g>
+
+  <!-- takeaway -->
+  <g transform="translate(70 1530)">
+    <text x="0" y="0" class="cn" fill="#737773" font-size="26" font-weight="700">核心判断</text>
+    <text x="0" y="78" class="cn" fill="#202124" font-size="57" font-weight="900">会写代码，不等于</text>
+    <text x="0" y="148" class="cn" fill="#202124" font-size="57" font-weight="900">会把任务推进到验收。</text>
+    <line x1="0" y1="178" x2="748" y2="178" stroke="#E56B2F" stroke-width="8"/>
+    <text x="0" y="235" class="cn" fill="#737773" font-size="29">重点不是“看起来完成”，而是留下可检查的过程和证据。</text>
+  </g>
+
+  <g transform="translate(70 1810)">
+    <line x1="0" y1="0" x2="828" y2="0" stroke="#D6D8D4" stroke-width="2"/>
+    <text x="0" y="42" class="cn" fill="#737773" font-size="21">方向 B · 真实产品纪录片 · 视觉候选 v0.2</text>
+  </g>
+</svg>
