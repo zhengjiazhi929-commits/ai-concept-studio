@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "bundleType": "codex-conversation-handoff",
+  "createdAt": "2026-08-03T21:20:13+08:00",
+  "language": "zh-CN",
+  "project": {
+    "name": "AI Concept Studio",
+    "localRootAtCreation": "C:/Users/User/Documents/Codex/2026-07-28/wo",
+    "repository": "https://github.com/zhengjiazhi929-commits/ai-concept-studio",
+    "branch": "main",
+    "commitBeforeBundle": "ee9ab08"
+  },
+  "status": {
+    "github": "synced",
+    "onedriveClient": "installed",
+    "onedriveAccount": "not_configured",
+    "mediaBackup": "not_started",
+    "uiSummary": "代码已上云 · 视频仍在本机",
+    "regressionTests": 23
+  },
+  "files": [
+    "README.md",
+    "CONTEXT.md",
+    "DECISION-LOG.md",
+    "NEXT-STEPS.md",
+    "RESUME-PROMPT.md",
+    "MANIFEST.json"
+  ],
+  "excludes": [
+    "passwords",
+    "cookies",
+    "api_keys",
+    "access_tokens",
+    "hidden_instructions",
+    "internal_reasoning",
+    "raw_chat_transcript"
+  ]
+}
