@@ -5,6 +5,7 @@ import { validateEpisode } from "../../shared/schema.mjs";
 import { renderPreview } from "../renderer.mjs";
 import { runPreviewQa } from "../qa.mjs";
 import { runTrendRadarAgent } from "../trends/agent.mjs";
+import { researchPatch, runEpisodeResearchAgent } from "../research/agent.mjs";
 
 function outcome(status, message, extras = {}) {
   return { status, message, artifacts: [], findings: [], ...extras };
@@ -41,13 +42,30 @@ export const agents = {
     id: "research-agent",
     label: "研究 Agent",
     async run(episode) {
-      if (episode.sourceDocs.length < 3) return outcome("failed", "一手来源和主张证据不足");
-      if (episode.approvals.facts.status !== "approved") {
-        return outcome("waiting_approval", "关键事实需要人工批准", {
-          requiresApproval: "facts"
-        });
+      if (episode.approvals.topic.status !== "approved") {
+        return outcome("failed", "必须先人工批准选题");
       }
-      return outcome("complete", `已登记 ${episode.sourceDocs.length} 份带哈希的研究文档`);
+      if (episode.approvals.facts.status === "approved") {
+        const importedLegacy = !episode.research && episode.sourceDocs.length >= 3;
+        if (!importedLegacy && !episode.research?.readiness?.readyForFactApproval) {
+          return outcome("failed", "事实审批与研究证据状态不一致，请重新核验");
+        }
+        return outcome("complete", `事实证据已批准，共登记 ${episode.sourceDocs.length} 份研究产物`);
+      }
+      const result = await runEpisodeResearchAgent(episode);
+      const ready = result.pack.readiness.readyForFactApproval;
+      return outcome(
+        ready ? "waiting_approval" : "blocked",
+        ready
+          ? "证据包达到门槛，关键事实需要人工批准"
+          : `研究计划已建立，仍需补证：${result.pack.readiness.reasons.join("；")}`,
+        {
+          requiresApproval: ready ? "facts" : null,
+          artifacts: [result.runPath, result.assistTaskPath],
+          findings: result.pack.readiness.reasons,
+          patch: researchPatch(episode, result)
+        }
+      );
     }
   },
   "script-agent": {

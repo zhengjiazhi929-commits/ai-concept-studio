@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "timeoutMs": 12000,
+  "retryCount": 1,
+  "retryBackoffMs": 300,
+  "maxConcurrency": 3,
+  "maxSourceBytes": 1500000,
+  "minimumSources": 3,
+  "minimumPrimarySources": 2,
+  "minimumSupportedClaims": 6,
+  "minimumCrossSourceClaims": 2,
+  "allowedSourceTypes": [
+    "official-doc",
+    "official-blog",
+    "official-repository",
+    "paper",
+    "standard",
+    "benchmark"
+  ],
+  "requiredClaimCategories": [
+    {
+      "id": "definition",
+      "label": "准确定义",
+      "question": "这个概念的准确名称、定义和不可混淆的边界是什么？",
+      "critical": true
+    },
+    {
+      "id": "timing",
+      "label": "出现背景",
+      "question": "它为什么在现在受到关注，旧方案遇到了什么问题？",
+      "critical": false
+    },
+    {
+      "id": "problem",
+      "label": "问题对象",
+      "question": "它具体解决此前什么问题，又不解决什么问题？",
+      "critical": false
+    },
+    {
+      "id": "mechanism",
+      "label": "工作机制",
+      "question": "它在系统中如何工作，涉及哪些角色、数据和反馈循环？",
+      "critical": true
+    },
+    {
+      "id": "comparison",
+      "label": "相似概念对比",
+      "question": "它与容易混淆的概念有什么结构性区别？",
+      "critical": false
+    },
+    {
+      "id": "boundary",
+      "label": "边界与代价",
+      "question": "它的能力边界、失败条件、成本与安全代价是什么？",
+      "critical": true
+    },
+    {
+      "id": "product-impact",
+      "label": "产品影响",
+      "question": "它会怎样影响产品能力、交互、架构和运营？",
+      "critical": true
+    },
+    {
+      "id": "product-decision",
+      "label": "产品决策",
+      "question": "产品经理应如何判断是否采用，并向工程团队追问什么？",
+      "critical": false
+    }
+  ]
+}

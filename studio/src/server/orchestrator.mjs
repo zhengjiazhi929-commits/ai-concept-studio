@@ -64,6 +64,16 @@ export async function runAgent(episodeId, agentId) {
       findings: output.findings ?? [],
       requiresApproval: output.requiresApproval ?? null
     };
+    if (output.status === "complete") {
+      const nextIndex = finalStepIndex + 1;
+      if (episode.pipeline[nextIndex]?.status === "pending") {
+        episode.pipeline[nextIndex] = {
+          ...episode.pipeline[nextIndex],
+          status: "ready",
+          message: "上一步已完成，可以运行"
+        };
+      }
+    }
     if (agentId === "render-agent" && output.status === "complete") {
       const qaIndex = episode.pipeline.findIndex((item) => item.agent === "qa-agent");
       if (qaIndex >= 0 && episode.pipeline[qaIndex].status === "pending") {
@@ -128,6 +138,9 @@ export async function runNextReadyAgent(episodeId) {
 export async function approveGate(episodeId, gate, note = "") {
   const episode = await readEpisode(episodeId);
   if (!Object.hasOwn(episode.approvals, gate)) throw new Error(`Unknown approval gate: ${gate}`);
+  if (gate === "facts" && episode.research && !episode.research.readiness?.readyForFactApproval) {
+    throw new Error("研究证据尚未达到事实审批门槛，不能批准");
+  }
   episode.approvals[gate] = {
     ...episode.approvals[gate],
     status: "approved",

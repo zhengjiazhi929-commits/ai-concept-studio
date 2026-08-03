@@ -5,6 +5,7 @@ const state = {
   events: [],
   collector: null,
   trends: null,
+  research: null,
   busy: false,
   pollTimer: null
 };
@@ -128,7 +129,7 @@ function renderEpisode() {
   panel.innerHTML = `
     <div class="episode-card-head">
       <div>
-        <p class="section-label">黄金样例 001 · ${escapeHtml(episode.concept)}</p>
+        <p class="section-label">${episode.id === "golden-001" ? "黄金样例 001" : "本期研究草稿"} · ${escapeHtml(episode.concept)}</p>
         <h2>${escapeHtml(episode.title)}</h2>
       </div>
       <span class="phase-tag">${episode.status === "approved" ? "已终审" : "制作中"}</span>
@@ -163,7 +164,7 @@ function renderPreview() {
         <div class="preview-shade"></div>
         <span>视觉验证版</span>
         <strong>${episode ? "等待运行渲染 Agent" : "等待导入样例"}</strong>
-        <small>${episode ? `${episode.render.durationSeconds} 秒 · ${episode.render.fps}fps` : "9:16"}</small>
+        <small>${episode ? `${episode.render.durationSeconds ? `${episode.render.durationSeconds} 秒 · ` : ""}${episode.render.fps}fps` : "9:16"}</small>
       </div>`;
     return;
   }
@@ -213,7 +214,7 @@ function renderAgents() {
     .map((step) => {
       const gateApproved = !step.gate || state.episode.approvals[step.gate]?.status === "approved";
       const canRun =
-        ["ready", "failed"].includes(step.status) ||
+        ["ready", "failed", "blocked"].includes(step.status) ||
         (step.status === "waiting_approval" && gateApproved);
       const disabled = state.busy || step.status === "running" || !canRun;
       return `
@@ -225,7 +226,7 @@ function renderAgents() {
             ${step.status === "running" ? `<div class="mini-progress"><span style="width:${Math.round((step.progress || 0) * 100)}%"></span></div>` : ""}
           </div>
           <button class="agent-button" data-action="run-agent" data-agent="${step.agent}" ${disabled ? "disabled" : ""}>
-            ${step.status === "failed" ? "重试" : step.status === "waiting_approval" ? "待审批" : "运行"}
+            ${step.status === "failed" ? "重试" : step.status === "blocked" ? "继续补证" : step.status === "waiting_approval" ? "待审批" : "运行"}
           </button>
         </div>`;
     })
@@ -354,6 +355,69 @@ function renderCollector() {
     </div>`;
 }
 
+function renderResearch() {
+  const container = document.querySelector("#researchWorkbench");
+  const research = state.research;
+  const selection = research?.selection;
+  const pack = research?.pack;
+  if (!selection) {
+    container.innerHTML = `
+      <div class="research-empty">
+        <strong>等待你选择研究主题</strong>
+        <span>只有热点雷达中的正式候选可以进入研究；创作者视频仍只作为热度信号。</span>
+      </div>`;
+    return;
+  }
+
+  const readiness = pack?.readiness;
+  const accessible = pack?.sources?.filter((source) => source.access.status === "accessible").length ?? 0;
+  const sources = pack?.sources ?? selection.primarySources?.map((source, index) => ({
+    id: `planned-${index}`,
+    label: source.label,
+    url: source.url,
+    sourceType: "待分类",
+    evidenceStatus: "unreviewed",
+    access: { status: "unchecked" }
+  })) ?? [];
+  const reasonText = readiness?.reasons?.length
+    ? readiness.reasons.join("；")
+    : "证据已达到事实审批门槛";
+  container.innerHTML = `
+    <div class="research-topic">
+      <div>
+        <span>已选概念</span>
+        <strong>${escapeHtml(selection.concept)}</strong>
+        <p>${escapeHtml(selection.recommendedTitle)}</p>
+      </div>
+      <span class="research-state ${readiness?.readyForFactApproval ? "ready" : "pending"}">${readiness?.readyForFactApproval ? "可提交事实审批" : pack ? "正在补证" : "等待首次运行"}</span>
+    </div>
+    <div class="research-summary">
+      <div><span>计划来源</span><strong>${sources.length}</strong></div>
+      <div><span>网页可读取</span><strong>${accessible}</strong></div>
+      <div><span>已核验证据</span><strong>${readiness?.verifiedSourceCount ?? 0}</strong></div>
+      <div><span>支持主张</span><strong>${readiness?.supportedClaimCount ?? 0}</strong></div>
+      <div><span>交叉核验</span><strong>${readiness?.crossSourceClaimCount ?? 0}</strong></div>
+    </div>
+    <div class="research-source-list">
+      ${sources.map((source) => `
+        <div class="research-source-row">
+          <div>
+            <strong>${escapeHtml(source.label)}</strong>
+            <span>${escapeHtml(source.sourceType)} · ${escapeHtml(source.url)}</span>
+          </div>
+          <div class="source-badges">
+            <span class="source-badge status-${source.access.status}">${source.access.status === "accessible" ? "可读取" : source.access.status === "unchecked" ? "待检查" : "需辅助"}</span>
+            <span class="source-badge evidence-${source.evidenceStatus}">${source.evidenceStatus === "verified" ? "证据已核验" : "尚未提取事实"}</span>
+          </div>
+        </div>`).join("")}
+    </div>
+    <div class="research-gate ${readiness?.readyForFactApproval ? "ready" : "pending"}">
+      <strong>${readiness?.readyForFactApproval ? "事实闸门已就绪" : "当前不能批准事实"}</strong>
+      <p>${escapeHtml(reasonText)}</p>
+      <small>直接读取网页只证明资料可访问；来源里的主张、定位和适用边界仍需 Codex 或人工核验。</small>
+    </div>`;
+}
+
 function renderAll() {
   renderHeader();
   renderEpisode();
@@ -363,27 +427,41 @@ function renderAll() {
   renderEvents();
   renderCollector();
   renderTrendRadar();
+  renderResearch();
 
   const nextButton = document.querySelector('[data-action="run-next"]');
   const nextStep = state.episode?.pipeline.find((step) => step.status === "ready");
   nextButton.disabled = state.busy || !nextStep;
   nextButton.textContent = nextStep ? `运行：${nextStep.label}` : "暂无可运行步骤";
+  const researchButton = document.querySelector('[data-action="run-research"]');
+  const researchSelection = state.research?.selection;
+  const factsApproved = state.research?.episode?.factsApproval?.status === "approved";
+  researchButton.disabled = state.busy || !researchSelection || factsApproved;
+  researchButton.textContent = !researchSelection
+    ? "先选择一个正式候选"
+    : factsApproved
+      ? "事实已批准"
+      : state.research?.pack
+        ? "继续核验研究资料"
+        : "运行研究 Agent";
 }
 
 async function refresh({ quiet = false } = {}) {
   try {
-    const [configBody, episodesBody, eventsBody, collectorBody, trendsBody] = await Promise.all([
+    const [configBody, episodesBody, eventsBody, collectorBody, trendsBody, researchBody] = await Promise.all([
       api("/api/config"),
       api("/api/episodes"),
       api("/api/events"),
       api("/api/collector"),
-      api("/api/trends")
+      api("/api/trends"),
+      api("/api/research")
     ]);
     state.config = configBody;
     state.episodes = episodesBody.episodes;
     state.events = eventsBody.events;
     state.collector = collectorBody;
     state.trends = trendsBody;
+    state.research = researchBody;
     if (state.episodes[0]) {
       state.episode = (await api(`/api/episodes/${state.episodes[0].id}`)).episode;
     } else {
@@ -456,6 +534,21 @@ document.addEventListener("click", (event) => {
       const result = await api("/api/collector/run", { method: "POST", body: "{}" });
       showToast(
         `采集完成：${result.run.summary.directSuccess} 个直读，${result.run.summary.assistedRequired} 个需辅助`,
+        "success"
+      );
+    });
+  }
+  if (action === "run-research") {
+    void withBusy(async () => {
+      showToast("正在检查一手资料并建立事实证据任务");
+      const result = await api("/api/research/run", {
+        method: "POST",
+        body: JSON.stringify({ episodeId: state.research?.selection?.episodeId })
+      });
+      showToast(
+        result.output.status === "waiting_approval"
+          ? "研究证据已达到门槛，等待你批准事实"
+          : "研究计划已建立，证据缺口已明确列出",
         "success"
       );
     });

@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { trendSnapshotsRoot } from "../../shared/paths.mjs";
 import { appendEvent, listEpisodes } from "../../shared/store.mjs";
+import { createEpisodeFromTrendSelection } from "../research/episode.mjs";
 import { normalizeSearchText } from "./schema.mjs";
 import { discoverTrendCandidates } from "./engine.mjs";
 import {
@@ -108,13 +109,14 @@ export async function getTrendRadarState() {
 
 export async function approveTrendCandidate(candidateId, note = "") {
   const result = await selectTrendCandidate(candidateId, note);
+  const episode = await createEpisodeFromTrendSelection(result.selection);
   await appendEvent({
     type: "trend.candidate-selected",
     agentId: "trend-radar-agent",
     candidateId,
     message: `已选择 ${result.selection.concept} 进入研究阶段`
   });
-  return result;
+  return { ...result, episode };
 }
 
 export async function ingestTrendSignal(signal) {

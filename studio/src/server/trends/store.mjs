@@ -218,8 +218,13 @@ export async function selectTrendCandidate(candidateId, note = "") {
     selectedAt,
     runId: run.id,
     candidateId,
+    episodeId: `${candidate.id}-${selectedAt.slice(0, 10).replaceAll("-", "")}`,
     concept: candidate.concept,
     recommendedTitle: candidate.recommendedTitle,
+    productDecisions: candidate.productDecisions,
+    primarySources: candidate.primarySources,
+    creatorEvidence: candidate.creatorEvidence,
+    evidenceSignals: candidate.evidenceSignals,
     note,
     nextStep: "research-agent"
   };

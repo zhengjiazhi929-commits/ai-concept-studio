@@ -15,10 +15,12 @@
     "trends": "node scripts/run-trend-radar.mjs",
     "collect": "node scripts/run-collector.mjs",
     "import:collector": "node scripts/import-collector-batch.mjs",
+    "research": "node scripts/run-research.mjs",
+    "import:research": "node scripts/import-research-evidence.mjs",
     "render:preview": "node scripts/render-preview.mjs golden-001",
     "qa": "node scripts/qa-preview.mjs golden-001",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check src/server/app.mjs && node --check src/server/orchestrator.mjs && node --check src/server/renderer.mjs && node --check src/server/trends/agent.mjs && node --check src/server/trends/engine.mjs && node --check src/server/trends/store.mjs && node --check src/server/collector/agent.mjs && node --check src/server/collector/adapters.mjs && node --check src/server/collector/normalizer.mjs && node --check src/server/collector/store.mjs && node --check src/web/app.js"
+    "check": "node --check src/server/app.mjs && node --check src/server/orchestrator.mjs && node --check src/server/renderer.mjs && node --check src/server/trends/agent.mjs && node --check src/server/trends/engine.mjs && node --check src/server/trends/store.mjs && node --check src/server/collector/agent.mjs && node --check src/server/collector/adapters.mjs && node --check src/server/collector/normalizer.mjs && node --check src/server/collector/store.mjs && node --check src/server/research/agent.mjs && node --check src/server/research/engine.mjs && node --check src/server/research/fetcher.mjs && node --check src/server/research/store.mjs && node --check src/web/app.js"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.504",

@@ -29,6 +29,21 @@ export const collectorInboxRoot = resolve(collectorDataRoot, "inbox");
 export const collectorLatestRunPath = resolve(collectorDataRoot, "latest.json");
 export const collectorSourceHealthPath = resolve(collectorDataRoot, "source-health.json");
 export const collectorAssistTaskPath = resolve(collectorDataRoot, "assist-task.json");
+export const researchConfigPath = resolve(studioRoot, "config", "research.json");
+export const researchDataRoot = resolve(dataRoot, "research");
+export const researchRunsRoot = resolve(researchDataRoot, "runs");
+export const researchEpisodesRoot = resolve(researchDataRoot, "episodes");
+export const researchInboxRoot = resolve(researchDataRoot, "inbox");
+export const researchLatestRunPath = resolve(researchDataRoot, "latest.json");
+export const researchAssistTaskPath = resolve(researchDataRoot, "assist-task.json");
+
+export function episodeResearchDirectory(episodeId) {
+  return ensureInside(researchEpisodesRoot, resolve(researchEpisodesRoot, episodeId));
+}
+
+export function episodeResearchLatestPath(episodeId) {
+  return resolve(episodeResearchDirectory(episodeId), "latest.json");
+}
 
 export function episodeDataDirectory(episodeId) {
   return ensureInside(episodesDataRoot, resolve(episodesDataRoot, episodeId));

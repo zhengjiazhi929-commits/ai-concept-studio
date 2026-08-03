@@ -8,9 +8,10 @@
 
 - 热点概念发现 Agent v0.1 已可运行：读取创作者信号、归一化概念、去除事件噪声、按独立创作者共振打分，并把候选送入人工选择。
 - 创作者信号采集 Agent v0.1 已可运行：B站公开页程序直读，抖音等客户端渲染页面生成 Codex 辅助任务，统一去重后再刷新热点雷达。
+- Research Agent v0.1 已可运行：人工选题会创建一期草稿，系统检查一手资料可达性、建立 8 类事实问题、生成 Codex 辅助任务，并在证据达到硬门槛前阻止事实审批。
 - 已配置 18 个观察源，首份公开信号快照包含 51 条内容信号；缺失播放量和评论数据时不会猜测。
 - Agentic Coding 黄金样例已贯通结构化数据、真实产品画面、Remotion 竖屏 MP4 和自动 QA。
-- 研究、脚本、分镜和素材 Agent 已有统一接口、状态机与审批约束，下一阶段会把它们从黄金样例接口升级为真实生成能力。
+- 脚本、分镜和素材 Agent 已有统一接口、状态机与审批约束，下一阶段会按 Research Agent 的证据包升级为真实生成能力。
 - 周期调度尚未接入；当前可以在控制台手动运行采集，也可以由后续 Codex 自动任务触发。
 
 ```mermaid
@@ -43,6 +44,8 @@ pnpm import:trends   导入默认公开信号快照
 pnpm collect         检查公开来源并刷新可直读信号
 pnpm import:collector -- <文件名>  导入 Codex 辅助采集批次
 pnpm trends          重新计算热点候选
+pnpm research        为已选概念建立一手资料与事实证据任务
+pnpm import:research -- <文件名>  导入 Codex 辅助研究证据批次
 pnpm test            运行回归测试
 pnpm check           检查主要模块语法
 pnpm render:preview  重新生成黄金样例视频
@@ -53,6 +56,7 @@ pnpm qa              检查黄金样例视频
 
 - `TREND-AGENT.md`：热点发现 Agent 的数据、门槛、评分和更新方法。
 - `COLLECTOR-AGENT.md`：公开来源采集、Codex 辅助和失败恢复方法。
+- `RESEARCH-AGENT.md`：一手资料、主张台账、证据门槛和事实审批方法。
 - `SYSTEM-CONTRACT.md`：系统边界、人工闸门和完成标准。
 - `config/trend-sources.json`：创作者观察源及权重。
 - `config/concept-taxonomy.json`：概念、别名、产品决策与一手资料计划。
@@ -62,6 +66,7 @@ pnpm qa              检查黄金样例视频
 - `data/trends/signals.json`：已经导入的标准化市场信号。
 - `data/trends/latest.json`：最近一次热点发现结果。
 - `data/trends/selection.json`：人工选择后交给研究 Agent 的任务。
+- `data/research/`：研究计划、运行快照、辅助任务和证据批次。
 - `data/episodes/<期数>/episode.json`：每期视频唯一状态源。
 - `src/server/agents/registry.mjs`：一期制作 Agent 的统一入口。
 - `src/video/`：可维护的视频模板。

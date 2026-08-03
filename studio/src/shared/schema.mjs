@@ -26,9 +26,7 @@ export function validateEpisode(episode) {
   if (!episode?.id || !/^[a-z0-9-]+$/.test(episode.id)) errors.push("invalid episode id");
   if (!episode?.title) errors.push("title is required");
   if (!Array.isArray(episode?.pipeline)) errors.push("pipeline must be an array");
-  if (!Array.isArray(episode?.scenes) || episode.scenes.length === 0) {
-    errors.push("at least one scene is required");
-  }
+  if (!Array.isArray(episode?.scenes)) errors.push("scenes must be an array");
 
   const pipelineIds = new Set(episode?.pipeline?.map((step) => step.id) ?? []);
   for (const definition of PIPELINE_DEFINITIONS) {
@@ -37,6 +35,11 @@ export function validateEpisode(episode) {
 
   for (const step of episode?.pipeline ?? []) {
     if (!STEP_STATUSES.has(step.status)) errors.push(`invalid status for ${step.id}`);
+  }
+
+  const storyboardStep = episode?.pipeline?.find((step) => step.id === "storyboard");
+  if (storyboardStep?.status === "complete" && episode?.scenes?.length === 0) {
+    errors.push("completed storyboard requires at least one scene");
   }
 
   let previousEnd = 0;

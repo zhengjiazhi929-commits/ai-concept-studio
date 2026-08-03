@@ -30,6 +30,10 @@ test("本地控制台 API 和视频分段读取可用", async () => {
     assert.equal(collector.summary.configuredSources, 18);
     assert.equal(Array.isArray(collector.sources), true);
 
+    const research = await fetch(`${base}/api/research`).then((response) => response.json());
+    assert.equal(Object.hasOwn(research, "selection"), true);
+    assert.equal(Object.hasOwn(research, "pack"), true);
+
     const video = await fetch(`${base}/outputs/golden-001/preview-v001.mp4`, {
       headers: { range: "bytes=0-127" }
     });

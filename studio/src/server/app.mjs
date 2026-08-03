@@ -24,6 +24,10 @@ import {
   runCollectorAgent
 } from "./collector/agent.mjs";
 import {
+  getResearchState,
+  importResearchEvidenceBatch
+} from "./research/agent.mjs";
+import {
   approveTrendCandidate,
   getTrendRadarState,
   ingestTrendSignal,
@@ -150,6 +154,26 @@ async function routeApi(request, response, url) {
   if (request.method === "POST" && url.pathname === "/api/collector/assisted-batches") {
     const batch = await readJsonBody(request);
     sendJson(response, 201, await importAssistedCollectorBatch(batch));
+    return true;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/research") {
+    sendJson(response, 200, await getResearchState());
+    return true;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/research/run") {
+    const body = await readJsonBody(request);
+    const researchState = await getResearchState();
+    const episodeId = body.episodeId || researchState.selection?.episodeId;
+    if (!episodeId) throw new Error("请先在热点概念雷达中选择一个正式候选");
+    sendJson(response, 200, await runAgent(episodeId, "research-agent"));
+    return true;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/research/evidence-batches") {
+    const batch = await readJsonBody(request);
+    sendJson(response, 201, await importResearchEvidenceBatch(batch));
     return true;
   }
 

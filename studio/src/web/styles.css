@@ -90,6 +90,35 @@ main { margin-top: 32px; }
 .collector-detail p { color: #6b5140; }
 .collector-detail small { grid-column: 1 / -1; color: #7e837d; }
 .collector-detail.has-failure { border-color: #e3c3bf; background: #fff8f7; }
+.research-workbench { display: grid; gap: 12px; }
+.research-empty { display: grid; gap: 7px; padding: 30px; border: 1px dashed #cfd3cd; border-radius: 14px; color: #747974; background: rgba(255, 255, 255, .6); }
+.research-empty strong { color: #202124; }
+.research-topic { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 19px; border: 1px solid #dde0da; border-radius: 13px; background: white; }
+.research-topic span, .research-topic strong { display: block; }
+.research-topic > div > span { color: #8a8f89; font-size: 10px; font-weight: 900; }
+.research-topic strong { margin-top: 5px; font-size: 24px; }
+.research-topic p { margin: 7px 0 0; color: #686d68; font-size: 12px; }
+.research-state { flex: 0 0 auto; padding: 7px 9px; border-radius: 7px; color: #875a16; background: #fbf0d7; font-size: 10px; font-weight: 900; }
+.research-state.ready { color: #2f7045; background: #e7f2ea; }
+.research-summary { display: grid; grid-template-columns: repeat(5, minmax(90px, 1fr)); gap: 9px; }
+.research-summary > div { padding: 14px 15px; border: 1px solid #dde0da; border-radius: 11px; background: white; }
+.research-summary span, .research-summary strong { display: block; }
+.research-summary span { color: #777c76; font-size: 11px; font-weight: 800; }
+.research-summary strong { margin-top: 5px; font-size: 21px; }
+.research-source-list { display: grid; gap: 7px; }
+.research-source-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 13px 15px; border: 1px solid #e1e4df; border-radius: 10px; background: white; }
+.research-source-row strong, .research-source-row span { display: block; }
+.research-source-row strong { font-size: 13px; }
+.research-source-row > div > span { max-width: 820px; margin-top: 4px; overflow: hidden; color: #7c817b; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.source-badges { display: flex; flex: 0 0 auto; gap: 6px; }
+.source-badge { padding: 5px 7px; border-radius: 6px; color: #777c76; background: #f0f1ee; font-size: 9px; font-weight: 900; }
+.source-badge.status-accessible, .source-badge.evidence-verified { color: #2f7045; background: #e7f2ea; }
+.source-badge.status-needs_assist, .source-badge.status-invalid { color: #875a16; background: #fbf0d7; }
+.research-gate { padding: 15px 17px; border: 1px solid #e7c99e; border-radius: 11px; color: #72521d; background: #fffaf0; }
+.research-gate.ready { border-color: #bdd7c5; color: #2f7045; background: #f4faf6; }
+.research-gate strong, .research-gate p, .research-gate small { display: block; }
+.research-gate p { margin: 5px 0 0; font-size: 12px; line-height: 1.55; }
+.research-gate small { margin-top: 6px; color: #7e837d; font-size: 10px; }
 .trend-radar { display: grid; gap: 14px; }
 .trend-empty { display: grid; gap: 7px; padding: 30px; border: 1px dashed #cfd3cd; border-radius: 14px; color: #747974; background: rgba(255, 255, 255, .6); }
 .trend-empty strong { color: #202124; }
@@ -173,6 +202,7 @@ main { margin-top: 32px; }
   .candidate-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .trend-summary { grid-template-columns: repeat(2, 1fr); }
   .collector-summary { grid-template-columns: repeat(3, 1fr); }
+  .research-summary { grid-template-columns: repeat(3, 1fr); }
   .collector-detail { grid-template-columns: 1fr; }
   .collector-detail small { grid-column: auto; }
 }
@@ -186,5 +216,7 @@ main { margin-top: 32px; }
   .action-row { display: grid; grid-template-columns: 1fr; }
   .agent-row { grid-template-columns: 40px 1fr; }
   .agent-button { grid-column: 2; justify-self: start; }
-  .candidate-grid, .trend-summary, .collector-summary { grid-template-columns: 1fr; }
+  .candidate-grid, .trend-summary, .collector-summary, .research-summary { grid-template-columns: 1fr; }
+  .research-topic, .research-source-row { align-items: stretch; flex-direction: column; }
+  .source-badges { flex-wrap: wrap; }
 }
