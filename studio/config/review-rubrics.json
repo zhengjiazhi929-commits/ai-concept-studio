@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "version": "review-rubrics-v9",
+  "maxAutomaticRevisionRounds": 2,
+  "lowConfidenceThreshold": 0.7,
+  "stages": {
+    "research": {
+      "version": "research-v1",
+      "semanticReview": false,
+      "automaticRevision": true,
+      "requiredChecks": ["artifact-version", "episode-contract", "research-ready", "research-sources"],
+      "escalateOnCodes": ["EVIDENCE_CONFLICT", "SOURCE_CONFLICT"]
+    },
+    "script": {
+      "version": "script-v2",
+      "semanticReview": false,
+      "automaticRevision": true,
+      "requiredChecks": [
+        "artifact-version",
+        "episode-contract",
+        "script-draft",
+        "sources",
+        "script-section-count",
+        "script-narration-density",
+        "script-evidence-refs"
+      ]
+    },
+    "storyboard": {
+      "version": "storyboard-v3",
+      "semanticReview": false,
+      "automaticRevision": true,
+      "requiredChecks": [
+        "artifact-version",
+        "episode-contract",
+        "scene-count",
+        "scene-type-title",
+        "scene-type-evidence",
+        "scene-type-statement",
+        "scene-type-summary",
+        "storyboard-script-coverage",
+        "subtitle-boundaries",
+        "scene-timeline",
+        "subtitle-timeline"
+      ]
+    },
+    "assets": {
+      "version": "assets-v6",
+      "semanticReview": false,
+      "automaticRevision": true,
+      "revisionAgents": ["storyboard-agent", "asset-agent", "voice-agent"],
+      "requiredChecks": [
+        "artifact-version",
+        "episode-contract",
+        "asset-count",
+        "progressive-technical-explanation",
+        "evidence-assets",
+        "voice-plan",
+        "voice-duration",
+        "voice-file-exists",
+        "voice-local-offline-provenance",
+        "voice-local-offline-integrity",
+        "voice-local-offline-authorization",
+        "subtitle-boundaries",
+        "scene-timeline",
+        "subtitle-timeline"
+      ]
+    },
+    "final": {
+      "version": "final-v3",
+      "semanticReview": false,
+      "automaticRevision": true,
+      "revisionAgents": ["storyboard-agent", "asset-agent", "voice-agent", "render-agent"],
+      "requiredChecks": [
+        "artifact-version",
+        "episode-contract",
+        "subtitle-boundaries",
+        "render-complete",
+        "render-output",
+        "render-integrity",
+        "qa-passed"
+      ]
+    }
+  }
+}

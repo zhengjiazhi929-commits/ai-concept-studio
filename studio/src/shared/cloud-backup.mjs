@@ -39,6 +39,41 @@ export function sanitizeGithubRemote(remoteUrl) {
   return repository ? `https://github.com/${repository}` : null;
 }
 
+async function resolveGitMetadataRoots() {
+  const dotGitPath = resolve(workspaceRoot, ".git");
+  try {
+    const dotGitStat = await stat(dotGitPath);
+    if (dotGitStat.isDirectory()) {
+      return { worktreeGitRoot: dotGitPath, commonGitRoot: dotGitPath };
+    }
+
+    const gitdirValue = await readFile(dotGitPath, "utf8");
+    const gitdir = gitdirValue.match(/^gitdir:\s*(.+)\s*$/imu)?.[1]?.trim();
+    if (!gitdir) {
+      return { worktreeGitRoot: dotGitPath, commonGitRoot: dotGitPath };
+    }
+
+    const worktreeGitRoot = isAbsolute(gitdir)
+      ? resolve(gitdir)
+      : resolve(workspaceRoot, gitdir);
+    const commondir = await readFile(resolve(worktreeGitRoot, "commondir"), "utf8")
+      .then((value) => value.trim())
+      .catch((error) => {
+        if (error?.code === "ENOENT") return null;
+        throw error;
+      });
+    const commonGitRoot = commondir
+      ? resolve(worktreeGitRoot, commondir)
+      : worktreeGitRoot;
+    return { worktreeGitRoot, commonGitRoot };
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return { worktreeGitRoot: dotGitPath, commonGitRoot: dotGitPath };
+    }
+    throw error;
+  }
+}
+
 async function readRef(gitRoot, refName) {
   try {
     return (await readFile(resolve(gitRoot, refName), "utf8")).trim();
@@ -59,21 +94,21 @@ async function readRef(gitRoot, refName) {
 }
 
 async function getGitHubStatus() {
-  const gitRoot = resolve(workspaceRoot, ".git");
+  const { worktreeGitRoot, commonGitRoot } = await resolveGitMetadataRoots();
   let config = "";
   try {
-    config = await readFile(resolve(gitRoot, "config"), "utf8");
+    config = await readFile(resolve(commonGitRoot, "config"), "utf8");
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   }
 
   const repositoryUrl = sanitizeGithubRemote(extractOriginUrl(config));
-  const headValue = await readFile(resolve(gitRoot, "HEAD"), "utf8").catch(() => "");
+  const headValue = await readFile(resolve(worktreeGitRoot, "HEAD"), "utf8").catch(() => "");
   const localRef = headValue.trim().startsWith("ref:")
     ? headValue.trim().slice(5).trim()
     : null;
-  const localSha = localRef ? await readRef(gitRoot, localRef) : headValue.trim() || null;
-  const remoteSha = await readRef(gitRoot, "refs/remotes/origin/main");
+  const localSha = localRef ? await readRef(commonGitRoot, localRef) : headValue.trim() || null;
+  const remoteSha = await readRef(commonGitRoot, "refs/remotes/origin/main");
 
   return {
     provider: "github",

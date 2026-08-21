@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { dirname, resolve, sep } from "node:path";
+import { dirname, relative, resolve, sep } from "node:path";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 
@@ -8,11 +8,24 @@ export const workspaceRoot = resolve(studioRoot, "..");
 export const dataRoot = resolve(studioRoot, "data");
 export const episodesDataRoot = resolve(dataRoot, "episodes");
 export const logsRoot = resolve(dataRoot, "logs");
+export const auditLedgerPath = resolve(logsRoot, "audit-ledger.json");
+export const providerHealthStatePath = resolve(dataRoot, "provider-health.json");
 export const publicRoot = resolve(studioRoot, "public");
 export const webRoot = resolve(studioRoot, "src", "web");
 export const videoRoot = resolve(studioRoot, "src", "video");
 export const studioOutputRoot = resolve(workspaceRoot, "outputs", "studio");
 export const configPath = resolve(studioRoot, "config", "studio.json");
+export const aiConfigPath = resolve(studioRoot, "config", "ai.json");
+export const aiLocalConfigPath = resolve(studioRoot, "config", "ai.local.json");
+export const reviewRubricsConfigPath = resolve(studioRoot, "config", "review-rubrics.json");
+export const modelRegistryConfigPath = resolve(studioRoot, "config", "model-registry.json");
+export const routingPolicyConfigPath = resolve(studioRoot, "config", "routing-policy.json");
+export const agentEvaluationSuiteConfigPath = resolve(
+  studioRoot,
+  "config",
+  "agent-evaluation-suite.json"
+);
+export const productionDataRoot = resolve(dataRoot, "production");
 export const trendRadarConfigPath = resolve(studioRoot, "config", "trend-radar.json");
 export const trendSourcesConfigPath = resolve(studioRoot, "config", "trend-sources.json");
 export const conceptTaxonomyPath = resolve(studioRoot, "config", "concept-taxonomy.json");
@@ -69,6 +82,10 @@ export function episodeOutputDirectory(episodeId) {
   return ensureInside(studioOutputRoot, resolve(studioOutputRoot, episodeId));
 }
 
+export function episodeProductionDirectory(episodeId) {
+  return ensureInside(productionDataRoot, resolve(productionDataRoot, "episodes", episodeId));
+}
+
 export function ensureInside(root, target) {
   const normalizedRoot = resolve(root);
   const normalizedTarget = resolve(target);
@@ -79,4 +96,9 @@ export function ensureInside(root, target) {
     throw new Error(`Path escapes allowed root: ${normalizedTarget}`);
   }
   return normalizedTarget;
+}
+
+export function workspaceRelativePath(target) {
+  const absoluteTarget = ensureInside(workspaceRoot, resolve(workspaceRoot, target));
+  return relative(workspaceRoot, absoluteTarget).replaceAll("\\", "/");
 }

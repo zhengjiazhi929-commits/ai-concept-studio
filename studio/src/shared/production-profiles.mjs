@@ -1,0 +1,74 @@
+export const DEFAULT_PRODUCTION_PROFILE_ID = "long-form-explainer-v1";
+export const SHORT_EXPLAINER_PROFILE_ID = "short-explainer-60s-v1";
+
+const PROFILES = Object.freeze({
+  [DEFAULT_PRODUCTION_PROFILE_ID]: Object.freeze({
+    id: DEFAULT_PRODUCTION_PROFILE_ID,
+    label: "8–12 分钟概念长片",
+    targetDurationSeconds: Object.freeze({ minimum: 480, maximum: 720 }),
+    scriptSections: Object.freeze({ minimum: 6, maximum: 12 }),
+    storyboardScenes: Object.freeze({ minimum: 12, maximum: 24 }),
+    sceneDurationSeconds: Object.freeze({ minimum: 12, maximum: 60 }),
+    scriptInstruction: "写成 8 到 12 分钟、适合竖屏视频的结构化脚本草稿",
+    storyboardInstruction: "转换成连续的 8 到 12 分钟分镜",
+    maximumScriptTokens: 6000,
+    maximumStoryboardTokens: 6000
+  }),
+  [SHORT_EXPLAINER_PROFILE_ID]: Object.freeze({
+    id: SHORT_EXPLAINER_PROFILE_ID,
+    label: "60 秒派生概念样片",
+    targetDurationSeconds: Object.freeze({ minimum: 60, maximum: 60 }),
+    scriptSections: Object.freeze({ minimum: 2, maximum: 4 }),
+    storyboardScenes: Object.freeze({ minimum: 6, maximum: 10 }),
+    sceneDurationSeconds: Object.freeze({ minimum: 4, maximum: 15 }),
+    scriptInstruction:
+      "把派生信息中的已批准脚本段落改编为准确的 60 秒竖屏讲解；只能压缩、重排或澄清已批准内容，不得为了视觉风格发明新比喻、事实或概念关系",
+    storyboardInstruction:
+      "把已批准的 60 秒脚本转换为 6 到 10 个连续竖屏分镜；优先使用结构图、关系动画和过程演示，不得用未经脚本批准的比喻改变原意",
+    maximumScriptTokens: 2400,
+    maximumStoryboardTokens: 3600
+  })
+});
+
+export const PRODUCTION_PROFILE_IDS = new Set(Object.keys(PROFILES));
+
+export function productionProfileForEpisode(episode = {}) {
+  const id = episode.productionProfile?.id ?? DEFAULT_PRODUCTION_PROFILE_ID;
+  const profile = PROFILES[id];
+  if (!profile) throw new Error(`未知生产规格：${id}`);
+  return profile;
+}
+
+export function validateProductionProfile(value) {
+  if (value === undefined) return [];
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return ["productionProfile must be an object"];
+  }
+  if (!PRODUCTION_PROFILE_IDS.has(value.id)) {
+    return [`unknown production profile: ${String(value.id ?? "missing")}`];
+  }
+  const profile = PROFILES[value.id];
+  if (
+    !Number.isInteger(value.targetDurationSeconds) ||
+    value.targetDurationSeconds < profile.targetDurationSeconds.minimum ||
+    value.targetDurationSeconds > profile.targetDurationSeconds.maximum
+  ) {
+    return [
+      `productionProfile target duration must be ${profile.targetDurationSeconds.minimum}` +
+        (profile.targetDurationSeconds.minimum === profile.targetDurationSeconds.maximum
+          ? ""
+          : `–${profile.targetDurationSeconds.maximum}`)
+    ];
+  }
+  return [];
+}
+
+export function targetDurationForEpisode(episode, requestedDuration) {
+  const profile = productionProfileForEpisode(episode);
+  const requested = Number(requestedDuration);
+  if (!Number.isFinite(requested)) return profile.targetDurationSeconds.minimum;
+  return Math.max(
+    profile.targetDurationSeconds.minimum,
+    Math.min(profile.targetDurationSeconds.maximum, requested)
+  );
+}

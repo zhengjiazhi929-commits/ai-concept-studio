@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "version": "ai-config-v1",
+  "primaryProvider": "aihubmix",
+  "fallbackProviders": [
+    "openai"
+  ],
+  "request": {
+    "timeoutMs": 90000,
+    "primaryAttempts": 3,
+    "fallbackAttempts": 1,
+    "retryBackoffMs": [
+      0,
+      600,
+      1600
+    ],
+    "maxRequestsPerEpisode": 12,
+    "maxOutputTokens": 6000
+  },
+  "tasks": {
+    "main-agent": {
+      "profile": "planner",
+      "model": "gpt-5.4-mini",
+      "reasoningEffort": "medium",
+      "verbosity": "low"
+    },
+    "script": {
+      "profile": "creative-structured",
+      "model": "gpt-5.4-mini",
+      "reasoningEffort": "medium",
+      "verbosity": "medium"
+    },
+    "storyboard": {
+      "profile": "creative-structured",
+      "model": "gpt-5.4-mini",
+      "reasoningEffort": "medium",
+      "verbosity": "medium"
+    },
+    "assets": {
+      "profile": "creative-structured",
+      "model": "gpt-5.4-mini",
+      "reasoningEffort": "medium",
+      "verbosity": "medium"
+    }
+  },
+  "providers": {
+    "openai": {
+      "label": "OpenAI 官方",
+      "baseUrl": "https://api.openai.com/v1",
+      "apiKeyEnv": "OPENAI_API_KEY",
+      "modelEnv": "OPENAI_MODEL",
+      "enabled": true
+    },
+    "aihubmix": {
+      "label": "AiHubMix",
+      "baseUrl": "https://aihubmix.com/v1",
+      "apiKeyEnv": "AIHUBMIX_API_KEY",
+      "modelEnv": "AIHUBMIX_MODEL",
+      "enabled": true
+    }
+  }
+}

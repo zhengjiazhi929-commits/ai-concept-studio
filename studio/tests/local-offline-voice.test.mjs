@@ -1,0 +1,1357 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import {
+  link,
+  lstat,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  symlink,
+  writeFile
+} from "node:fs/promises";
+import { resolve } from "node:path";
+
+import { validateEpisode } from "../src/shared/schema.mjs";
+import { integrityHash } from "../src/shared/integrity.mjs";
+import { readEpisode } from "../src/shared/store.mjs";
+import { currentGateArtifactHash } from "../src/shared/workflow.mjs";
+import {
+  LOCAL_TTS_MODEL,
+  LOCAL_TTS_VOICES
+} from "../src/video/agent-skill-local-tts-plan.mjs";
+import {
+  LOCAL_OFFLINE_TTS_V002_REGISTRATION,
+  LOCAL_OFFLINE_TTS_REBIND_INSPECTION,
+  assertNoSymlinkRegularFile,
+  inspectLocalOfflineTtsCandidate,
+  inspectRegisteredLocalOfflineTtsRebindCandidate,
+  registerApprovedLocalOfflineTts,
+  verifyRegisteredLocalOfflineVoiceForAssets
+} from "../src/server/production/local-offline-voice.mjs";
+import { validateAssetsForReview } from "../src/server/reviews/validators/assets.mjs";
+import {
+  assetExecutionApprovalRecordValid,
+  assetExecutionApprovalValid
+} from
+  "../src/server/reviews/asset-execution-checkpoint.mjs";
+import { approvalValidForGate } from "../src/server/control/policy-engine.mjs";
+import { adaptApprovedStoryboardToShortAssetPlan } from
+  "../src/server/production/short-asset-plan-adapter.mjs";
+import { studioRoot, workspaceRoot } from "../src/shared/paths.mjs";
+
+const episodeId = LOCAL_OFFLINE_TTS_V002_REGISTRATION.episodeId;
+const historicAssetPlanPath =
+  `studio/data/production/episodes/${episodeId}/asset-plan-v009.json`;
+const historicAssetPlanArtifact = JSON.parse(await readFile(
+  resolve(workspaceRoot, historicAssetPlanPath),
+  "utf8"
+));
+const historicVoiceCandidateManifest = JSON.parse(await readFile(
+  resolve(
+    workspaceRoot,
+    "outputs",
+    "studio",
+    episodeId,
+    LOCAL_OFFLINE_TTS_V002_REGISTRATION.manifestFileName
+  ),
+  "utf8"
+));
+const historicStoryboardBinding = historicVoiceCandidateManifest.source.storyboard;
+const historicStoryboardArtifact = JSON.parse(await readFile(
+  resolve(workspaceRoot, historicStoryboardBinding.artifactPath),
+  "utf8"
+));
+const historicRebindStoryboardBinding = {
+  version: 4,
+  artifactPath:
+    `studio/data/production/episodes/${episodeId}/storyboard-draft-v004.json`,
+  artifactHash: "c6bf111531e14a4a42fd26b55c3d1135c53ff64e19b5f2c2804e7d58c57f3a30",
+  reviewReportId: "review-storyboard-v4-5-2026-08-17T11-38-18-288Z"
+};
+const historicRebindStoryboardArtifact = JSON.parse(await readFile(
+  resolve(workspaceRoot, historicRebindStoryboardBinding.artifactPath),
+  "utf8"
+));
+const historicRebindAssetPlanPath =
+  `studio/data/production/episodes/${episodeId}/asset-plan-v013.json`;
+const historicRebindAssetPlanArtifact = JSON.parse(await readFile(
+  resolve(workspaceRoot, historicRebindAssetPlanPath),
+  "utf8"
+));
+const historicRebindAssetBinding = {
+  version: 13,
+  candidateHash: "2b511e3685940b12240942812697c373d8f78f88eaddb94819f306465ee76edb",
+  planHash: "a776121354841411ab0d6f05570d0e3be9980c29a1a4b667a6c7595a3dc320d8",
+  approvedAt: "2026-08-17T16:38:14.435Z",
+  authorizedToolIds: []
+};
+const historicAssetBundleRevisionBeforeVoice = 10;
+
+function restoreHistoricVoiceSourceStoryboard(episode) {
+  const binding = historicStoryboardBinding;
+  const currentDraft = episode.production?.storyboardDraft;
+  const versions = currentDraft?.versions ?? [];
+  const historicVersion = [currentDraft, ...versions].find((entry) =>
+    entry?.version === binding.version
+      && entry.artifactPath === binding.artifactPath
+  );
+  const reports = episode.reviews?.storyboard?.reports ?? [];
+  const report = reports.find((entry) =>
+    entry.id === binding.reviewReportId
+      && entry.decision === "pass"
+      && entry.artifactVersion === binding.version
+      && entry.artifactHash === binding.artifactHash
+  );
+  const approvalRecord = (episode.approvals?.storyboard?.history ?? []).find((entry) =>
+    entry.gate === "storyboard"
+      && entry.decision === "approved"
+      && entry.version === binding.version
+  );
+  if (!historicVersion || !report || !approvalRecord) {
+    throw new Error("测试夹具缺少候选绑定的历史 Storyboard v3 审核与批准证据");
+  }
+
+  episode.production.storyboardDraft = {
+    ...structuredClone(historicVersion),
+    needsRevision: false,
+    versions: structuredClone(
+      versions.filter((entry) => entry.version <= binding.version)
+    )
+  };
+  episode.scenes = structuredClone(historicStoryboardArtifact.timeline.scenes);
+  episode.subtitles = structuredClone(historicStoryboardArtifact.timeline.subtitles);
+  episode.render.durationSeconds = historicStoryboardArtifact.timeline.durationSeconds;
+  episode.reviews.storyboard = {
+    ...episode.reviews.storyboard,
+    status: "passed",
+    artifactVersion: binding.version,
+    artifactHash: binding.artifactHash,
+    latestReportId: binding.reviewReportId,
+    reports: structuredClone(
+      reports.filter((entry) => entry.artifactVersion <= binding.version)
+    )
+  };
+  episode.approvals.storyboard = {
+    ...episode.approvals.storyboard,
+    status: "approved",
+    at: approvalRecord.at,
+    note: approvalRecord.note,
+    feedback: "",
+    currentVersion: binding.version,
+    history: [structuredClone(approvalRecord)],
+    provenance: "reviewed-v2",
+    reviewReportId: binding.reviewReportId,
+    artifactHash: binding.artifactHash
+  };
+  if (episode.production.feedback?.storyboard) {
+    delete episode.production.feedback.storyboard;
+  }
+  const storyboardStep = episode.pipeline.find((step) => step.agent === "storyboard-agent");
+  Object.assign(storyboardStep, {
+    status: "complete",
+    progress: 1,
+    message: "历史 Storyboard v3 已完成机器审核与人工批准",
+    requiresApproval: null,
+    requiresHuman: false,
+    artifacts: [binding.artifactPath],
+    lastError: null
+  });
+  if (currentGateArtifactHash(episode, "storyboard") !== binding.artifactHash) {
+    throw new Error("测试夹具重建的历史 Storyboard v3 哈希不匹配");
+  }
+  return episode;
+}
+
+function restoreHistoricVoiceSourceAssetExecution(episode) {
+  const binding = historicVoiceCandidateManifest.source.assetExecution;
+  const history = (episode.reviewCheckpoints.assetExecution.history ?? [])
+    .filter((entry) => String(entry.at ?? "") <= binding.approvedAt);
+  const machine = history.find((entry) =>
+    entry.type === "machine-review"
+      && entry.version === binding.version
+      && entry.candidateHash === binding.candidateHash
+      && entry.status === "passed"
+  );
+  episode.production.assetPlanDirection = {
+    strategy: "local-only",
+    selectedBy: "human"
+  };
+  episode.production.assetPlan = {
+    version: binding.version,
+    artifactPath: historicAssetPlanPath,
+    content: historicAssetPlanArtifact.plan,
+    needsRevision: false
+  };
+  episode.reviewCheckpoints.assetExecution = {
+    schemaVersion: 1,
+    status: "approved",
+    currentCandidate: {
+      episodeId,
+      version: binding.version,
+      artifact: {
+        path: historicAssetPlanPath,
+        bytes: 1,
+        sha256: "9".repeat(64)
+      },
+      planHash: binding.planHash,
+      candidateHash: binding.candidateHash,
+      summary: {
+        itemCount: historicAssetPlanArtifact.plan.items.length,
+        requiredVisualItemCount: historicAssetPlanArtifact.plan.items.filter(
+          (item) => item.required && item.assetType !== "voice"
+        ).length,
+        productionMethods: ["local-code-animation", "deferred-voice-agent"],
+        externalApiCallCount: 0,
+        externalApiCalls: [],
+        maximumPaidCostUsd: 0,
+        currency: "USD",
+        billingCurrencies: [],
+        nativeCurrencyCaps: [],
+        budgetNormalization: null,
+        costScope: "external-api-only",
+        pricingConfirmed: true
+      }
+    },
+    machineReview: {
+      id: machine.reviewId,
+      status: "passed",
+      candidateHash: binding.candidateHash,
+      checks: []
+    },
+    humanApproval: {
+      decision: "approved",
+      at: binding.approvedAt,
+      note: "历史 v9 本地零调用测试夹具",
+      version: binding.version,
+      candidateHash: binding.candidateHash,
+      machineReviewId: machine.reviewId,
+      maximumPaidCostUsd: 0,
+      externalApiCallCount: 0,
+      authorizedToolIds: []
+    },
+    history
+  };
+  const assetStep = episode.pipeline.find((step) => step.agent === "asset-agent");
+  Object.assign(assetStep, {
+    status: "complete",
+    progress: 1,
+    message: "历史 v9 本地零调用素材已完成机器审核与人工批准",
+    requiresApproval: null,
+    requiresHuman: false,
+    artifacts: [historicAssetPlanPath],
+    lastError: null
+  });
+  return episode;
+}
+
+function registrationEpisodeFixture(source) {
+  const episode = structuredClone(source);
+  restoreHistoricVoiceSourceStoryboard(episode);
+  restoreHistoricVoiceSourceAssetExecution(episode);
+  episode.voice = {
+    status: "unconfigured",
+    mode: null,
+    audioPath: null,
+    note: "请上传本人录音或已获授权的旁白文件，再进行素材总审"
+  };
+  const voiceStep = episode.pipeline.find((step) => step.agent === "voice-agent");
+  Object.assign(voiceStep, {
+    status: "blocked",
+    progress: 0,
+    message: "请上传本人录音或已获授权的旁白文件，再进行素材总审",
+    requiresApproval: null,
+    requiresHuman: true,
+    artifacts: [],
+    findings: [],
+    finishedAt: null,
+    lastError: null
+  });
+  episode.production.assetBundleRevision = historicAssetBundleRevisionBeforeVoice;
+  episode.approvals.assets = {
+    ...episode.approvals.assets,
+    status: "pending",
+    at: null,
+    note: "",
+    feedback: "",
+    currentVersion: historicAssetBundleRevisionBeforeVoice,
+    provenance: null,
+    reviewReportId: null,
+    artifactHash: null
+  };
+  return episode;
+}
+
+function historicRebindEpisodeFixture(source) {
+  const episode = structuredClone(source);
+  const storyboard = historicRebindStoryboardBinding;
+  const currentDraft = episode.production?.storyboardDraft;
+  const versions = currentDraft?.versions ?? [];
+  const historicVersion = [currentDraft, ...versions].find((entry) =>
+    entry?.version === storyboard.version
+      && entry.artifactPath === storyboard.artifactPath
+  );
+  const reports = episode.reviews?.storyboard?.reports ?? [];
+  const report = reports.find((entry) =>
+    entry.id === storyboard.reviewReportId
+      && entry.decision === "pass"
+      && entry.artifactVersion === storyboard.version
+      && entry.artifactHash === storyboard.artifactHash
+  );
+  const approvalHistory = episode.approvals?.storyboard?.history ?? [];
+  const approvalRecord = approvalHistory.find((entry) =>
+    entry.gate === "storyboard"
+      && entry.decision === "approved"
+      && entry.version === storyboard.version
+  );
+  if (!historicVersion || !report || !approvalRecord) {
+    throw new Error("测试夹具缺少历史 Storyboard v4 审核与批准证据");
+  }
+
+  episode.production.storyboardDraft = {
+    ...structuredClone(historicVersion),
+    needsRevision: false,
+    versions: structuredClone(
+      versions.filter((entry) => entry.version <= storyboard.version)
+    )
+  };
+  episode.scenes = structuredClone(historicRebindStoryboardArtifact.timeline.scenes);
+  episode.subtitles = structuredClone(historicRebindStoryboardArtifact.timeline.subtitles);
+  episode.render.durationSeconds =
+    historicRebindStoryboardArtifact.timeline.durationSeconds;
+  episode.reviews.storyboard = {
+    ...episode.reviews.storyboard,
+    status: "passed",
+    artifactVersion: storyboard.version,
+    artifactHash: storyboard.artifactHash,
+    latestReportId: storyboard.reviewReportId,
+    reports: structuredClone(
+      reports.filter((entry) => entry.artifactVersion <= storyboard.version)
+    )
+  };
+  episode.approvals.storyboard = {
+    ...episode.approvals.storyboard,
+    status: "approved",
+    at: approvalRecord.at,
+    note: approvalRecord.note,
+    feedback: "",
+    currentVersion: storyboard.version,
+    history: structuredClone(approvalHistory.filter((entry) =>
+      entry.decision === "approved" && entry.version <= storyboard.version
+    )),
+    provenance: "reviewed-v2",
+    reviewReportId: storyboard.reviewReportId,
+    artifactHash: storyboard.artifactHash
+  };
+  if (episode.production.feedback?.storyboard) {
+    delete episode.production.feedback.storyboard;
+  }
+  const storyboardStep = episode.pipeline.find((step) =>
+    step.agent === "storyboard-agent"
+  );
+  Object.assign(storyboardStep, {
+    status: "complete",
+    progress: 1,
+    message: "历史 Storyboard v4 已完成机器审核与人工批准",
+    requiresApproval: null,
+    requiresHuman: false,
+    artifacts: [storyboard.artifactPath],
+    lastError: null
+  });
+  if (currentGateArtifactHash(episode, "storyboard") !== storyboard.artifactHash) {
+    throw new Error("测试夹具重建的历史 Storyboard v4 哈希不匹配");
+  }
+
+  const asset = historicRebindAssetBinding;
+  const assetHistory = (episode.reviewCheckpoints.assetExecution.history ?? [])
+    .filter((entry) => String(entry.at ?? "") <= asset.approvedAt);
+  const machine = assetHistory.find((entry) =>
+    entry.type === "machine-review"
+      && entry.version === asset.version
+      && entry.candidateHash === asset.candidateHash
+      && entry.status === "passed"
+  );
+  const human = assetHistory.find((entry) =>
+    entry.type === "human-approval"
+      && entry.version === asset.version
+      && entry.candidateHash === asset.candidateHash
+      && entry.machineReviewId === machine?.reviewId
+      && entry.decision === "approved"
+      && entry.at === asset.approvedAt
+  );
+  const currentCandidate = episode.reviewCheckpoints.assetExecution.currentCandidate;
+  if (
+    !machine
+    || !human
+    || currentCandidate?.version !== asset.version
+    || currentCandidate.candidateHash !== asset.candidateHash
+  ) {
+    throw new Error("测试夹具缺少历史 Asset v13 审核与批准证据");
+  }
+  episode.production.assetPlanDirection = {
+    strategy: "local-only",
+    selectedBy: "human"
+  };
+  episode.production.assetPlan = {
+    version: asset.version,
+    artifactPath: historicRebindAssetPlanPath,
+    content: structuredClone(historicRebindAssetPlanArtifact.plan),
+    needsRevision: false
+  };
+  episode.production.assetBundleRevision = asset.version;
+  episode.reviewCheckpoints.assetExecution = {
+    schemaVersion: 1,
+    status: "approved",
+    currentCandidate: structuredClone(currentCandidate),
+    machineReview: {
+      ...structuredClone(episode.reviewCheckpoints.assetExecution.machineReview),
+      id: machine.reviewId,
+      status: "passed",
+      checkedAt: machine.at,
+      candidateHash: asset.candidateHash
+    },
+    humanApproval: {
+      decision: "approved",
+      at: asset.approvedAt,
+      note: human.note,
+      version: asset.version,
+      candidateHash: asset.candidateHash,
+      machineReviewId: machine.reviewId,
+      maximumPaidCostUsd: 0,
+      externalApiCallCount: 0,
+      authorizedToolIds: []
+    },
+    history: structuredClone(assetHistory)
+  };
+  const assetStep = episode.pipeline.find((step) => step.agent === "asset-agent");
+  Object.assign(assetStep, {
+    status: "complete",
+    progress: 1,
+    message: "历史 Asset v13 本地零调用候选已完成机器审核与人工批准",
+    requiresApproval: null,
+    requiresHuman: false,
+    artifacts: [historicRebindAssetPlanPath],
+    lastError: null
+  });
+  if (!assetExecutionApprovalRecordValid(episode)) {
+    throw new Error("测试夹具重建的历史 Asset v13 批准绑定无效");
+  }
+  return episode;
+}
+
+const currentEpisodeTemplate = await readEpisode(episodeId);
+const isolatedEpisodeTemplate = registrationEpisodeFixture(currentEpisodeTemplate);
+const currentRebindEpisodeTemplate = historicRebindEpisodeFixture(currentEpisodeTemplate);
+
+function isolatedEpisode() {
+  return structuredClone(isolatedEpisodeTemplate);
+}
+
+function currentRebindEpisode() {
+  return structuredClone(currentRebindEpisodeTemplate);
+}
+
+function sha256(data) {
+  return createHash("sha256").update(data).digest("hex");
+}
+
+function isPinnedRuntimePath(path) {
+  return path.includes("/.cache/ai-concept-studio/kokoro312/model-v1.1-zh/");
+}
+
+function fakeRuntimeIntegrity(path) {
+  if (path.endsWith(LOCAL_TTS_MODEL.fileName)) {
+    return { bytes: 100, sha256: LOCAL_TTS_MODEL.sha256 };
+  }
+  if (path.endsWith("config.json")) {
+    return { bytes: 101, sha256: LOCAL_TTS_MODEL.configSha256 };
+  }
+  return {
+    bytes: 102,
+    sha256: LOCAL_TTS_VOICES.find(({ id }) => id === "zm_010").sha256
+  };
+}
+
+function verifierOptions(extra = {}) {
+  return {
+    episode: isolatedEpisode(),
+    lstat: async (path) => isPinnedRuntimePath(path)
+      ? {
+          size: fakeRuntimeIntegrity(path).bytes,
+          nlink: 1,
+          isFile: () => true,
+          isSymbolicLink: () => false
+        }
+      : lstat(path),
+    realpath: async (path) => isPinnedRuntimePath(path) ? resolve(path) : realpath(path),
+    inspectFileIntegrity: async (path) => fakeRuntimeIntegrity(path),
+    validateAssetExecutionApproval: () => true,
+    ...extra
+  };
+}
+
+function registeredRuntimeIntegrity(path, episode) {
+  if (path.endsWith(LOCAL_TTS_MODEL.fileName)) {
+    return {
+      bytes: episode.voice.provenance.model.bytes,
+      sha256: LOCAL_TTS_MODEL.sha256
+    };
+  }
+  if (path.endsWith("config.json")) {
+    return {
+      bytes: episode.voice.provenance.model.configBytes,
+      sha256: LOCAL_TTS_MODEL.configSha256
+    };
+  }
+  return {
+    bytes: episode.voice.provenance.voice.packageBytes,
+    sha256: LOCAL_TTS_VOICES.find(({ id }) => id === "zm_010").sha256
+  };
+}
+
+function rebindVerifierOptions(extra = {}) {
+  const episode = extra.episode ?? currentRebindEpisode();
+  return {
+    episode,
+    readEpisode: async () => {
+      throw new Error("rebind inspector 测试不得回退读取 live Episode");
+    },
+    lstat: async (path) => isPinnedRuntimePath(path)
+      ? {
+          size: registeredRuntimeIntegrity(path, episode).bytes,
+          nlink: 1,
+          isFile: () => true,
+          isSymbolicLink: () => false
+        }
+      : lstat(path),
+    realpath: async (path) => isPinnedRuntimePath(path) ? resolve(path) : realpath(path),
+    inspectFileIntegrity: async (path) => registeredRuntimeIntegrity(path, episode),
+    validateAssetExecutionApproval: () => true,
+    ...extra,
+    episode
+  };
+}
+
+function fakeStore(source, appendEvent = async () => undefined) {
+  let episode = structuredClone(source);
+  const writes = [];
+  return {
+    readEpisode: async () => structuredClone(episode),
+    writeEpisode: async (next) => {
+      episode = structuredClone(next);
+      writes.push(structuredClone(next));
+    },
+    appendEvent,
+    get episode() {
+      return structuredClone(episode);
+    },
+    writes
+  };
+}
+
+function ledgerSnapshot(episode) {
+  return {
+    budget: structuredClone(episode.control.budget),
+    ai: structuredClone(episode.production.ai),
+    routingHistory: structuredClone(episode.routingHistory),
+    dispatchHistory: structuredClone(episode.dispatchHistory),
+    assetExecution: structuredClone(episode.reviewCheckpoints.assetExecution)
+  };
+}
+
+function withApprovedLocalOnlyAssetCandidate(source, version = 10) {
+  const episode = structuredClone(source);
+  episode.production.assetPlanDirection = {
+    strategy: "local-only",
+    selectedBy: "human"
+  };
+  const content = adaptApprovedStoryboardToShortAssetPlan(episode);
+  const artifactPath = `studio/data/production/episodes/${episode.id}/asset-plan-v${String(
+    version
+  ).padStart(3, "0")}.json`;
+  const planHash = integrityHash(content);
+  const candidateHash = integrityHash({
+    episodeId: episode.id,
+    version,
+    artifactPath,
+    planHash,
+    purpose: "local-offline-voice-carry-forward-test"
+  });
+  const machineReviewId = `asset-execution-review-v${String(version).padStart(3, "0")}-test`;
+  const approvedAt = "2026-08-15T12:00:00.000Z";
+  episode.production.assetPlan = {
+    version,
+    artifactPath,
+    content,
+    needsRevision: false
+  };
+  const previousHistory = episode.reviewCheckpoints.assetExecution.history ?? [];
+  episode.reviewCheckpoints.assetExecution = {
+    schemaVersion: 1,
+    status: "approved",
+    currentCandidate: {
+      episodeId: episode.id,
+      version,
+      artifact: {
+        path: artifactPath,
+        bytes: 1,
+        sha256: "a".repeat(64)
+      },
+      planHash,
+      candidateHash
+    },
+    machineReview: {
+      id: machineReviewId,
+      status: "passed",
+      checkedAt: approvedAt,
+      candidateHash,
+      checks: []
+    },
+    humanApproval: {
+      decision: "approved",
+      at: approvedAt,
+      note: "测试：批准新的本地零调用视觉候选",
+      version,
+      candidateHash,
+      machineReviewId,
+      maximumPaidCostUsd: 0,
+      externalApiCallCount: 0,
+      authorizedToolIds: []
+    },
+    history: [
+      ...previousHistory,
+      {
+        type: "machine-review",
+        at: approvedAt,
+        version,
+        candidateHash,
+        reviewId: machineReviewId,
+        status: "passed"
+      },
+      {
+        type: "human-approval",
+        at: approvedAt,
+        version,
+        candidateHash,
+        machineReviewId,
+        decision: "approved",
+        note: "测试：批准新的本地零调用视觉候选"
+      }
+    ]
+  };
+  return episode;
+}
+
+function rebindAssetPlanHash(episode, purpose) {
+  const checkpoint = episode.reviewCheckpoints.assetExecution;
+  const planHash = integrityHash(episode.production.assetPlan.content);
+  const candidateHash = integrityHash({
+    version: checkpoint.currentCandidate.version,
+    planHash,
+    purpose
+  });
+  checkpoint.currentCandidate.planHash = planHash;
+  checkpoint.currentCandidate.candidateHash = candidateHash;
+  checkpoint.machineReview.candidateHash = candidateHash;
+  checkpoint.humanApproval.candidateHash = candidateHash;
+}
+
+test("登记前夹具固定到历史 Storyboard v3 与本地零调用素材 v9", () => {
+  const episode = isolatedEpisode();
+  assert.equal(episode.production.storyboardDraft.version, 3);
+  assert.equal(
+    currentGateArtifactHash(episode, "storyboard"),
+    historicStoryboardBinding.artifactHash
+  );
+  assert.equal(approvalValidForGate(episode, "storyboard"), true);
+  assert.equal(episode.production.assetPlan.version, 9);
+  assert.equal(episode.reviewCheckpoints.assetExecution.status, "approved");
+  assert.equal(episode.reviewCheckpoints.assetExecution.machineReview.status, "passed");
+  assert.equal(
+    episode.reviewCheckpoints.assetExecution.humanApproval.decision,
+    "approved"
+  );
+  assert.equal(assetExecutionApprovalRecordValid(episode), true);
+  assert.equal(
+    episode.reviewCheckpoints.assetExecution.history.some((entry) => entry.version > 9),
+    false
+  );
+});
+
+test("只读机器验证返回可复算 candidateHash、完整 machineVerification 与精确登记请求", async () => {
+  const first = await inspectLocalOfflineTtsCandidate(episodeId, verifierOptions());
+  const second = await inspectLocalOfflineTtsCandidate(episodeId, verifierOptions());
+  assert.equal(first.candidateHash, second.candidateHash);
+  assert.equal(first.machineVerification.id, first.machineVerificationId);
+  assert.equal(first.machineVerification.status, "passed");
+  assert.equal(first.machineVerification.candidateHash, first.candidateHash);
+  assert.match(first.machineVerification.verificationHash, /^[a-f0-9]{64}$/u);
+  assert.deepEqual(first.registrationRequest, {
+    candidateId: first.candidateId,
+    manifestSha256: first.manifestSha256,
+    candidateHash: first.candidateHash,
+    machineVerificationId: first.machineVerificationId,
+    machineVerificationHash: first.machineVerification.verificationHash,
+    confirmation: LOCAL_OFFLINE_TTS_V002_REGISTRATION.confirmation
+  });
+  assert.equal(first.audio.durationSeconds, 60);
+  assert.equal(first.audio.sampleRate, 24000);
+  assert.equal(first.audio.channels, 1);
+  assert.equal(first.audio.bitsPerSample, 16);
+});
+
+test("已登记 voice-v001 可只读形成 v3/v9 来源到 v4/v13 使用范围的零调用重绑定候选", async () => {
+  const inspectedEpisode = currentRebindEpisode();
+  const inspectedEpisodeHash = integrityHash(inspectedEpisode);
+  const first = await inspectRegisteredLocalOfflineTtsRebindCandidate(
+    episodeId,
+    rebindVerifierOptions({ episode: inspectedEpisode })
+  );
+  const second = await inspectRegisteredLocalOfflineTtsRebindCandidate(
+    episodeId,
+    rebindVerifierOptions()
+  );
+
+  assert.equal(first.candidateHash, second.candidateHash);
+  assert.equal(first.machineVerificationId, second.machineVerificationId);
+  assert.equal(first.machineVerification.status, "passed");
+  assert.equal(first.machineVerification.candidateHash, first.candidateHash);
+  assert.equal(first.machineVerification.checks.length, 10);
+  assert.equal(first.machineVerification.checks.every((check) => check.passed), true);
+  assert.equal(first.registrationImplemented, false);
+  assert.equal(first.liveStateModified, false);
+  assert.equal(first.dossier.status, "ready_for_human_review");
+  assert.equal(first.dossier.playablePreview.path,
+    `studio/public/episodes/${episodeId}/voice-v001.wav`);
+  assert.equal(first.dossier.sourceGeneration.bindings.storyboard.version, 3);
+  assert.equal(first.dossier.sourceGeneration.bindings.assetExecution.version, 9);
+  assert.equal(first.dossier.currentUseBinding.storyboard.version, 4);
+  assert.equal(first.dossier.currentUseBinding.assetExecution.version, 13);
+  assert.equal(first.dossier.comparison.sameRegisteredWav, true);
+  assert.equal(first.dossier.comparison.sameNarration, true);
+  assert.equal(first.dossier.comparison.sameNineSceneSegmentPlan, true);
+  assert.equal(first.dossier.comparison.sameNonSubtitleStoryboardContent, true);
+  assert.equal(first.dossier.comparison.subtitleLayoutChanged, true);
+  assert.deepEqual(first.dossier.comparison.subtitleChangedSceneIds, ["S03"]);
+  assert.equal(first.dossier.comparison.wavByteIdentical, true);
+  assert.equal(first.dossier.comparison.narrationUnchanged, true);
+  assert.equal(first.dossier.comparison.sceneTimingUnchanged, true);
+  assert.equal(first.dossier.comparison.segmentPlanUnchanged, true);
+  assert.equal(first.dossier.comparison.onlySubtitleBoundaryChanged, true);
+  assert.equal(first.dossier.comparison.audioRegenerationRequired, false);
+  assert.deepEqual(first.dossier.comparison.subtitleDelta, {
+    changedSceneIds: ["S03"],
+    scenes: [{
+      sceneId: "S03",
+      before: [
+        {
+          start: 8.708,
+          end: 13.707,
+          text: "MCP 标准化 prompts、resources 和 "
+        },
+        {
+          start: 13.707,
+          end: 17.402,
+          text: "tools 如何被外部系统暴露和调用。"
+        }
+      ],
+      after: [
+        {
+          start: 8.708,
+          end: 14.794,
+          text: "MCP 标准化 prompts、resources 和 tools "
+        },
+        {
+          start: 14.794,
+          end: 17.402,
+          text: "如何被外部系统暴露和调用。"
+        }
+      ]
+    }]
+  });
+  assert.deepEqual(first.dossier.comparison.syncCaveat, {
+    strictAlignmentStatus: "not-verified",
+    evidenceBasis: "render-plan-boundary-not-acoustic-word-alignment",
+    audioSecondPhraseStartsAtSecond: 11.883,
+    sourceSubtitleBoundarySecond: 13.707,
+    currentSubtitleBoundarySecond: 14.794,
+    sourceToCurrentBoundaryShiftSeconds: 1.087,
+    audioToCurrentSubtitleBoundaryDeltaSeconds: 2.911,
+    disclosure:
+      "WAV、逐字旁白和九镜语音方案未变；字幕显示断句已变化，但这不代表逐词或逐音同步已经通过。"
+  });
+  assert.equal(
+    first.dossier.comparison.sourceSubtitlesSha256,
+    "3b1e61f04ee69b7399922e3a25c3b6595cb5ce2ab4e586c7654bee2f87b2b57f"
+  );
+  assert.equal(
+    first.dossier.comparison.currentSubtitlesSha256,
+    "f48c19a488a383aa55c882f0e43f5c0c3d140769b91ea8c2c185fddab973a462"
+  );
+  assert.equal(
+    first.dossier.priorReviewEvidence.media.sourceVoiceSha256,
+    LOCAL_OFFLINE_TTS_V002_REGISTRATION.wavSha256
+  );
+  assert.equal(first.dossier.priorReviewEvidence.media.storyboardVersion, 4);
+  assert.equal(first.dossier.humanApproval, null);
+  assert.equal(first.humanApproval, null);
+  assert.equal(first.humanDecisionBinding.status, "pending");
+  assert.equal(first.humanDecisionBinding.candidateHash, first.candidateHash);
+  assert.equal(first.humanDecisionBinding.registrationImplemented, false);
+  assert.deepEqual(first.dossier.apiAndCost, {
+    mode: "local-read-only-rebind-inspection",
+    networkCalls: 0,
+    externalApiCalls: 0,
+    externalInferenceCalls: 0,
+    maximumPaidCostUsd: 0
+  });
+  assert.equal(
+    first.registrationRequest.confirmation,
+    LOCAL_OFFLINE_TTS_REBIND_INSPECTION.confirmation
+  );
+  assert.equal(first.registrationRequest.nonExecutablePreview, true);
+  assert.equal(first.registrationRequest.registrationImplemented, false);
+  assert.equal(first.registrationRequest.candidateHash, first.candidateHash);
+  assert.equal(
+    first.registrationRequest.machineVerificationHash,
+    first.machineVerification.verificationHash
+  );
+  assert.equal(first.registrationRequest.sourceVoiceVersion, 1);
+  assert.equal(first.registrationRequest.currentStoryboardVersion, 4);
+  assert.equal(first.registrationRequest.currentAssetExecutionVersion, 13);
+  assert.equal(integrityHash(inspectedEpisode), inspectedEpisodeHash,
+    "只读重绑定候选不得修改注入的历史 Episode 快照");
+});
+
+test("重绑定候选对 WAV、授权、上游批准、字幕语义和零调用账本漂移 fail closed", async () => {
+  const staleStoryboard = currentRebindEpisode();
+  staleStoryboard.approvals.storyboard.status = "pending";
+  await assert.rejects(
+    inspectRegisteredLocalOfflineTtsRebindCandidate(
+      episodeId,
+      rebindVerifierOptions({ episode: staleStoryboard })
+    ),
+    (error) => error.code === "local_tts_source_approval_stale"
+  );
+
+  const changedNarration = currentRebindEpisode();
+  changedNarration.subtitles[2].text = `${changedNarration.subtitles[2].text}篡改`;
+  await assert.rejects(
+    inspectRegisteredLocalOfflineTtsRebindCandidate(
+      episodeId,
+      rebindVerifierOptions({ episode: changedNarration })
+    ),
+    (error) => error.code === "local_tts_source_approval_stale"
+  );
+
+  const tamperedAuthorization = currentRebindEpisode();
+  tamperedAuthorization.voice.authorization.candidateHash = "f".repeat(64);
+  await assert.rejects(
+    inspectRegisteredLocalOfflineTtsRebindCandidate(
+      episodeId,
+      rebindVerifierOptions({ episode: tamperedAuthorization })
+    ),
+    (error) => error.code === "local_tts_registered_provenance_invalid"
+      || error.code === "local_tts_registered_authorization_invalid"
+  );
+
+  const nonZeroLedger = currentRebindEpisode();
+  nonZeroLedger.control.budget.usedCalls = 1;
+  await assert.rejects(
+    inspectRegisteredLocalOfflineTtsRebindCandidate(
+      episodeId,
+      rebindVerifierOptions({ episode: nonZeroLedger })
+    ),
+    (error) => error.code === "local_tts_zero_call_ledger_invalid"
+  );
+
+  const dispatched = currentRebindEpisode();
+  dispatched.dispatchHistory.push({
+    id: "test-dispatch",
+    workerId: "voice-agent",
+    at: "2026-08-18T00:00:00.000Z"
+  });
+  await assert.rejects(
+    inspectRegisteredLocalOfflineTtsRebindCandidate(
+      episodeId,
+      rebindVerifierOptions({ episode: dispatched })
+    ),
+    (error) => error.code === "local_tts_zero_call_ledger_invalid"
+  );
+
+  const sourceBindingTampered = currentRebindEpisode();
+  sourceBindingTampered.voice.provenance.sourceBindings.storyboard.artifactHash =
+    "e".repeat(64);
+  await assert.rejects(
+    inspectRegisteredLocalOfflineTtsRebindCandidate(
+      episodeId,
+      rebindVerifierOptions({ episode: sourceBindingTampered })
+    ),
+    (error) => error.code === "local_tts_source_stage_approval_invalid"
+  );
+
+  await assert.rejects(
+    inspectRegisteredLocalOfflineTtsRebindCandidate(
+      episodeId,
+      rebindVerifierOptions({
+        readFile: async (path) => {
+          const data = await readFile(path);
+          if (!path.endsWith("voice-v001.wav")) return data;
+          const tampered = Buffer.from(data);
+          tampered[100] ^= 1;
+          return tampered;
+        }
+      })
+    ),
+    /voice-v001 与原始 WAV 哈希不一致/u
+  );
+});
+
+test("候选、运行时和正式公共文件必须是单链接普通文件", async () => {
+  const directory = await mkdtemp(resolve(studioRoot, ".test-local-tts-symlink-"));
+  try {
+    const target = resolve(directory, "target.wav");
+    const hardlink = resolve(directory, "hardlink.wav");
+    const alias = resolve(directory, "alias.wav");
+    await writeFile(target, "test");
+    await link(target, hardlink);
+    await assert.rejects(
+      assertNoSymlinkRegularFile(target, workspaceRoot),
+      (error) => error.code === "local_tts_candidate_symlink_rejected"
+    );
+    await symlink(
+      resolve(workspaceRoot, "outputs", "studio", episodeId,
+        LOCAL_OFFLINE_TTS_V002_REGISTRATION.wavFileName),
+      alias
+    );
+    await assert.rejects(
+      assertNoSymlinkRegularFile(alias, workspaceRoot),
+      (error) => error.code === "local_tts_candidate_symlink_rejected"
+    );
+    await assert.rejects(
+      inspectLocalOfflineTtsCandidate(episodeId, verifierOptions({
+        lstat: async (path) => path.endsWith(
+          LOCAL_OFFLINE_TTS_V002_REGISTRATION.manifestFileName
+        )
+          ? {
+              size: 1,
+              nlink: 1,
+              isFile: () => false,
+              isSymbolicLink: () => true
+            }
+          : verifierOptions().lstat(path)
+      })),
+      (error) => error.code === "local_tts_candidate_symlink_rejected"
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("正式登记只接受 inspect 返回的精确哈希，不接受客户端 actor、时间或路径", async () => {
+  const inspected = await inspectLocalOfflineTtsCandidate(episodeId, verifierOptions());
+  const store = fakeStore(isolatedEpisode());
+  const options = verifierOptions(store);
+  for (const extra of [
+    { approvedBy: "someone" },
+    { approvedAt: "2026-08-14T00:00:00.000Z" },
+    { path: "/tmp/voice.wav" }
+  ]) {
+    await assert.rejects(
+      registerApprovedLocalOfflineTts(episodeId, {
+        ...inspected.registrationRequest,
+        ...extra
+      }),
+      (error) => error.code === "local_tts_registration_scope_invalid"
+    );
+  }
+  for (const [field, value, expectedCode] of [
+    ["candidateHash", "0".repeat(64), "local_tts_candidate_verification_conflict"],
+    ["machineVerificationId", "1".repeat(64), "local_tts_candidate_verification_conflict"],
+    ["machineVerificationHash", "2".repeat(64), "local_tts_candidate_verification_conflict"],
+    ["manifestSha256", "3".repeat(64), "local_tts_candidate_conflict"]
+  ]) {
+    await assert.rejects(
+      registerApprovedLocalOfflineTts(episodeId, {
+        ...inspected.registrationRequest,
+        [field]: value
+      }, options),
+      (error) => error.code === expectedCode
+    );
+  }
+  assert.equal(store.writes.length, 0);
+});
+
+test("候选单字节变化、脚本审批失效或素材批准漂移都会在复制前拒绝", async () => {
+  const source = isolatedEpisode();
+  const inspected = await inspectLocalOfflineTtsCandidate(episodeId, verifierOptions());
+  for (const fileName of [
+    LOCAL_OFFLINE_TTS_V002_REGISTRATION.manifestFileName,
+    LOCAL_OFFLINE_TTS_V002_REGISTRATION.wavFileName
+  ]) {
+    const store = fakeStore(source);
+    const options = verifierOptions({
+      ...store,
+      readFile: async (path) => {
+        const data = await readFile(path);
+        if (!path.endsWith(fileName)) return data;
+        const tampered = Buffer.from(data);
+        tampered[Math.min(100, tampered.length - 1)] ^= 1;
+        return tampered;
+      }
+    });
+    await assert.rejects(
+      registerApprovedLocalOfflineTts(episodeId, inspected.registrationRequest, options),
+      /哈希不匹配/u
+    );
+    assert.equal(store.writes.length, 0);
+  }
+
+  const staleScript = structuredClone(source);
+  staleScript.approvals.script.status = "pending";
+  await assert.rejects(
+    inspectLocalOfflineTtsCandidate(episodeId, verifierOptions({ episode: staleScript })),
+    (error) => error.code === "local_tts_source_approval_stale"
+  );
+  const staleStoryboard = structuredClone(source);
+  staleStoryboard.approvals.storyboard.status = "pending";
+  await assert.rejects(
+    inspectLocalOfflineTtsCandidate(episodeId, verifierOptions({ episode: staleStoryboard })),
+    (error) => error.code === "local_tts_source_approval_stale"
+  );
+  const staleAsset = structuredClone(source);
+  staleAsset.reviewCheckpoints.assetExecution.humanApproval.candidateHash = "0".repeat(64);
+  await assert.rejects(
+    inspectLocalOfflineTtsCandidate(episodeId, verifierOptions({ episode: staleAsset })),
+    (error) => error.code === "local_tts_asset_approval_stale"
+  );
+});
+
+test("目标版本竞态已存在时不覆盖原文件，并清理临时文件与操作锁", async () => {
+  const source = isolatedEpisode();
+  const inspected = await inspectLocalOfflineTtsCandidate(episodeId, verifierOptions());
+  const directory = await mkdtemp(resolve(studioRoot, ".test-local-tts-existing-"));
+  const destination = resolve(directory, "voice-v001.wav");
+  const original = Buffer.from("pre-existing-do-not-overwrite");
+  await writeFile(destination, original, { flag: "wx" });
+  const store = fakeStore(source);
+  const options = verifierOptions({
+    ...store,
+    episodePublicDirectory: () => directory,
+    readdir: async () => []
+  });
+  try {
+    await assert.rejects(
+      registerApprovedLocalOfflineTts(episodeId, inspected.registrationRequest, options),
+      (error) => error.code === "EEXIST"
+    );
+    assert.deepEqual(await readFile(destination), original);
+    await assert.rejects(
+      lstat(`${destination}.registering`),
+      (error) => error.code === "ENOENT"
+    );
+    assert.equal(store.episode.control.activeOperation, null);
+    assert.equal(store.episode.voice.status, "unconfigured");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("复制后复验或最终 Episode 写入失败都会删除新 WAV 并释放操作锁", async () => {
+  const source = isolatedEpisode();
+  const inspected = await inspectLocalOfflineTtsCandidate(episodeId, verifierOptions());
+  for (const failure of ["copy-verification", "final-write"]) {
+    const directory = await mkdtemp(resolve(studioRoot, `.test-local-tts-${failure}-`));
+    let state = structuredClone(source);
+    const options = verifierOptions({
+      episodePublicDirectory: () => directory,
+      readEpisode: async () => structuredClone(state),
+      writeEpisode: async (next) => {
+        if (failure === "final-write" && next.voice?.mode === "local-offline-tts") {
+          throw new Error("test final write failed");
+        }
+        state = structuredClone(next);
+      },
+      appendEvent: async () => undefined,
+      readFile: async (path) => {
+        const data = await readFile(path);
+        if (failure !== "copy-verification" || !path.startsWith(`${directory}/`)) return data;
+        const tampered = Buffer.from(data);
+        tampered[100] ^= 1;
+        return tampered;
+      }
+    });
+    try {
+      await assert.rejects(
+        registerApprovedLocalOfflineTts(episodeId, inspected.registrationRequest, options),
+        failure === "copy-verification" ? /复制后的文件复验失败/u : /test final write failed/u
+      );
+      assert.deepEqual(await readdir(directory), []);
+      assert.equal(state.control.activeOperation, null);
+      assert.equal(state.voice.status, "unconfigured");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
+});
+
+test("v002 版本化登记、复制后复验、授权绑定与 Assets Gate happy path 全部通过", async () => {
+  const liveEpisodeData = await readFile(
+    resolve(studioRoot, "data", "episodes", episodeId, "episode.json")
+  );
+  const liveEpisodeHash = sha256(liveEpisodeData);
+  const source = isolatedEpisode();
+  const beforeLedger = ledgerSnapshot(source);
+  const inspected = await inspectLocalOfflineTtsCandidate(episodeId, verifierOptions());
+  const directory = await mkdtemp(resolve(studioRoot, ".test-local-tts-public-"));
+  const events = new Map();
+  const store = fakeStore(source, async (event) => {
+    if (!events.has(event.idempotencyKey)) events.set(event.idempotencyKey, structuredClone(event));
+  });
+  const options = verifierOptions({
+    ...store,
+    episodePublicDirectory: () => directory,
+    now: new Date("2026-08-14T12:00:00.000Z")
+  });
+  try {
+    const result = await registerApprovedLocalOfflineTts(
+      episodeId,
+      inspected.registrationRequest,
+      options
+    );
+    assert.equal(result.unchanged, false);
+    assert.equal(result.episode.voice.mode, "local-offline-tts");
+    assert.equal(result.episode.voice.status, "ready");
+    assert.equal(result.episode.voice.provenance.candidateHash, inspected.candidateHash);
+    assert.deepEqual(
+      result.episode.voice.provenance.machineVerification,
+      inspected.machineVerification
+    );
+    assert.deepEqual(
+      result.episode.voice.provenance.humanSelection,
+      result.episode.voice.authorization
+    );
+    assert.equal(result.episode.voice.authorization.approvedBy, "Zhengjiazhi");
+    assert.equal(result.episode.voice.authorization.approvedAt, "2026-08-14T12:00:00.000Z");
+    assert.equal(result.episode.voice.authorization.candidateHash, inspected.candidateHash);
+    assert.equal(
+      result.episode.voice.authorization.machineVerificationHash,
+      inspected.machineVerification.verificationHash
+    );
+    assert.match(result.episode.voice.authorization.verificationId, /^[a-f0-9]{64}$/u);
+    assert.equal(result.episode.approvals.assets.status, "pending");
+    assert.equal(result.episode.approvals.final.status, "pending");
+    assert.equal(result.episode.reviews.assets.status, "not_started");
+    assert.equal(result.episode.reviews.final.status, "not_started");
+    assert.equal(
+      result.episode.pipeline.find((step) => step.agent === "voice-agent").status,
+      "ready"
+    );
+    assert.deepEqual(ledgerSnapshot(result.episode), beforeLedger);
+    assert.equal(events.size, 1);
+
+    const registered = await verifyRegisteredLocalOfflineVoiceForAssets(result.episode, options);
+    assert.equal(registered.candidateHash, inspected.candidateHash);
+    assert.equal(registered.machineVerificationHash, inspected.machineVerification.verificationHash);
+    const publicFile = await lstat(registered.path);
+    assert.equal(publicFile.isSymbolicLink(), false);
+    assert.equal(publicFile.nlink, 1);
+    assert.equal(publicFile.size, 2_880_044);
+
+    const assetsChecks = await validateAssetsForReview(result.episode, options);
+    const localChecks = assetsChecks.filter((check) => check.code.startsWith(
+      "voice-local-offline-"
+    ));
+    assert.equal(localChecks.length, 3);
+    assert.equal(localChecks.every((check) => check.passed), true);
+
+    const schemaEpisode = structuredClone(result.episode);
+    const fileName = schemaEpisode.voice.publicPath.split("/").at(-1);
+    schemaEpisode.voice.audioPath = `studio/public/episodes/${episodeId}/${fileName}`;
+    assert.deepEqual(validateEpisode(schemaEpisode), { valid: true, errors: [] });
+
+    const idempotent = await registerApprovedLocalOfflineTts(
+      episodeId,
+      inspected.registrationRequest,
+      options
+    );
+    assert.equal(idempotent.unchanged, true);
+    assert.equal(events.size, 1);
+
+    const dispatched = structuredClone(result.episode);
+    dispatched.dispatchHistory.push({
+      id: "dispatch:test:voice-agent",
+      agentId: "voice-agent",
+      status: "running",
+      at: "2026-08-14T12:00:01.000Z"
+    });
+    const afterDispatch = await verifyRegisteredLocalOfflineVoiceForAssets(dispatched, options);
+    assert.equal(afterDispatch.candidateHash, inspected.candidateHash);
+
+    const carried = withApprovedLocalOnlyAssetCandidate(dispatched);
+    assert.equal(assetExecutionApprovalValid(carried), true);
+    const carriedReview = await verifyRegisteredLocalOfflineVoiceForAssets(
+      carried,
+      verifierOptions({
+        ...options,
+        validateAssetExecutionApproval: undefined
+      })
+    );
+    assert.equal(carriedReview.candidateHash, inspected.candidateHash);
+    assert.equal(carriedReview.reusedAcrossAssetExecutionCandidate, true);
+    assert.equal(carriedReview.sourceAssetExecution.version, 9);
+    assert.equal(carriedReview.currentAssetExecution.version, 10);
+    assert.equal(carriedReview.reuseAttestation.reused, true);
+    const {
+      verificationHash: reuseVerificationHash,
+      ...reuseAttestationPayload
+    } = carriedReview.reuseAttestation;
+    assert.equal(
+      reuseVerificationHash,
+      integrityHash(reuseAttestationPayload)
+    );
+    const carriedAssetsChecks = await validateAssetsForReview(
+      carried,
+      verifierOptions({
+        ...options,
+        validateAssetExecutionApproval: undefined
+      })
+    );
+    const carriedVoiceCheck = carriedAssetsChecks.find(
+      (check) => check.code === "voice-local-offline-provenance"
+    );
+    assert.equal(carriedVoiceCheck.passed, true);
+    assert.equal(carriedVoiceCheck.actual.reuseAttestation.reused, true);
+    assert.equal(
+      carriedVoiceCheck.actual.reuseAttestation.verificationHash,
+      reuseVerificationHash
+    );
+
+    const unsafeCarry = structuredClone(carried);
+    unsafeCarry.production.assetPlan.content.items[0]
+      .productionMethod.externalProvider = "forbidden-provider";
+    rebindAssetPlanHash(unsafeCarry, "unsafe-provider");
+    await assert.rejects(
+      verifyRegisteredLocalOfflineVoiceForAssets(
+        unsafeCarry,
+        verifierOptions({
+          ...options,
+          validateAssetExecutionApproval: undefined
+        })
+      ),
+      (error) => error.code === "local_tts_asset_reuse_scope_invalid"
+    );
+
+    const staleCarryScript = structuredClone(carried);
+    staleCarryScript.approvals.script.status = "pending";
+    await assert.rejects(
+      verifyRegisteredLocalOfflineVoiceForAssets(
+        staleCarryScript,
+        verifierOptions({
+          ...options,
+          validateAssetExecutionApproval: undefined
+        })
+      ),
+      (error) => error.code === "local_tts_source_approval_stale"
+    );
+
+    const alteredSourceBinding = structuredClone(carried);
+    alteredSourceBinding.voice.provenance.sourceBindings.assetExecution.planHash = "f".repeat(64);
+    await assert.rejects(
+      verifyRegisteredLocalOfflineVoiceForAssets(
+        alteredSourceBinding,
+        verifierOptions({
+          ...options,
+          validateAssetExecutionApproval: undefined
+        })
+      ),
+      /原始素材执行候选绑定不匹配/u
+    );
+
+    for (const mutateProviderLedger of [
+      (episode) => { episode.control.budget.usedCalls = 1; },
+      (episode) => { episode.production.ai.requestCount = 1; },
+      (episode) => { episode.routingHistory.push({ id: "provider-route:test" }); }
+    ]) {
+      const providerDrift = structuredClone(dispatched);
+      mutateProviderLedger(providerDrift);
+      await assert.rejects(
+        verifyRegisteredLocalOfflineVoiceForAssets(providerDrift, options),
+        (error) => error.code === "local_tts_zero_call_ledger_invalid"
+      );
+    }
+
+    const tampered = structuredClone(result.episode);
+    tampered.voice.authorization.candidateHash = "f".repeat(64);
+    await assert.rejects(
+      verifyRegisteredLocalOfflineVoiceForAssets(tampered, options),
+      (error) => error.code === "local_tts_registered_provenance_invalid"
+        || error.code === "local_tts_registered_authorization_invalid"
+    );
+    const failedChecks = await validateAssetsForReview(tampered, options);
+    assert.equal(
+      failedChecks.filter((check) => check.code.startsWith("voice-local-offline-"))
+        .every((check) => !check.passed),
+      true
+    );
+
+    const assetsHash = currentGateArtifactHash(result.episode, "assets");
+    const changed = structuredClone(result.episode);
+    changed.voice.provenance.candidateHash = "a".repeat(64);
+    assert.notEqual(currentGateArtifactHash(changed, "assets"), assetsHash);
+    changed.voice.provenance.candidateHash = result.episode.voice.provenance.candidateHash;
+    changed.voice.authorization.machineVerificationId = "b".repeat(64);
+    assert.notEqual(currentGateArtifactHash(changed, "assets"), assetsHash);
+    changed.voice.authorization.machineVerificationId =
+      result.episode.voice.authorization.machineVerificationId;
+    changed.voice.verification.verificationHash = "c".repeat(64);
+    assert.notEqual(currentGateArtifactHash(changed, "assets"), assetsHash);
+    changed.voice.verification.verificationHash =
+      result.episode.voice.verification.verificationHash;
+    changed.voice.sampleRate = 48_000;
+    assert.notEqual(currentGateArtifactHash(changed, "assets"), assetsHash);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+  assert.equal(
+    sha256(await readFile(resolve(studioRoot, "data", "episodes", episodeId, "episode.json"))),
+    liveEpisodeHash
+  );
+});
+
+test("状态已提交但审计事件暂时失败时，重试会幂等补写事件", async () => {
+  const source = isolatedEpisode();
+  const inspected = await inspectLocalOfflineTtsCandidate(episodeId, verifierOptions());
+  const directory = await mkdtemp(resolve(studioRoot, ".test-local-tts-event-"));
+  let eventAttempts = 0;
+  const events = new Map();
+  const store = fakeStore(source, async (event) => {
+    eventAttempts += 1;
+    if (eventAttempts === 1) throw new Error("test audit unavailable");
+    if (!events.has(event.idempotencyKey)) events.set(event.idempotencyKey, structuredClone(event));
+  });
+  const options = verifierOptions({
+    ...store,
+    episodePublicDirectory: () => directory,
+    now: new Date("2026-08-14T12:01:00.000Z")
+  });
+  try {
+    await assert.rejects(
+      registerApprovedLocalOfflineTts(episodeId, inspected.registrationRequest, options),
+      /test audit unavailable/u
+    );
+    assert.equal(store.episode.voice.mode, "local-offline-tts");
+    const retry = await registerApprovedLocalOfflineTts(
+      episodeId,
+      inspected.registrationRequest,
+      options
+    );
+    assert.equal(retry.unchanged, true);
+    assert.equal(eventAttempts, 2);
+    assert.equal(events.size, 1);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

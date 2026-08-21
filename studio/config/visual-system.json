@@ -1,0 +1,275 @@
+{
+  "schemaVersion": 3,
+  "id": "desktop-light-window-editorial-v3",
+  "status": "approved-design-target",
+  "effectiveDate": "2026-08-04",
+  "master": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "aspectRatio": "16:9",
+    "colorSpace": "rec709"
+  },
+  "derivatives": {
+    "vertical": {
+      "width": 1080,
+      "height": 1920,
+      "aspectRatio": "9:16",
+      "sourceCrop": {
+        "x": 656,
+        "y": 0,
+        "width": 608,
+        "height": 1080
+      },
+      "strategy": "recompose-and-focus",
+      "allowMechanicalFullFrameScale": false
+    }
+  },
+  "safeAreas": {
+    "master": {
+      "left": 48,
+      "right": 48,
+      "top": 24,
+      "bottom": 32
+    },
+    "verticalEssential": {
+      "left": 656,
+      "right": 1264,
+      "top": 84,
+      "bottom": 1034
+    },
+    "subtitle": {
+      "x": 300,
+      "y": 872,
+      "width": 1320,
+      "height": 88
+    }
+  },
+  "wallpaper": {
+    "base": "#EEF3FA",
+    "blurPx": 72,
+    "driftPeriodSeconds": 20,
+    "maxDriftPercent": 1.5,
+    "maxLuminanceShiftPercent": 6,
+    "stops": [
+      {
+        "role": "upperLeftCoral",
+        "color": "#F5C9BD",
+        "xPercent": 7,
+        "yPercent": 4,
+        "radiusPercent": 34
+      },
+      {
+        "role": "topLavender",
+        "color": "#CDD6F6",
+        "xPercent": 48,
+        "yPercent": 0,
+        "radiusPercent": 42
+      },
+      {
+        "role": "lowerWarmGlow",
+        "color": "#F1C6CE",
+        "xPercent": 58,
+        "yPercent": 100,
+        "radiusPercent": 28
+      },
+      {
+        "role": "lowerRightViolet",
+        "color": "#D8D0F5",
+        "xPercent": 96,
+        "yPercent": 92,
+        "radiusPercent": 30
+      },
+      {
+        "role": "powderBlue",
+        "color": "#B7D3F5",
+        "xPercent": 10,
+        "yPercent": 92,
+        "radiusPercent": 44
+      }
+    ]
+  },
+  "window": {
+    "x": 94,
+    "y": 98,
+    "width": 1732,
+    "height": 880,
+    "borderRadius": 24,
+    "topBarHeight": 56,
+    "contentPadding": 32,
+    "background": "#F2F2F4",
+    "chromeBackground": "rgba(250,250,251,0.96)",
+    "border": "rgba(108,123,147,0.22)",
+    "borderWidth": 1,
+    "shadow": "0 24px 72px rgba(52,72,105,0.18)",
+    "trafficLights": true,
+    "vertical": {
+      "x": 42,
+      "y": 128,
+      "width": 996,
+      "height": 1568,
+      "borderRadius": 30,
+      "topBarHeight": 64
+    }
+  },
+  "chapterLabel": {
+    "x": 720,
+    "y": 26,
+    "width": 480,
+    "height": 52,
+    "fontSize": 27,
+    "fontWeight": 550,
+    "color": "#4C5568",
+    "dotColor": "#2F7FF7",
+    "container": "subtle-glass"
+  },
+  "subtitle": {
+    "x": 300,
+    "y": 872,
+    "width": 1320,
+    "height": 88,
+    "fontFamily": "HarmonyOS Sans SC, PingFang SC, Noto Sans SC, sans-serif",
+    "fontSize": 46,
+    "fontWeight": 700,
+    "lineHeight": 1.25,
+    "color": "#16213A",
+    "maxLines": 2,
+    "container": "none",
+    "textShadow": "0 1px 2px rgba(255,255,255,0.92), 0 3px 14px rgba(52,72,105,0.12)",
+    "leadFrames": 2,
+    "tailFrames": 8
+  },
+  "evidenceTag": {
+    "fontSize": 18,
+    "fontWeight": 650,
+    "height": 38,
+    "paddingX": 14,
+    "borderRadius": 9,
+    "background": "rgba(255,255,255,0.9)",
+    "border": "#D9E1EC",
+    "text": "#182033",
+    "dot": "#2F7FF7"
+  },
+  "colors": {
+    "canvas": "#F2F2F4",
+    "surface": "#FAFAFB",
+    "surfaceElevated": "#FFFFFF",
+    "surfaceTint": "#EEF2F7",
+    "activeTint": "#EAF2FF",
+    "ink": "#16213A",
+    "muted": "#667085",
+    "line": "#DCE2EA",
+    "activeBlue": "#2F7FF7",
+    "structureViolet": "#6E78D8",
+    "returnCyan": "#3F9EC6",
+    "successGreen": "#2CA66F",
+    "warningOrange": "#E58945",
+    "errorRed": "#D95865"
+  },
+  "diagram": {
+    "theme": "light-control-plane",
+    "chinesePrimary": true,
+    "englishSecondary": true,
+    "primaryLabelSize": 24,
+    "secondaryLabelSize": 16,
+    "nodeRadius": 14,
+    "nodeBorderWidth": 1,
+    "primaryLineWidth": 2.5,
+    "secondaryLineWidth": 1.5,
+    "maxSimultaneousHighlights": 3,
+    "maxDefaultNodes": 12,
+    "layout": "closed-loop-with-layers",
+    "defaultLayers": [
+      "experience",
+      "agent-runtime",
+      "runtime-controls"
+    ],
+    "defaultControls": [
+      "parallel-execution",
+      "timeout",
+      "retry",
+      "fallback",
+      "audit-log",
+      "tracing",
+      "cost-latency"
+    ]
+  },
+  "motion": {
+    "contentFadeFrames": 10,
+    "focusEnterFrames": 7,
+    "diagramNodeEnterFrames": 6,
+    "diagramLineDrawFrames": 9,
+    "diagramStaggerFrames": 3,
+    "maxSimultaneousMovingObjects": 3,
+    "wallpaperMovesDuringContentCuts": false,
+    "stageManager": {
+      "mode": "single-window-two-phase",
+      "enterFrames": 18,
+      "exitFrames": 18,
+      "holdFrames": 3,
+      "overlapFrames": 0,
+      "enterScale": 0.965,
+      "exitScale": 0.92,
+      "enterLiftPxWide": 14,
+      "enterLiftPxVertical": 22,
+      "exitLiftPxWide": -8,
+      "exitLiftPxVertical": -12,
+      "enterCurve": [0.22, 1, 0.36, 1],
+      "exitCurve": [0.4, 0, 0.6, 1]
+    },
+    "magicMove": {
+      "nodeTransitionFrames": 18,
+      "focusScale": 1.018,
+      "focusLiftPx": 2
+    },
+    "references": [
+      {
+        "name": "Apple Stage Manager",
+        "purpose": "centered window shrink and restore timing",
+        "url": "https://www.youtube.com/watch?v=B7t_BCmY-lg"
+      },
+      {
+        "name": "Apple Keynote Magic Move",
+        "purpose": "shared-element continuity inside concept scenes",
+        "url": "https://support.apple.com/en-ca/guide/keynote/tanff5ae749e/mac"
+      },
+      {
+        "name": "Arc Peek",
+        "purpose": "fast restrained overlay easing",
+        "url": "https://resources.arc.net/hc/en-us/articles/19335302900887-Peek-Preview-Sites-From-Pinned-Tabs"
+      },
+      {
+        "name": "Linear",
+        "purpose": "low-bounce polished light product motion",
+        "url": "https://linear.app/"
+      }
+    ]
+  },
+  "sceneTypes": [
+    "screenCapture",
+    "sourceReview",
+    "dataEvidence",
+    "conceptArchitecture",
+    "codeReview",
+    "acceptance",
+    "statement"
+  ],
+  "forbidden": [
+    "progress-bar",
+    "playhead",
+    "elapsed-time",
+    "total-time",
+    "chapter-count",
+    "giant-glass-circle",
+    "magnifying-lens-overlay",
+    "spotlight-ring",
+    "glass-subtitle-container",
+    "default-dark-neon-diagram",
+    "dark-theme",
+    "dual-window-overlap-transition",
+    "window-blur-transition",
+    "fake-product-ui",
+    "unverified-success-state",
+    "mechanically-shrunk-desktop-for-vertical"
+  ]
+}

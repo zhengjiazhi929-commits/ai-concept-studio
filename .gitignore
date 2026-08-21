@@ -2,7 +2,18 @@
 studio/node_modules/
 studio/tmp/
 studio/data/logs/*.ndjson
+studio/data/logs/audit-ledger.json
+studio/data/provider-health.json
 *.log
+
+# Package-manager, test, and build caches
+studio/.pnpm-store/
+studio/.cache/
+studio/.vite/
+studio/.remotion/
+studio/coverage/
+studio/dist/
+studio/build/
 
 # Generated videos are included in migration backups, but not in Git history
 outputs/
@@ -12,9 +23,27 @@ outputs/
 .env.*
 !.env.example
 studio/config/cloud-backup.local.json
+studio/config/ai.local.json
+studio/node_modules
 
 # Machine-specific cloud backup state
 studio/data/cloud/backup-status.json
+
+# Local Codex state and working notes
+.codex/
+HANDOFF.md
+design-qa.md
+
+# Runtime, production, and generated episode data
+studio/data/collector/
+studio/data/research/
+studio/data/trends/
+studio/data/production/
+studio/data/episodes/agent-skill-*/
+studio/data/fixtures/agent-skill-voice/
+studio/data/fixtures/agent-skill-assets/
+studio/public/episodes/
+studio/public/assets/**/raster-contact-sheet.png
 
 # Operating-system files
 .DS_Store

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "version": "routing-policy-v1",
+  "providerPreference": ["aihubmix", "openai"],
+  "healthStates": ["healthy", "degraded", "unavailable", "half-open"],
+  "allowDegradedFallback": true,
+  "pauseWhenBudgetUnknown": true,
+  "budgetSafetyFactor": 1.25,
+  "reviewIsolation": {
+    "enabled": true,
+    "profiles": ["critical-review", "vision-review"]
+  },
+  "taskProfiles": {
+    "script": "creative-structured",
+    "storyboard": "creative-structured",
+    "assets": "creative-structured",
+    "main-agent": "planner",
+    "review": "critical-review",
+    "visual-review": "vision-review"
+  }
+}

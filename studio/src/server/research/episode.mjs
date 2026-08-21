@@ -1,4 +1,5 @@
 import { PIPELINE_DEFINITIONS } from "../../shared/schema.mjs";
+import { createApprovalMap } from "../../shared/workflow.mjs";
 import { readEpisode, writeEpisode } from "../../shared/store.mjs";
 
 export function buildEpisodeFromTrendSelection(selection, now = new Date()) {
@@ -15,14 +16,8 @@ export function buildEpisodeFromTrendSelection(selection, now = new Date()) {
     createdAt,
     updatedAt: createdAt,
     previewMode: "production-draft",
-    approvals: {
-      topic: { status: "approved", at: selection.selectedAt, note: selection.note || "" },
-      facts: { status: "pending", at: null },
-      script: { status: "pending", at: null },
-      visual: { status: "pending", at: null },
-      voice: { status: "pending", at: null },
-      final: { status: "pending", at: null }
-    },
+    approvals: createApprovalMap(),
+    approvalHistory: [],
     pipeline: PIPELINE_DEFINITIONS.map((definition) => ({
       ...definition,
       status:
@@ -52,6 +47,8 @@ export function buildEpisodeFromTrendSelection(selection, now = new Date()) {
     },
     research: {
       status: "pending",
+      version: 0,
+      versions: [],
       packPath: null,
       assistTaskPath: null,
       readiness: {
@@ -63,6 +60,11 @@ export function buildEpisodeFromTrendSelection(selection, now = new Date()) {
     },
     sourceDocs: [],
     assets: [],
+    production: {
+      ai: { requestCount: 0, attempts: [] },
+      feedback: {},
+      quality: {}
+    },
     voice: {
       status: "unconfigured",
       mode: null,

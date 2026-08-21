@@ -1,4 +1,5 @@
 import React from "react";
+import { phraseWrapChunks } from "../text-layout.mjs";
 
 export const colors = {
   paper: "#F7F7F5",
@@ -24,6 +25,25 @@ export const sourceBadgeStyle = {
   letterSpacing: "0.03em"
 };
 
+export const phraseAwareTextStyle = {
+  wordBreak: "auto-phrase",
+  lineBreak: "strict",
+  overflowWrap: "normal"
+};
+
+export function PhraseText({ text }) {
+  return phraseWrapChunks(text).map((chunk, index) =>
+    chunk === "\n" ? (
+      <br key={`line-${index}`} />
+    ) : (
+      <React.Fragment key={`${index}-${chunk}`}>
+        <span style={{ whiteSpace: "nowrap" }}>{chunk}</span>
+        <wbr />
+      </React.Fragment>
+    )
+  );
+}
+
 export function ProgressStrip({ sceneIndex, sceneCount }) {
   return (
     <div
@@ -48,15 +68,24 @@ export function ProgressStrip({ sceneIndex, sceneCount }) {
   );
 }
 
-export function Subtitle({ text }) {
+export function Subtitle({
+  text,
+  variant = "panel",
+  bottom = 72,
+  horizontalInset,
+  fontSize,
+  lineHeight
+}) {
   if (!text) return null;
+  const isOutline = variant === "outline";
+  const inset = horizontalInset ?? (isOutline ? 30 : 34);
   return (
     <div
       style={{
         position: "absolute",
-        left: 30,
-        right: 92,
-        bottom: 72,
+        left: inset,
+        right: inset,
+        bottom,
         display: "flex",
         justifyContent: "center"
       }}
@@ -64,17 +93,24 @@ export function Subtitle({ text }) {
       <div
         style={{
           maxWidth: "100%",
-          padding: "13px 18px 14px",
-          borderRadius: 9,
-          backgroundColor: colors.ink,
+          padding: isOutline ? "0 8px" : "13px 18px 14px",
+          borderRadius: isOutline ? 0 : 9,
+          backgroundColor: isOutline ? "transparent" : colors.ink,
           color: "white",
-          fontSize: 24,
-          fontWeight: 700,
-          lineHeight: 1.45,
-          textAlign: "center"
+          fontSize: fontSize ?? (isOutline ? 25 : 24),
+          fontWeight: isOutline ? 850 : 700,
+          lineHeight: lineHeight ?? 1.45,
+          textAlign: "center",
+          textWrap: "balance",
+          WebkitTextStroke: isOutline ? "1.5px rgba(18, 26, 24, 0.96)" : undefined,
+          paintOrder: isOutline ? "stroke fill" : undefined,
+          textShadow: isOutline
+            ? "0 2px 2px rgba(18, 26, 24, 0.9), 0 4px 8px rgba(18, 26, 24, 0.72)"
+            : undefined,
+          ...phraseAwareTextStyle
         }}
       >
-        {text}
+        <PhraseText text={text} />
       </div>
     </div>
   );

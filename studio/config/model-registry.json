@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "version": "model-registry-v1",
+  "profiles": {
+    "planner": { "requires": ["structured-output", "reasoning"] },
+    "fast-structured": { "requires": ["structured-output"] },
+    "deep-research": { "requires": ["structured-output", "long-context", "reasoning"] },
+    "creative-structured": { "requires": ["structured-output", "creative-writing"] },
+    "critical-review": { "requires": ["structured-output", "reasoning"] },
+    "vision-review": { "requires": ["structured-output", "vision"] },
+    "deterministic": { "requires": [], "providerRequired": false }
+  },
+  "models": {
+    "gpt-5.4-mini": {
+      "capabilities": ["structured-output", "reasoning", "creative-writing", "long-context"],
+      "profiles": ["planner", "fast-structured", "deep-research", "creative-structured", "critical-review"],
+      "qualityTier": 2,
+      "costTier": 1,
+      "pricing": {
+        "status": "unconfirmed",
+        "version": null,
+        "confirmedAt": null,
+        "source": null,
+        "currency": "USD",
+        "inputUsdPerMillion": null,
+        "cachedInputUsdPerMillion": null,
+        "outputUsdPerMillion": null,
+        "reasoningOutputUsdPerMillion": null
+      }
+    }
+  }
+}

@@ -11,10 +11,15 @@ import {
 import {
   colors,
   Footer,
+  phraseAwareTextStyle,
+  PhraseText,
   ProgressStrip,
   sourceBadgeStyle,
   Subtitle
 } from "./components/chrome.jsx";
+import { AgentSkillFullVideo } from "./agent-skill-full-video.jsx";
+import { AgentSkillShortExplainer } from "./agent-skill-short.jsx";
+import { AGENT_SKILL_SHORT_EPISODE_ID } from "./agent-skill-short-plan.mjs";
 
 function activeItem(items, currentTime) {
   return items.find((item) => currentTime >= item.start && currentTime < item.end);
@@ -29,14 +34,15 @@ function TitleScene({ scene }) {
           marginTop: 34,
           maxWidth: 460,
           color: colors.ink,
-          fontSize: 66,
+          fontSize: 60,
           fontWeight: 900,
           lineHeight: 1.08,
           letterSpacing: "-0.055em",
-          whiteSpace: "pre-line"
+          whiteSpace: "pre-line",
+          ...phraseAwareTextStyle
         }}
       >
-        {scene.title}
+        <PhraseText text={scene.title} />
       </div>
       <div
         style={{
@@ -54,10 +60,11 @@ function TitleScene({ scene }) {
           color: colors.muted,
           fontSize: 27,
           fontWeight: 650,
-          lineHeight: 1.5
+          lineHeight: 1.5,
+          ...phraseAwareTextStyle
         }}
       >
-        {scene.subtitle}
+        <PhraseText text={scene.subtitle} />
       </div>
     </div>
   );
@@ -104,10 +111,11 @@ function EvidenceScene({ scene, localFrame, fps }) {
           fontWeight: 900,
           lineHeight: 1.18,
           letterSpacing: "-0.035em",
-          whiteSpace: "pre-line"
+          whiteSpace: "pre-line",
+          ...phraseAwareTextStyle
         }}
       >
-        {scene.title}
+        <PhraseText text={scene.title} />
       </div>
     </div>
   );
@@ -131,10 +139,11 @@ function StatementScene({ scene }) {
           marginTop: 14,
           color: colors.muted,
           fontSize: 24,
-          fontWeight: 800
+          fontWeight: 800,
+          ...phraseAwareTextStyle
         }}
       >
-        {scene.title}
+        <PhraseText text={scene.title} />
       </div>
       <div
         style={{
@@ -147,10 +156,11 @@ function StatementScene({ scene }) {
           fontWeight: 900,
           lineHeight: 1.32,
           letterSpacing: "-0.045em",
-          whiteSpace: "pre-line"
+          whiteSpace: "pre-line",
+          ...phraseAwareTextStyle
         }}
       >
-        {scene.statement}
+        <PhraseText text={scene.statement} />
       </div>
     </div>
   );
@@ -167,10 +177,11 @@ function SummaryScene({ scene }) {
           color: colors.ink,
           fontSize: 42,
           fontWeight: 900,
-          letterSpacing: "-0.04em"
+          letterSpacing: "-0.04em",
+          ...phraseAwareTextStyle
         }}
       >
-        {scene.title}
+        <PhraseText text={scene.title} />
       </div>
       <div
         style={{
@@ -180,10 +191,11 @@ function SummaryScene({ scene }) {
           fontWeight: 900,
           lineHeight: 1.3,
           letterSpacing: "-0.05em",
-          whiteSpace: "pre-line"
+          whiteSpace: "pre-line",
+          ...phraseAwareTextStyle
         }}
       >
-        {scene.statement}
+        <PhraseText text={scene.statement} />
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 46 }}>
         {items.map((item, index) => (
@@ -207,7 +219,7 @@ function SummaryScene({ scene }) {
   );
 }
 
-export function EpisodePreview({ episode }) {
+export function GenericEpisodePreview({ episode }) {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
   const currentTime = frame / fps;
@@ -226,6 +238,7 @@ export function EpisodePreview({ episode }) {
 
   return (
     <AbsoluteFill
+      lang="zh-CN"
       style={{
         backgroundColor: colors.paper,
         color: colors.ink,
@@ -265,4 +278,12 @@ export function EpisodePreview({ episode }) {
       />
     </AbsoluteFill>
   );
+}
+
+export function EpisodePreview({ episode }) {
+  if (episode.id === "agent-skill-20260806") return <AgentSkillFullVideo episode={episode} />;
+  if (episode.id === AGENT_SKILL_SHORT_EPISODE_ID) {
+    return <AgentSkillShortExplainer episode={episode} />;
+  }
+  return <GenericEpisodePreview episode={episode} />;
 }

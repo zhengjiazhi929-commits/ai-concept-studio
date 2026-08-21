@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "host": "127.0.0.1",
   "port": 4317,
-  "browserExecutable": "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+  "browserExecutable": null,
   "render": {
     "compositionId": "ConceptPreview",
     "previewWidth": 540,
@@ -12,14 +12,13 @@
     "previewDurationSeconds": 36,
     "codec": "h264",
     "crf": 22,
-    "concurrency": "50%"
+    "concurrency": "25%"
   },
   "humanGates": [
-    "topic",
-    "facts",
+    "research",
     "script",
-    "visual",
-    "voice",
+    "storyboard",
+    "assets",
     "final"
   ],
   "autoPublish": false

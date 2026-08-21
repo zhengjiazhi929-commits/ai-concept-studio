@@ -3,11 +3,15 @@ import { createHash } from "node:crypto";
 import { basename, relative, resolve } from "node:path";
 import { PIPELINE_DEFINITIONS } from "../shared/schema.mjs";
 import {
+  createApprovalMap,
+  currentGateArtifactHash
+} from "../shared/workflow.mjs";
+import {
   episodePublicDirectory,
   studioRoot,
   workspaceRoot
 } from "../shared/paths.mjs";
-import { readConfig, writeEpisode, appendEvent } from "../shared/store.mjs";
+import { readConfig, readEpisode, writeEpisode, appendEvent } from "../shared/store.mjs";
 
 const GOLDEN_ID = "golden-001";
 
@@ -38,10 +42,11 @@ async function fileRecord(relativePath) {
   };
 }
 
-export async function importGoldenSample() {
+export async function importGoldenSample(options = {}) {
+  const persist = options.persist !== false;
   const config = await readConfig();
   const publicDirectory = episodePublicDirectory(GOLDEN_ID);
-  await mkdir(publicDirectory, { recursive: true });
+  if (persist) await mkdir(publicDirectory, { recursive: true });
 
   const assets = [];
   for (const fileName of screenshotFiles) {
@@ -55,12 +60,16 @@ export async function importGoldenSample() {
       fileName
     );
     const destination = resolve(publicDirectory, fileName);
-    await copyFile(source, destination);
+    if (persist) await copyFile(source, destination);
+    const sourcePath = relative(workspaceRoot, source).replaceAll("\\", "/");
+    const integrity = await fileRecord(sourcePath);
     assets.push({
       id: fileName.replace(/\.png$/u, ""),
       type: "image",
       path: `episodes/${GOLDEN_ID}/${fileName}`,
-      source: relative(workspaceRoot, source).replaceAll("\\", "/"),
+      source: sourcePath,
+      bytes: integrity.bytes,
+      sha256: integrity.sha256,
       privacy: "fictional-data",
       verified: true
     });
@@ -82,33 +91,81 @@ export async function importGoldenSample() {
     createdAt: "2026-07-31T00:00:00.000Z",
     updatedAt: now,
     previewMode: "visual-proof",
-    approvals: {
-      topic: { status: "approved", at: "2026-07-31" },
-      facts: { status: "approved", at: "2026-07-31" },
-      script: { status: "approved", at: "2026-08-03" },
-      visual: { status: "approved", at: "2026-08-03", choice: "B-real-product-documentary" },
-      voice: { status: "pending", at: null },
-      final: { status: "pending", at: null }
+    trendSelection: {
+      runId: "golden-import",
+      candidateId: "agentic-coding",
+      selectedAt: "2026-07-31T00:00:00.000Z",
+      note: "黄金样例人工选题",
+      productDecisions: ["任务授权范围", "完成定义与验收", "人工接管和可逆性"],
+      primarySources: [
+        { label: "OpenAI Codex", url: "https://developers.openai.com/codex/" },
+        {
+          label: "Anthropic Claude Code",
+          url: "https://docs.anthropic.com/en/docs/claude-code/overview"
+        }
+      ],
+      creatorEvidence: [],
+      evidenceSignals: []
     },
+    approvals: createApprovalMap({
+      research: {
+        status: "approved",
+        at: "2026-07-31",
+        currentVersion: 1,
+        provenance: "trusted-fixture"
+      },
+      script: {
+        status: "approved",
+        at: "2026-08-03",
+        currentVersion: 1,
+        provenance: "trusted-fixture"
+      },
+      storyboard: {
+        status: "approved",
+        at: "2026-08-03",
+        note: "B-real-product-documentary",
+        currentVersion: 1,
+        provenance: "trusted-fixture"
+      },
+      assets: { currentVersion: 1 }
+    }),
+    approvalHistory: [
+      { at: "2026-07-31", gate: "research", decision: "approved", note: "", version: 1 },
+      { at: "2026-08-03", gate: "script", decision: "approved", note: "", version: 1 },
+      {
+        at: "2026-08-03",
+        gate: "storyboard",
+        decision: "approved",
+        note: "B-real-product-documentary",
+        version: 1
+      }
+    ],
     pipeline: PIPELINE_DEFINITIONS.map((definition) => {
       const complete = ["trend", "research", "script", "storyboard", "assets"].includes(
         definition.id
       );
       return {
         ...definition,
-        status: complete ? "complete" : definition.id === "render" ? "ready" : "pending",
+        status: complete ? "complete" : definition.id === "voice" ? "ready" : "pending",
         mode: complete ? "imported-approved-artifact" : null,
         lastRunAt: complete ? now : null,
         message:
           definition.id === "voice"
-            ? "等待选择本人录音、授权音色或通用自然音色"
-            : definition.id === "render"
-              ? "可以先生成无旁白的视觉验证版"
-              : null
+            ? "素材已导入，可以进行旁白与素材总审"
+            : "等待上一步完成"
       };
     }),
     sourceDocs,
     assets,
+    production: {
+      ai: { requestCount: 0, attempts: [] },
+      feedback: {},
+      quality: {},
+      materialsVersion: 1,
+      assetBundleRevision: 1,
+      scriptDraft: { version: 1, source: "episodes/golden-001/07-script.md" },
+      storyboardDraft: { version: 1, source: "episodes/golden-001/08-storyboard.md" }
+    },
     voice: {
       status: "unconfigured",
       mode: null,
@@ -122,7 +179,7 @@ export async function importGoldenSample() {
       durationSeconds: config.render.previewDurationSeconds,
       compositionId: config.render.compositionId,
       outputPath: null,
-      status: "not_rendered",
+      status: "pending",
       progress: 0
     },
     scenes: [
@@ -195,9 +252,10 @@ export async function importGoldenSample() {
       { start: 30, end: 36, text: "从生成代码，到持续推进一个可验证任务。" }
     ],
     qa: {
-      status: "not_run",
+      status: "pending",
       reportPath: null,
-      checks: []
+      checks: [],
+      checkedAt: null
     },
     history: [
       {
@@ -208,10 +266,26 @@ export async function importGoldenSample() {
     ],
     system: {
       studioRoot: relative(workspaceRoot, studioRoot).replaceAll("\\", "/"),
-      importedBy: "golden-sample-importer-v0.1"
+      importedBy: "golden-sample-importer-v0.1",
+      trustedFixture: true
     }
   };
 
+  for (const gate of ["research", "script", "storyboard"]) {
+    episode.approvals[gate].artifactHash = currentGateArtifactHash(episode, gate);
+  }
+
+  if (!persist) return { episode, destination: null };
+
+  try {
+    const existing = await readEpisode(GOLDEN_ID);
+    episode.control = {
+      ...(episode.control ?? {}),
+      stateVersion: existing.control.stateVersion
+    };
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
   const destination = await writeEpisode(episode);
   await appendEvent({
     type: "episode.imported",

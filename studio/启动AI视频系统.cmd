@@ -27,8 +27,8 @@ if errorlevel 1 (
 )
 
 if not exist "node_modules" (
-  echo 首次启动：正在安装本地依赖，请稍候……
-  call "%STUDIO_PNPM%" install
+  echo 首次启动：正在按锁文件安装本地依赖，请稍候……
+  call "%STUDIO_PNPM%" install --frozen-lockfile
   if errorlevel 1 (
     echo 安装失败，请检查网络后重试，或回到 Codex 里让我检查。
     pause

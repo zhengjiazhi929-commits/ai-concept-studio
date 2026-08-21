@@ -1,11 +1,12 @@
 import { runAgent } from "../src/server/orchestrator.mjs";
+import { isSuccessfulQaWorkerStatus } from "../src/server/qa.mjs";
 
 const episodeId = process.argv[2] || "golden-001";
 const result = await runAgent(episodeId, "qa-agent");
 console.log(
   JSON.stringify(
     {
-      ok: result.output.status === "complete",
+      ok: isSuccessfulQaWorkerStatus(result.output.status),
       episodeId,
       message: result.output.message,
       findings: result.output.findings

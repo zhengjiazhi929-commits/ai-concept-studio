@@ -4,6 +4,10 @@ import { relative } from "node:path";
 import { workspaceRoot } from "../../shared/paths.mjs";
 import { appendEvent, readEpisode, writeEpisode } from "../../shared/store.mjs";
 import {
+  latestReviewFeedback,
+  resetApprovalForVersion
+} from "../../shared/workflow.mjs";
+import {
   buildResearchAssistTask,
   buildResearchPlan,
   mergeEvidenceBatch,
@@ -51,6 +55,19 @@ function mergeSourceDocs(current, additions) {
   return Array.from(records.values());
 }
 
+export function researchStepAfterEvidenceImport(step, pack) {
+  const ready = pack.readiness.readyForFactApproval;
+  return {
+    ...step,
+    status: ready ? "ready" : "blocked",
+    message: ready
+      ? "证据包达到门槛，可以由研究 Agent 提交机器审核"
+      : `证据仍不足：${pack.readiness.reasons.join("；")}`,
+    findings: pack.readiness.reasons,
+    requiresApproval: null
+  };
+}
+
 export async function runEpisodeResearchAgent(episode, options = {}) {
   const config = await readResearchConfig();
   const now = options.now instanceof Date ? options.now : new Date(options.now ?? Date.now());
@@ -68,7 +85,16 @@ export async function runEpisodeResearchAgent(episode, options = {}) {
       })
   );
   pack = mergeSourceInspections(pack, inspections, config, now);
-  const assistTask = buildResearchAssistTask(pack, config, now);
+  const reviewFeedback =
+    (Array.isArray(options.reviewFeedback) && options.reviewFeedback.length > 0)
+      ? structuredClone(options.reviewFeedback)
+      : (typeof options.reviewFeedback === "string" && options.reviewFeedback.trim())
+        ? options.reviewFeedback.trim()
+        : latestReviewFeedback(episode, "research");
+  const assistTask = {
+    ...buildResearchAssistTask(pack, config, now),
+    reviewFeedback: reviewFeedback || null
+  };
   const runPath = await writeResearchPack(pack);
   const assistTaskPath = await writeResearchAssistTask(assistTask);
   return {
@@ -99,24 +125,26 @@ export async function importResearchEvidenceBatch(batch, options = {}) {
   const stepIndex = episode.pipeline.findIndex((step) => step.agent === "research-agent");
   if (stepIndex < 0) throw new Error("这一期缺少研究 Agent 流水线步骤");
   const ready = pack.readiness.readyForFactApproval;
+  const version = (episode.research?.version ?? 0) + 1;
   episode.pipeline[stepIndex] = {
-    ...episode.pipeline[stepIndex],
-    status: ready ? "waiting_approval" : "blocked",
-    message: ready
-      ? "证据包达到门槛，等待人工批准关键事实"
-      : `证据仍不足：${pack.readiness.reasons.join("；")}`,
-    artifacts: [runPath, batchPath],
-    findings: pack.readiness.reasons,
-    requiresApproval: ready ? "facts" : null,
+    ...researchStepAfterEvidenceImport(episode.pipeline[stepIndex], pack),
+    artifacts: [packRecord.path, batchRecord.path],
     lastRunAt: now.toISOString()
   };
   episode.research = {
     status: pack.status,
+    version,
+    versions: [
+      ...(episode.research?.versions ?? []),
+      { version, packPath: packRecord.path, batchPath: batchRecord.path, at: now.toISOString() }
+    ],
     packPath: packRecord.path,
     assistTaskPath: episode.research?.assistTaskPath ?? null,
     lastImportedBatch: batch.batchId,
-    readiness: pack.readiness
+    readiness: pack.readiness,
+    needsRevision: false
   };
+  episode.approvals.research = resetApprovalForVersion(episode.approvals.research, version);
   episode.sourceDocs = mergeSourceDocs(episode.sourceDocs, [packRecord, batchRecord]);
   episode.updatedAt = now.toISOString();
   episode.history.push({
@@ -129,9 +157,9 @@ export async function importResearchEvidenceBatch(batch, options = {}) {
     type: "research.evidence-imported",
     episodeId: batch.episodeId,
     agentId: "research-agent",
-    status: ready ? "waiting_approval" : "blocked",
+    status: ready ? "ready" : "blocked",
     message: ready
-      ? `研究证据达到事实审批门槛：${pack.readiness.verifiedSourceCount} 份来源`
+      ? `研究证据达到机器审核门槛：${pack.readiness.verifiedSourceCount} 份来源`
       : `研究证据已导入，但仍有 ${pack.readiness.reasons.length} 项缺口`
   });
   return { pack, episode, batchPath, runPath };
@@ -155,7 +183,7 @@ export async function getResearchState() {
           title: episode.title,
           status: episode.status,
           research: episode.research,
-          factsApproval: episode.approvals.facts
+          researchApproval: episode.approvals.research
         }
       : null
   };
@@ -164,12 +192,22 @@ export async function getResearchState() {
 export function researchPatch(episode, result) {
   const packRecord = result.sourceDocs[0];
   const assistRecord = result.sourceDocs[1];
+  const version = (episode.research?.version ?? 0) + 1;
   return {
     research: {
       status: result.pack.status,
+      version,
+      versions: [
+        ...(episode.research?.versions ?? []),
+        { version, packPath: packRecord.path, assistTaskPath: assistRecord.path, at: new Date().toISOString() }
+      ],
       packPath: packRecord.path,
       assistTaskPath: assistRecord.path,
-      readiness: result.pack.readiness
+      readiness: result.pack.readiness,
+      needsRevision: false
+    },
+    approvals: {
+      research: resetApprovalForVersion(episode.approvals.research, version)
     },
     sourceDocs: mergeSourceDocs(episode.sourceDocs, result.sourceDocs)
   };

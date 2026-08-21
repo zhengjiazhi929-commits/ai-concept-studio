@@ -7,6 +7,7 @@ import {
   mergeEvidenceBatch
 } from "../src/server/research/engine.mjs";
 import { inspectPrimarySource } from "../src/server/research/fetcher.mjs";
+import { researchStepAfterEvidenceImport } from "../src/server/research/agent.mjs";
 import { validateResearchEvidenceBatch } from "../src/server/research/schema.mjs";
 import { readResearchConfig } from "../src/server/research/store.mjs";
 
@@ -180,6 +181,12 @@ test("证据包只有达到来源、主张、交叉核验和关键类别门槛�
   assert.equal(merged.readiness.verifiedSourceCount, 3);
   assert.equal(merged.readiness.supportedClaimCount, 6);
   assert.equal(merged.readiness.crossSourceClaimCount, 4);
+  const step = researchStepAfterEvidenceImport(
+    { id: "research", status: "blocked", requiresApproval: "research" },
+    merged
+  );
+  assert.equal(step.status, "ready");
+  assert.equal(step.requiresApproval, null);
 });
 
 test("创作者视频类型不能被伪装成研究证据来源", async () => {

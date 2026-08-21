@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "main-agent-release-v1",
+  "version": "1.0.0",
+  "policyVersion": "routing-policy-v1",
+  "reviewVersion": "review-rubrics-v5",
+  "requiredCases": [
+    { "caseId": "golden-next-step", "scenarioType": "golden" },
+    { "caseId": "reject-illegal-action", "scenarioType": "rejection" },
+    { "caseId": "respect-human-gate", "scenarioType": "boundary" },
+    { "caseId": "respect-human-feedback", "scenarioType": "human-feedback" },
+    { "caseId": "pause-on-budget", "scenarioType": "budget" },
+    { "caseId": "recover-without-duplicate", "scenarioType": "recovery" }
+  ]
+}
