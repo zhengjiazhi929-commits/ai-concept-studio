@@ -1,0 +1,1137 @@
+{
+  "schemaVersion": "motion-library-upstream-selection-v1",
+  "generatedBy": "studio/scripts/archive-motion-library-upstream.mjs",
+  "source": {
+    "repository": "https://github.com/Subhan-code/Amicro--Micro-transitions-",
+    "commit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+    "license": "MIT",
+    "copyright": "Copyright (c) 2026 SYED SUBHAN UDDIN",
+    "licensePath": "LICENSE",
+    "licenseBytes": 1075,
+    "licenseSha256": "4b2e0abfc3fdc8722545c3772ee7c6fd0bcdbe8af76112af50066689fca4a9c2"
+  },
+  "summary": {
+    "catalogItemCount": 35,
+    "selectionReferenceCount": 38,
+    "selectedFileCount": 29,
+    "selectedBytes": 152075,
+    "archiveBytesIncludingLicense": 153150
+  },
+  "selections": [
+    {
+      "catalogId": "fade-in",
+      "category": "entrance-text",
+      "title": "Fade In",
+      "titleZh": "平稳淡入",
+      "sourcePath": "registry/ui/entrance/fade-in.tsx",
+      "symbol": "FadeIn",
+      "selectedReason": "内容保持原位，以低干扰透明度变化进入。",
+      "useWhen": [
+        "场景内补充说明",
+        "证据元素出现",
+        "低优先级内容进入"
+      ],
+      "archivePath": "selected/registry/ui/entrance/fade-in.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 571,
+      "sha256": "742d0118dfb2237da82e62fc8740f1144e270bcb921ed561ec896f97b4d89612"
+    },
+    {
+      "catalogId": "fade-up",
+      "category": "entrance-text",
+      "title": "Fade Up",
+      "titleZh": "轻微上移淡入",
+      "sourcePath": "registry/ui/entrance/fade-up.tsx",
+      "symbol": "FadeUp",
+      "selectedReason": "从下方少量位移进入，适合标题或关键结论。",
+      "useWhen": [
+        "页面标题",
+        "关键结论",
+        "小型模块"
+      ],
+      "archivePath": "selected/registry/ui/entrance/fade-up.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 618,
+      "sha256": "8546ead007bc5a9605f871695431e782f23e28dd140af51a4f3a2df5d88086d0"
+    },
+    {
+      "catalogId": "fade-down",
+      "category": "entrance-text",
+      "title": "Fade Down",
+      "titleZh": "轻微下移淡入",
+      "sourcePath": "registry/ui/entrance/fade-down.tsx",
+      "symbol": "FadeDown",
+      "selectedReason": "从上方少量位移进入，适合标签与次级提示。",
+      "useWhen": [
+        "章节标签",
+        "状态说明",
+        "上方注释"
+      ],
+      "archivePath": "selected/registry/ui/entrance/fade-down.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 625,
+      "sha256": "91bab02f673371503b775c57fb5436b8fe26998dca0e1e663b4fd60552d2ab2c"
+    },
+    {
+      "catalogId": "slide-left",
+      "category": "entrance-text",
+      "title": "Slide Left",
+      "titleZh": "左向接管",
+      "sourcePath": "registry/ui/entrance/slide-left.tsx",
+      "symbol": "SlideLeft",
+      "selectedReason": "内容从右侧进入并向左完成接管，表达前进关系。",
+      "useWhen": [
+        "流程推进",
+        "前后步骤切换",
+        "局部页面接管"
+      ],
+      "archivePath": "selected/registry/ui/entrance/slide-left.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 627,
+      "sha256": "eb36ec78ebcf3594e00106b1d3b12d518c5a5994a518fc0b25e21bb5ddcce5a4"
+    },
+    {
+      "catalogId": "slide-right",
+      "category": "entrance-text",
+      "title": "Slide Right",
+      "titleZh": "右向返回",
+      "sourcePath": "registry/ui/entrance/slide-right.tsx",
+      "symbol": "SlideRight",
+      "selectedReason": "内容从左侧进入，适合表达返回、回溯或结果回流。",
+      "useWhen": [
+        "结果回流",
+        "回到上一层",
+        "反向关系"
+      ],
+      "archivePath": "selected/registry/ui/entrance/slide-right.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 631,
+      "sha256": "ea3cc579eea31299d5cff7a31fb84348a8e39ec5b19beaaa3965101760cc14ce"
+    },
+    {
+      "catalogId": "scale-in",
+      "category": "entrance-text",
+      "title": "Scale In",
+      "titleZh": "克制缩放进入",
+      "sourcePath": "registry/ui/entrance/scale-in.tsx",
+      "symbol": "ScaleIn",
+      "selectedReason": "从 97% 左右恢复到完整尺寸，不使用明显弹跳。",
+      "useWhen": [
+        "重点对象聚焦",
+        "小型独立模块",
+        "确认结果"
+      ],
+      "archivePath": "selected/registry/ui/entrance/scale-in.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 666,
+      "sha256": "7086be226e1a051a88afb8ef125a257ad5522360ce1f2419769036f0f5d9c297"
+    },
+    {
+      "catalogId": "text-reveal",
+      "category": "entrance-text",
+      "title": "Text Reveal",
+      "titleZh": "文字遮罩揭示",
+      "sourcePath": "registry/ui/text/text-reveal.tsx",
+      "symbol": "TextReveal",
+      "selectedReason": "通过平稳遮罩展开正文或标题，不闪烁、不逐字跳动。",
+      "useWhen": [
+        "标题",
+        "正文关键句",
+        "章节判断"
+      ],
+      "archivePath": "selected/registry/ui/text/text-reveal.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 1164,
+      "sha256": "bc17940a8d340cce65a986bc3e1b9105cbc64e5cdfd93c5a481d090f80dfad20"
+    },
+    {
+      "catalogId": "word-reveal",
+      "category": "entrance-text",
+      "title": "Word Reveal",
+      "titleZh": "中文分词依次揭示",
+      "sourcePath": "registry/ui/text/word-reveal.tsx",
+      "symbol": "WordReveal",
+      "selectedReason": "按中文词组依次进入，用于短句层级而非逐字炫技。",
+      "useWhen": [
+        "短标题",
+        "三到五个关键词",
+        "因果短句"
+      ],
+      "archivePath": "selected/registry/ui/text/word-reveal.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 1223,
+      "sha256": "6d17e2dc183f0f4bfbc4d60267ccbf49d7379487e6a47c1a63511ef2a2403c05"
+    },
+    {
+      "catalogId": "card-linear-spread",
+      "category": "composition-flow",
+      "title": "Card Linear Spread",
+      "titleZh": "同级卡片线性展开",
+      "sourcePath": "src/components/cards/CardLinearSpread.tsx",
+      "symbol": "CardLinearSpread",
+      "selectedReason": "同级平面模块从重叠状态等距铺开，保持相同尺寸与表面。",
+      "useWhen": [
+        "并列概念",
+        "同级选项",
+        "阶段总览"
+      ],
+      "archivePath": "selected/src/components/cards/CardLinearSpread.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 1943,
+      "sha256": "ae4c1026bf3cccc9060290342f7eb30e3606bc2e6ea0726eeeaaee1932dd9bcb"
+    },
+    {
+      "catalogId": "card-cascade-stagger",
+      "category": "composition-flow",
+      "title": "Card Cascade Stagger",
+      "titleZh": "卡片级联入场",
+      "sourcePath": "src/components/cards/CardCascadeStagger.tsx",
+      "symbol": "CardCascadeStagger",
+      "selectedReason": "同级模块按阅读顺序依次进入，最终严格对齐。",
+      "useWhen": [
+        "步骤列表",
+        "三到五项支持点",
+        "分层说明"
+      ],
+      "archivePath": "selected/src/components/cards/CardCascadeStagger.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 2041,
+      "sha256": "7d09738cb4488f103e3330012d16bd158ea7dc1ad17c32866286a8ccc346dbee"
+    },
+    {
+      "catalogId": "card-arc",
+      "category": "composition-flow",
+      "title": "Card Arc",
+      "titleZh": "卡片弧形编排",
+      "sourcePath": "src/components/cards/CardArc5.tsx",
+      "symbol": "CardArc5",
+      "selectedReason": "少量卡片形成克制弧线，仅用于概念集合的短暂总览。",
+      "useWhen": [
+        "概念集合",
+        "备选路径",
+        "素材组"
+      ],
+      "archivePath": "selected/src/components/cards/CardArc5.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 2536,
+      "sha256": "99ef657c3582895367261be0e4dd7d193244363df0add52cbad19705a08736ac"
+    },
+    {
+      "catalogId": "circuit-trace-draw",
+      "category": "composition-flow",
+      "title": "Circuit Trace Draw",
+      "titleZh": "调用线路绘制",
+      "sourcePath": "src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx",
+      "symbol": "CircuitTraceDraw",
+      "selectedReason": "线段从源节点向目标节点生长，用于解释调用路径。",
+      "useWhen": [
+        "Agent 调用",
+        "数据流",
+        "受控执行路径"
+      ],
+      "archivePath": "selected/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 31272,
+      "sha256": "b891f53e120b84845d03ad71a95fdcece50fdd84b6c69dd6c9b5e29ecdc3990e"
+    },
+    {
+      "catalogId": "hexagon-lattice-draw",
+      "category": "composition-flow",
+      "title": "Hexagon Lattice Draw",
+      "titleZh": "能力网络展开",
+      "sourcePath": "src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx",
+      "symbol": "HexagonLatticeDraw",
+      "selectedReason": "轻量六边形网络按中心向外展开，表达模块化能力关系。",
+      "useWhen": [
+        "能力地图",
+        "模块组合",
+        "协议网络"
+      ],
+      "archivePath": "selected/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 31272,
+      "sha256": "b891f53e120b84845d03ad71a95fdcece50fdd84b6c69dd6c9b5e29ecdc3990e"
+    },
+    {
+      "catalogId": "modular-tile-snap",
+      "category": "composition-flow",
+      "title": "Modular Tile Snap",
+      "titleZh": "模块吸附成组",
+      "sourcePath": "src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx",
+      "symbol": "ModularTileSnap",
+      "selectedReason": "独立模块吸附成规则网格，表达能力被组织为系统。",
+      "useWhen": [
+        "能力归类",
+        "组件组合",
+        "从散点到结构"
+      ],
+      "archivePath": "selected/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 31272,
+      "sha256": "b891f53e120b84845d03ad71a95fdcece50fdd84b6c69dd6c9b5e29ecdc3990e"
+    },
+    {
+      "catalogId": "segmented-link-stretch",
+      "category": "composition-flow",
+      "title": "Segmented Link Stretch",
+      "titleZh": "分段连接伸展",
+      "sourcePath": "src/components/css-animations/whimsical/ConceptTrios3.tsx",
+      "symbol": "SegmentedLinkStretch",
+      "selectedReason": "短连接段依次伸展并对接，表达标准接口建立。",
+      "useWhen": [
+        "协议连接",
+        "工具接入",
+        "链路组装"
+      ],
+      "archivePath": "selected/src/components/css-animations/whimsical/ConceptTrios3.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 19985,
+      "sha256": "105d5160d798144f2197bc6c7ed3fc61cc773b3c254c8779e081addd45a98bf7"
+    },
+    {
+      "catalogId": "domino-chain",
+      "category": "composition-flow",
+      "title": "Domino Chain",
+      "titleZh": "因果链推进",
+      "sourcePath": "src/components/css-animations/whimsical/WhimsicalVariations.tsx",
+      "symbol": "DominoChain",
+      "selectedReason": "节点按顺序产生轻微倾转与传递，用于短因果链。",
+      "useWhen": [
+        "因果关系",
+        "连续触发",
+        "依赖传播"
+      ],
+      "archivePath": "selected/src/components/css-animations/whimsical/WhimsicalVariations.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 14545,
+      "sha256": "49373770d35d02542afb2c42e58c8db12773912ef89c4d6280cbf68e20b9a8f4"
+    },
+    {
+      "catalogId": "filter-tag-pill",
+      "category": "state-feedback",
+      "title": "Filter Tag Pill",
+      "titleZh": "筛选标签确认",
+      "sourcePath": "src/components/css-animations/yui-components/UiKitTrios.tsx",
+      "symbol": "FilterTagPill",
+      "selectedReason": "标签从待选状态进入已选择状态，适合表达条件生效。",
+      "useWhen": [
+        "条件筛选",
+        "约束启用",
+        "标签选择"
+      ],
+      "archivePath": "selected/src/components/css-animations/yui-components/UiKitTrios.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 6267,
+      "sha256": "2c98a762a212b5965a8c378f34b5d4ecfb1295ac6617d3d3dc53368102130b2d"
+    },
+    {
+      "catalogId": "morph-action-pill",
+      "category": "state-feedback",
+      "title": "Morph Action Pill",
+      "titleZh": "动作胶囊展开",
+      "sourcePath": "src/components/css-animations/yui-components/UiKitTrios.tsx",
+      "symbol": "MorphActionPill",
+      "selectedReason": "小图标扩展为带文字的动作提示，用于一次性确认。",
+      "useWhen": [
+        "动作确认",
+        "结果提示",
+        "小型独立模块"
+      ],
+      "archivePath": "selected/src/components/css-animations/yui-components/UiKitTrios.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 6267,
+      "sha256": "2c98a762a212b5965a8c378f34b5d4ecfb1295ac6617d3d3dc53368102130b2d"
+    },
+    {
+      "catalogId": "segmented-step-bar",
+      "category": "state-feedback",
+      "title": "Segmented Step Bar",
+      "titleZh": "分段步骤条",
+      "sourcePath": "src/components/css-animations/yui-components/UiKitTrios.tsx",
+      "symbol": "SegmentedStepBar",
+      "selectedReason": "按步骤点亮同色分段，表达当前执行位置。",
+      "useWhen": [
+        "短流程进度",
+        "阶段状态",
+        "执行链"
+      ],
+      "archivePath": "selected/src/components/css-animations/yui-components/UiKitTrios.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 6267,
+      "sha256": "2c98a762a212b5965a8c378f34b5d4ecfb1295ac6617d3d3dc53368102130b2d"
+    },
+    {
+      "catalogId": "segmented-stepper-dots",
+      "category": "state-feedback",
+      "title": "Segmented Stepper Dots",
+      "titleZh": "步骤节点推进",
+      "sourcePath": "src/components/css-animations/yui-components/RedesignedUiTrios.tsx",
+      "symbol": "SegmentedStepperDots",
+      "selectedReason": "节点与连接线同步推进，适合小型执行状态模块。",
+      "useWhen": [
+        "Agent 阶段",
+        "审核步骤",
+        "状态切换"
+      ],
+      "archivePath": "selected/src/components/css-animations/yui-components/RedesignedUiTrios.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 7789,
+      "sha256": "8f108567a74fd0b09ca7874102986ae789ea8eb4dec8485227322b20ff53fb58"
+    },
+    {
+      "catalogId": "card-glance-preview",
+      "category": "state-feedback",
+      "title": "Card Glance Preview",
+      "titleZh": "小模块预览展开",
+      "sourcePath": "src/components/css-animations/yui-components/RedesignedUiTrios.tsx",
+      "symbol": "CardGlancePreview",
+      "selectedReason": "小型条目在原位展开补充信息，不创建大卡片套页面。",
+      "useWhen": [
+        "证据摘要",
+        "术语解释",
+        "局部详情"
+      ],
+      "archivePath": "selected/src/components/css-animations/yui-components/RedesignedUiTrios.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 7789,
+      "sha256": "8f108567a74fd0b09ca7874102986ae789ea8eb4dec8485227322b20ff53fb58"
+    },
+    {
+      "catalogId": "bookmark-save-pill",
+      "category": "state-feedback",
+      "title": "Bookmark Save Pill",
+      "titleZh": "保存状态确认",
+      "sourcePath": "src/components/css-animations/yui-components/RedesignedUiTrios.tsx",
+      "symbol": "BookmarkSavePill",
+      "selectedReason": "书签图标平稳转为已保存状态，表达结果持久化。",
+      "useWhen": [
+        "结果保存",
+        "版本固化",
+        "资产入库"
+      ],
+      "archivePath": "selected/src/components/css-animations/yui-components/RedesignedUiTrios.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 7789,
+      "sha256": "8f108567a74fd0b09ca7874102986ae789ea8eb4dec8485227322b20ff53fb58"
+    },
+    {
+      "catalogId": "checkbox-draw",
+      "category": "state-feedback",
+      "title": "Checkbox Draw",
+      "titleZh": "检查项完成",
+      "sourcePath": "src/components/forms/AnimatedFormElement.tsx",
+      "symbol": "AnimatedCheckbox",
+      "selectedReason": "边框稳定出现后绘制勾选路径，用于验收完成。",
+      "useWhen": [
+        "检查项",
+        "验证通过",
+        "完成标准"
+      ],
+      "archivePath": "selected/src/components/forms/AnimatedFormElement.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 20397,
+      "sha256": "f8787f23c12e3973e7d9e144de9b8865154cddd4b99c7390177747671525d5ae"
+    },
+    {
+      "catalogId": "checkbox-draw",
+      "category": "state-feedback",
+      "title": "Checkbox Draw",
+      "titleZh": "检查项完成",
+      "sourcePath": "src/data/formElements.ts",
+      "symbol": "formElementsData",
+      "selectedReason": "边框稳定出现后绘制勾选路径，用于验收完成。",
+      "useWhen": [
+        "检查项",
+        "验证通过",
+        "完成标准"
+      ],
+      "archivePath": "selected/src/data/formElements.ts",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 4302,
+      "sha256": "f6e842ea944ea397da0744f5c5383a41a112b46328cff55dcad402e483ef8f3d"
+    },
+    {
+      "catalogId": "form-submit-morph",
+      "category": "state-feedback",
+      "title": "Form Submit Morph",
+      "titleZh": "提交结果变形",
+      "sourcePath": "src/components/forms/AnimatedFormElement.tsx",
+      "symbol": "AnimatedSubmit",
+      "selectedReason": "提交动作从进行中平稳变为完成状态。",
+      "useWhen": [
+        "人工批准",
+        "提交完成",
+        "结果返回"
+      ],
+      "archivePath": "selected/src/components/forms/AnimatedFormElement.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 20397,
+      "sha256": "f8787f23c12e3973e7d9e144de9b8865154cddd4b99c7390177747671525d5ae"
+    },
+    {
+      "catalogId": "form-submit-morph",
+      "category": "state-feedback",
+      "title": "Form Submit Morph",
+      "titleZh": "提交结果变形",
+      "sourcePath": "src/data/formElements.ts",
+      "symbol": "formElementsData",
+      "selectedReason": "提交动作从进行中平稳变为完成状态。",
+      "useWhen": [
+        "人工批准",
+        "提交完成",
+        "结果返回"
+      ],
+      "archivePath": "selected/src/data/formElements.ts",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 4302,
+      "sha256": "f6e842ea944ea397da0744f5c5383a41a112b46328cff55dcad402e483ef8f3d"
+    },
+    {
+      "catalogId": "smooth-dot-shift",
+      "category": "ai-status",
+      "title": "Smooth Dot Shift",
+      "titleZh": "处理点位流转",
+      "sourcePath": "registry/ui/loading/smooth-dot-shift.tsx",
+      "symbol": "SmoothDotShift",
+      "selectedReason": "三个点位平滑换位，表示任务正在不同处理单元间流转。",
+      "useWhen": [
+        "短暂处理中",
+        "节点调度",
+        "等待返回"
+      ],
+      "archivePath": "selected/registry/ui/loading/smooth-dot-shift.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 670,
+      "sha256": "3053ffa3d020ebe0d774e376b9e5bbb13a493684ffd8ecb3e6873d67f9df6368"
+    },
+    {
+      "catalogId": "magnetic-dots",
+      "category": "ai-status",
+      "title": "Magnetic Dots",
+      "titleZh": "能力聚合",
+      "sourcePath": "registry/ui/loading/magnetic-dots.tsx",
+      "symbol": "MagneticDots",
+      "selectedReason": "点位先分散后聚合，表达上下文或能力汇入当前任务。",
+      "useWhen": [
+        "上下文聚合",
+        "多源输入",
+        "能力汇入"
+      ],
+      "archivePath": "selected/registry/ui/loading/magnetic-dots.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 985,
+      "sha256": "dc83bc5c2e27360bd05338ac282bbc8c753d3948b438834fc13cfb1fa4f54791"
+    },
+    {
+      "catalogId": "arc-tracer",
+      "category": "ai-status",
+      "title": "Arc Tracer",
+      "titleZh": "环形处理进度",
+      "sourcePath": "registry/ui/loading/arc-tracer.tsx",
+      "symbol": "ArcTracer",
+      "selectedReason": "单一弧线沿圆周推进，适合小型处理状态。",
+      "useWhen": [
+        "处理中",
+        "单任务等待",
+        "后台执行"
+      ],
+      "archivePath": "selected/registry/ui/loading/arc-tracer.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 652,
+      "sha256": "09fee44a7328d0a15b3fe8a8a89690c31d2bb15baa29d6096fbc930bda27506a"
+    },
+    {
+      "catalogId": "morphing-bars",
+      "category": "ai-status",
+      "title": "Morphing Bars",
+      "titleZh": "处理强度柱",
+      "sourcePath": "registry/ui/loading/morphing-bars.tsx",
+      "symbol": "MorphingBars",
+      "selectedReason": "同色柱体平稳改变高度，表达计算活跃而非真实数据。",
+      "useWhen": [
+        "模型处理中",
+        "语音或流式响应",
+        "活跃状态"
+      ],
+      "archivePath": "selected/registry/ui/loading/morphing-bars.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 561,
+      "sha256": "fa70c977f5716b8f3367d70093f44e9e91fa77ad445f502e827c91829c4a10ed"
+    },
+    {
+      "catalogId": "waveform-loader",
+      "category": "ai-status",
+      "title": "Waveform Loader",
+      "titleZh": "波形处理状态",
+      "sourcePath": "registry/ui/loading/waveform-loader.tsx",
+      "symbol": "WaveformLoader",
+      "selectedReason": "低幅波形表示音频、流或模型处理活动。",
+      "useWhen": [
+        "语音处理",
+        "流式响应",
+        "实时分析"
+      ],
+      "archivePath": "selected/registry/ui/loading/waveform-loader.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 474,
+      "sha256": "acb7db39d79c42bcade9ff654708a9498cc7122a50ae3073d677a01ff3474e5d"
+    },
+    {
+      "catalogId": "shape-shift-grid",
+      "category": "ai-status",
+      "title": "Shape Shift Grid",
+      "titleZh": "网格状态变换",
+      "sourcePath": "registry/ui/loading/shape-shift-grid.tsx",
+      "symbol": "ShapeShiftGrid",
+      "selectedReason": "规则网格的局部形态平稳变化，表达内部状态重组。",
+      "useWhen": [
+        "模型内部处理",
+        "模块重排",
+        "状态重组"
+      ],
+      "archivePath": "selected/registry/ui/loading/shape-shift-grid.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 476,
+      "sha256": "18db13024f66e8dd801990482c0c8b8a95fa625e99e98f7f987e46a5c8d761e6"
+    },
+    {
+      "catalogId": "mono-rounded-line",
+      "category": "data-evidence",
+      "title": "Mono Rounded Line",
+      "titleZh": "证据折线生长",
+      "sourcePath": "src/components/mono-charts/MonoRoundedLineChart.tsx",
+      "symbol": "MonoRoundedLineChart",
+      "selectedReason": "折线按时间方向绘制，只保留图表主体与必要标注。",
+      "useWhen": [
+        "趋势证据",
+        "前后变化",
+        "时间序列"
+      ],
+      "archivePath": "selected/src/components/mono-charts/MonoRoundedLineChart.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 6192,
+      "sha256": "d5f83196323fb12b284b01ef0134b7cf1dc22817e53d3d4b6657a7fecf6eeda6"
+    },
+    {
+      "catalogId": "mono-rounded-bar",
+      "category": "data-evidence",
+      "title": "Mono Rounded Bar",
+      "titleZh": "证据柱状比较",
+      "sourcePath": "src/components/mono-charts/MonoRoundedBarChart.tsx",
+      "symbol": "MonoRoundedBarChart",
+      "selectedReason": "圆角柱体从基线增长，用于少量分类对比。",
+      "useWhen": [
+        "分类比较",
+        "前后差异",
+        "结果证据"
+      ],
+      "archivePath": "selected/src/components/mono-charts/MonoRoundedBarChart.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 6050,
+      "sha256": "52d903ed6361f564008b8d6442e3913964514a5b17ee92f090536f0ab321f5a8"
+    },
+    {
+      "catalogId": "mono-rounded-sankey",
+      "category": "data-evidence",
+      "title": "Mono Rounded Sankey",
+      "titleZh": "流向证据图",
+      "sourcePath": "src/components/mono-charts/MonoRoundedSankeyChart.tsx",
+      "symbol": "MonoRoundedSankeyChart",
+      "selectedReason": "三层以内的流向带按源到目标展开，用于解释分配关系。",
+      "useWhen": [
+        "流量分配",
+        "能力路由",
+        "成本或任务去向"
+      ],
+      "archivePath": "selected/src/components/mono-charts/MonoRoundedSankeyChart.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 3721,
+      "sha256": "cd357752462ff7c20adcd87adf17d56f87e087ab9f95f28844b782e78c3203e7"
+    },
+    {
+      "catalogId": "split-gate-reveal",
+      "category": "scene-transition",
+      "title": "Split Gate Reveal",
+      "titleZh": "分屏揭示",
+      "sourcePath": "src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx",
+      "symbol": "SplitGateReveal",
+      "selectedReason": "两侧平面短暂分开揭示新内容，只在语义环境切换时使用。",
+      "useWhen": [
+        "章节级语义切换",
+        "前后对照揭示"
+      ],
+      "archivePath": "selected/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 31272,
+      "sha256": "b891f53e120b84845d03ad71a95fdcece50fdd84b6c69dd6c9b5e29ecdc3990e"
+    },
+    {
+      "catalogId": "radial-iris-mask",
+      "category": "scene-transition",
+      "title": "Radial Iris Mask",
+      "titleZh": "径向聚焦揭示",
+      "sourcePath": "src/components/PageTransitionOverlay.tsx",
+      "symbol": "PageTransitionOverlay",
+      "selectedReason": "从焦点位置扩张的圆形遮罩揭示新内容，低频使用。",
+      "useWhen": [
+        "聚焦一个关键对象",
+        "章节级揭示"
+      ],
+      "archivePath": "selected/src/components/PageTransitionOverlay.tsx",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 7164,
+      "sha256": "2ffe62b57ab73b07168282f37cff98b3c4b1801bf7c0fee1c45f2994398caf91"
+    },
+    {
+      "catalogId": "radial-iris-mask",
+      "category": "scene-transition",
+      "title": "Radial Iris Mask",
+      "titleZh": "径向聚焦揭示",
+      "sourcePath": "src/data/transitions.ts",
+      "symbol": "RadialIrisPortal",
+      "selectedReason": "从焦点位置扩张的圆形遮罩揭示新内容，低频使用。",
+      "useWhen": [
+        "聚焦一个关键对象",
+        "章节级揭示"
+      ],
+      "archivePath": "selected/src/data/transitions.ts",
+      "upstreamCommit": "07adc1640084940f045875e2bb1b682c90f30c3c",
+      "license": "MIT",
+      "bytes": 7928,
+      "sha256": "97e0797a9e00a8a6f33ce08b715c7faca1fb0d8709ed2932e7b39cabb5d70d71"
+    }
+  ],
+  "files": [
+    {
+      "sourcePath": "registry/ui/entrance/fade-down.tsx",
+      "archivePath": "selected/registry/ui/entrance/fade-down.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/registry/ui/entrance/fade-down.tsx",
+      "bytes": 625,
+      "sha256": "91bab02f673371503b775c57fb5436b8fe26998dca0e1e663b4fd60552d2ab2c",
+      "catalogIds": [
+        "fade-down"
+      ],
+      "symbols": [
+        "FadeDown"
+      ]
+    },
+    {
+      "sourcePath": "registry/ui/entrance/fade-in.tsx",
+      "archivePath": "selected/registry/ui/entrance/fade-in.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/registry/ui/entrance/fade-in.tsx",
+      "bytes": 571,
+      "sha256": "742d0118dfb2237da82e62fc8740f1144e270bcb921ed561ec896f97b4d89612",
+      "catalogIds": [
+        "fade-in"
+      ],
+      "symbols": [
+        "FadeIn"
+      ]
+    },
+    {
+      "sourcePath": "registry/ui/entrance/fade-up.tsx",
+      "archivePath": "selected/registry/ui/entrance/fade-up.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/registry/ui/entrance/fade-up.tsx",
+      "bytes": 618,
+      "sha256": "8546ead007bc5a9605f871695431e782f23e28dd140af51a4f3a2df5d88086d0",
+      "catalogIds": [
+        "fade-up"
+      ],
+      "symbols": [
+        "FadeUp"
+      ]
+    },
+    {
+      "sourcePath": "registry/ui/entrance/scale-in.tsx",
+      "archivePath": "selected/registry/ui/entrance/scale-in.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/registry/ui/entrance/scale-in.tsx",
+      "bytes": 666,
+      "sha256": "7086be226e1a051a88afb8ef125a257ad5522360ce1f2419769036f0f5d9c297",
+      "catalogIds": [
+        "scale-in"
+      ],
+      "symbols": [
+        "ScaleIn"
+      ]
+    },
+    {
+      "sourcePath": "registry/ui/entrance/slide-left.tsx",
+      "archivePath": "selected/registry/ui/entrance/slide-left.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/registry/ui/entrance/slide-left.tsx",
+      "bytes": 627,
+      "sha256": "eb36ec78ebcf3594e00106b1d3b12d518c5a5994a518fc0b25e21bb5ddcce5a4",
+      "catalogIds": [
+        "slide-left"
+      ],
+      "symbols": [
+        "SlideLeft"
+      ]
+    },
+    {
+      "sourcePath": "registry/ui/entrance/slide-right.tsx",
+      "archivePath": "selected/registry/ui/entrance/slide-right.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/registry/ui/entrance/slide-right.tsx",
+      "bytes": 631,
+      "sha256": "ea3cc579eea31299d5cff7a31fb84348a8e39ec5b19beaaa3965101760cc14ce",
+      "catalogIds": [
+        "slide-right"
+      ],
+      "symbols": [
+        "SlideRight"
+      ]
+    },
+    {
+      "sourcePath": "registry/ui/loading/arc-tracer.tsx",
+      "archivePath": "selected/registry/ui/loading/arc-tracer.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/registry/ui/loading/arc-tracer.tsx",
+      "bytes": 652,
+      "sha256": "09fee44a7328d0a15b3fe8a8a89690c31d2bb15baa29d6096fbc930bda27506a",
+      "catalogIds": [
+        "arc-tracer"
+      ],
+      "symbols": [
+        "ArcTracer"
+      ]
+    },
+    {
+      "sourcePath": "registry/ui/loading/magnetic-dots.tsx",
+      "archivePath": "selected/registry/ui/loading/magnetic-dots.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/registry/ui/loading/magnetic-dots.tsx",
+      "bytes": 985,
+      "sha256": "dc83bc5c2e27360bd05338ac282bbc8c753d3948b438834fc13cfb1fa4f54791",
+      "catalogIds": [
+        "magnetic-dots"
+      ],
+      "symbols": [
+        "MagneticDots"
+      ]
+    },
+    {
+      "sourcePath": "registry/ui/loading/morphing-bars.tsx",
+      "archivePath": "selected/registry/ui/loading/morphing-bars.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/registry/ui/loading/morphing-bars.tsx",
+      "bytes": 561,
+      "sha256": "fa70c977f5716b8f3367d70093f44e9e91fa77ad445f502e827c91829c4a10ed",
+      "catalogIds": [
+        "morphing-bars"
+      ],
+      "symbols": [
+        "MorphingBars"
+      ]
+    },
+    {
+      "sourcePath": "registry/ui/loading/shape-shift-grid.tsx",
+      "archivePath": "selected/registry/ui/loading/shape-shift-grid.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/registry/ui/loading/shape-shift-grid.tsx",
+      "bytes": 476,
+      "sha256": "18db13024f66e8dd801990482c0c8b8a95fa625e99e98f7f987e46a5c8d761e6",
+      "catalogIds": [
+        "shape-shift-grid"
+      ],
+      "symbols": [
+        "ShapeShiftGrid"
+      ]
+    },
+    {
+      "sourcePath": "registry/ui/loading/smooth-dot-shift.tsx",
+      "archivePath": "selected/registry/ui/loading/smooth-dot-shift.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/registry/ui/loading/smooth-dot-shift.tsx",
+      "bytes": 670,
+      "sha256": "3053ffa3d020ebe0d774e376b9e5bbb13a493684ffd8ecb3e6873d67f9df6368",
+      "catalogIds": [
+        "smooth-dot-shift"
+      ],
+      "symbols": [
+        "SmoothDotShift"
+      ]
+    },
+    {
+      "sourcePath": "registry/ui/loading/waveform-loader.tsx",
+      "archivePath": "selected/registry/ui/loading/waveform-loader.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/registry/ui/loading/waveform-loader.tsx",
+      "bytes": 474,
+      "sha256": "acb7db39d79c42bcade9ff654708a9498cc7122a50ae3073d677a01ff3474e5d",
+      "catalogIds": [
+        "waveform-loader"
+      ],
+      "symbols": [
+        "WaveformLoader"
+      ]
+    },
+    {
+      "sourcePath": "registry/ui/text/text-reveal.tsx",
+      "archivePath": "selected/registry/ui/text/text-reveal.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/registry/ui/text/text-reveal.tsx",
+      "bytes": 1164,
+      "sha256": "bc17940a8d340cce65a986bc3e1b9105cbc64e5cdfd93c5a481d090f80dfad20",
+      "catalogIds": [
+        "text-reveal"
+      ],
+      "symbols": [
+        "TextReveal"
+      ]
+    },
+    {
+      "sourcePath": "registry/ui/text/word-reveal.tsx",
+      "archivePath": "selected/registry/ui/text/word-reveal.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/registry/ui/text/word-reveal.tsx",
+      "bytes": 1223,
+      "sha256": "6d17e2dc183f0f4bfbc4d60267ccbf49d7379487e6a47c1a63511ef2a2403c05",
+      "catalogIds": [
+        "word-reveal"
+      ],
+      "symbols": [
+        "WordReveal"
+      ]
+    },
+    {
+      "sourcePath": "src/components/PageTransitionOverlay.tsx",
+      "archivePath": "selected/src/components/PageTransitionOverlay.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/src/components/PageTransitionOverlay.tsx",
+      "bytes": 7164,
+      "sha256": "2ffe62b57ab73b07168282f37cff98b3c4b1801bf7c0fee1c45f2994398caf91",
+      "catalogIds": [
+        "radial-iris-mask"
+      ],
+      "symbols": [
+        "PageTransitionOverlay"
+      ]
+    },
+    {
+      "sourcePath": "src/components/cards/CardArc5.tsx",
+      "archivePath": "selected/src/components/cards/CardArc5.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/src/components/cards/CardArc5.tsx",
+      "bytes": 2536,
+      "sha256": "99ef657c3582895367261be0e4dd7d193244363df0add52cbad19705a08736ac",
+      "catalogIds": [
+        "card-arc"
+      ],
+      "symbols": [
+        "CardArc5"
+      ]
+    },
+    {
+      "sourcePath": "src/components/cards/CardCascadeStagger.tsx",
+      "archivePath": "selected/src/components/cards/CardCascadeStagger.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/src/components/cards/CardCascadeStagger.tsx",
+      "bytes": 2041,
+      "sha256": "7d09738cb4488f103e3330012d16bd158ea7dc1ad17c32866286a8ccc346dbee",
+      "catalogIds": [
+        "card-cascade-stagger"
+      ],
+      "symbols": [
+        "CardCascadeStagger"
+      ]
+    },
+    {
+      "sourcePath": "src/components/cards/CardLinearSpread.tsx",
+      "archivePath": "selected/src/components/cards/CardLinearSpread.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/src/components/cards/CardLinearSpread.tsx",
+      "bytes": 1943,
+      "sha256": "ae4c1026bf3cccc9060290342f7eb30e3606bc2e6ea0726eeeaaee1932dd9bcb",
+      "catalogIds": [
+        "card-linear-spread"
+      ],
+      "symbols": [
+        "CardLinearSpread"
+      ]
+    },
+    {
+      "sourcePath": "src/components/css-animations/whimsical/ConceptTrios3.tsx",
+      "archivePath": "selected/src/components/css-animations/whimsical/ConceptTrios3.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/src/components/css-animations/whimsical/ConceptTrios3.tsx",
+      "bytes": 19985,
+      "sha256": "105d5160d798144f2197bc6c7ed3fc61cc773b3c254c8779e081addd45a98bf7",
+      "catalogIds": [
+        "segmented-link-stretch"
+      ],
+      "symbols": [
+        "SegmentedLinkStretch"
+      ]
+    },
+    {
+      "sourcePath": "src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx",
+      "archivePath": "selected/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/src/components/css-animations/whimsical/RedesignedPhysicsTrios.tsx",
+      "bytes": 31272,
+      "sha256": "b891f53e120b84845d03ad71a95fdcece50fdd84b6c69dd6c9b5e29ecdc3990e",
+      "catalogIds": [
+        "circuit-trace-draw",
+        "hexagon-lattice-draw",
+        "modular-tile-snap",
+        "split-gate-reveal"
+      ],
+      "symbols": [
+        "CircuitTraceDraw",
+        "HexagonLatticeDraw",
+        "ModularTileSnap",
+        "SplitGateReveal"
+      ]
+    },
+    {
+      "sourcePath": "src/components/css-animations/whimsical/WhimsicalVariations.tsx",
+      "archivePath": "selected/src/components/css-animations/whimsical/WhimsicalVariations.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/src/components/css-animations/whimsical/WhimsicalVariations.tsx",
+      "bytes": 14545,
+      "sha256": "49373770d35d02542afb2c42e58c8db12773912ef89c4d6280cbf68e20b9a8f4",
+      "catalogIds": [
+        "domino-chain"
+      ],
+      "symbols": [
+        "DominoChain"
+      ]
+    },
+    {
+      "sourcePath": "src/components/css-animations/yui-components/RedesignedUiTrios.tsx",
+      "archivePath": "selected/src/components/css-animations/yui-components/RedesignedUiTrios.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/src/components/css-animations/yui-components/RedesignedUiTrios.tsx",
+      "bytes": 7789,
+      "sha256": "8f108567a74fd0b09ca7874102986ae789ea8eb4dec8485227322b20ff53fb58",
+      "catalogIds": [
+        "segmented-stepper-dots",
+        "card-glance-preview",
+        "bookmark-save-pill"
+      ],
+      "symbols": [
+        "SegmentedStepperDots",
+        "CardGlancePreview",
+        "BookmarkSavePill"
+      ]
+    },
+    {
+      "sourcePath": "src/components/css-animations/yui-components/UiKitTrios.tsx",
+      "archivePath": "selected/src/components/css-animations/yui-components/UiKitTrios.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/src/components/css-animations/yui-components/UiKitTrios.tsx",
+      "bytes": 6267,
+      "sha256": "2c98a762a212b5965a8c378f34b5d4ecfb1295ac6617d3d3dc53368102130b2d",
+      "catalogIds": [
+        "filter-tag-pill",
+        "morph-action-pill",
+        "segmented-step-bar"
+      ],
+      "symbols": [
+        "FilterTagPill",
+        "MorphActionPill",
+        "SegmentedStepBar"
+      ]
+    },
+    {
+      "sourcePath": "src/components/forms/AnimatedFormElement.tsx",
+      "archivePath": "selected/src/components/forms/AnimatedFormElement.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/src/components/forms/AnimatedFormElement.tsx",
+      "bytes": 20397,
+      "sha256": "f8787f23c12e3973e7d9e144de9b8865154cddd4b99c7390177747671525d5ae",
+      "catalogIds": [
+        "checkbox-draw",
+        "form-submit-morph"
+      ],
+      "symbols": [
+        "AnimatedCheckbox",
+        "AnimatedSubmit"
+      ]
+    },
+    {
+      "sourcePath": "src/components/mono-charts/MonoRoundedBarChart.tsx",
+      "archivePath": "selected/src/components/mono-charts/MonoRoundedBarChart.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/src/components/mono-charts/MonoRoundedBarChart.tsx",
+      "bytes": 6050,
+      "sha256": "52d903ed6361f564008b8d6442e3913964514a5b17ee92f090536f0ab321f5a8",
+      "catalogIds": [
+        "mono-rounded-bar"
+      ],
+      "symbols": [
+        "MonoRoundedBarChart"
+      ]
+    },
+    {
+      "sourcePath": "src/components/mono-charts/MonoRoundedLineChart.tsx",
+      "archivePath": "selected/src/components/mono-charts/MonoRoundedLineChart.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/src/components/mono-charts/MonoRoundedLineChart.tsx",
+      "bytes": 6192,
+      "sha256": "d5f83196323fb12b284b01ef0134b7cf1dc22817e53d3d4b6657a7fecf6eeda6",
+      "catalogIds": [
+        "mono-rounded-line"
+      ],
+      "symbols": [
+        "MonoRoundedLineChart"
+      ]
+    },
+    {
+      "sourcePath": "src/components/mono-charts/MonoRoundedSankeyChart.tsx",
+      "archivePath": "selected/src/components/mono-charts/MonoRoundedSankeyChart.tsx",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/src/components/mono-charts/MonoRoundedSankeyChart.tsx",
+      "bytes": 3721,
+      "sha256": "cd357752462ff7c20adcd87adf17d56f87e087ab9f95f28844b782e78c3203e7",
+      "catalogIds": [
+        "mono-rounded-sankey"
+      ],
+      "symbols": [
+        "MonoRoundedSankeyChart"
+      ]
+    },
+    {
+      "sourcePath": "src/data/formElements.ts",
+      "archivePath": "selected/src/data/formElements.ts",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/src/data/formElements.ts",
+      "bytes": 4302,
+      "sha256": "f6e842ea944ea397da0744f5c5383a41a112b46328cff55dcad402e483ef8f3d",
+      "catalogIds": [
+        "checkbox-draw",
+        "form-submit-morph"
+      ],
+      "symbols": [
+        "formElementsData"
+      ]
+    },
+    {
+      "sourcePath": "src/data/transitions.ts",
+      "archivePath": "selected/src/data/transitions.ts",
+      "sourceUrl": "https://raw.githubusercontent.com/Subhan-code/Amicro--Micro-transitions-/07adc1640084940f045875e2bb1b682c90f30c3c/src/data/transitions.ts",
+      "bytes": 7928,
+      "sha256": "97e0797a9e00a8a6f33ce08b715c7faca1fb0d8709ed2932e7b39cabb5d70d71",
+      "catalogIds": [
+        "radial-iris-mask"
+      ],
+      "symbols": [
+        "RadialIrisPortal"
+      ]
+    }
+  ]
+}

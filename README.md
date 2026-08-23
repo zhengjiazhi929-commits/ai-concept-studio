@@ -16,6 +16,7 @@
 - `docs/04-golden-sample-process.md`：第一条黄金样例的人工编排流程
 - `docs/05-visual-system.md`：16:9 桌面窗口母版、9:16 重构、安全区、字幕、概念图、转场与可复用组件规范
 - `docs/06-agent-architecture-v2.md`：混合式 Main Agent、模型路由、审核协调 Agent、迁移阶段和文件级改造清单
+- `docs/07-motion-library.md`：筛选后的横版视频动效组件库、逐项 GIF 和 Remotion 调用方式
 - `research/2026-07-30-golden-topic-candidates.md`：已撤回的技术新颖性优先候选，仅保留审计记录
 - `research/2026-07-30-creator-heat-audit.md`：热门创作者近期内容与事件信号审计
 - `research/2026-07-31-hot-concept-candidates.md`：从热点信号中抽取的纯概念候选，当前正式选题依据
