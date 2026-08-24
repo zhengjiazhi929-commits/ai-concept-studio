@@ -52,7 +52,7 @@ export function visualSystemV1SpringMotionAtFrame(frame, startFrame, fps = VISUA
   return Object.freeze({
     progress,
     opacity: progress,
-    translateY: (1 - progress) * 12,
+    translateY: (1 - progress) * VISUAL_SYSTEM_V1.motion.nodeEnterTranslateYPx,
     scale: 0.985 + progress * 0.015
   });
 }
@@ -159,6 +159,30 @@ export function visualSystemV1SceneOpacityAtFrame(
   if (frame < startFrame || frame >= endFrame) return 0;
   const fadeIn = visualSystemV1ProgressAtFrame(frame, startFrame, fadeFrames);
   const fadeOut = 1 - visualSystemV1ProgressAtFrame(frame, endFrame - fadeFrames, fadeFrames);
+  return Math.min(fadeIn, fadeOut);
+}
+
+export function visualSystemV1SequentialSceneOpacityAtFrame(
+  frame,
+  { startFrame, endFrame, fadeFrames = VISUAL_SYSTEM_V1.motion.sceneFadeFrames }
+) {
+  if (!Number.isInteger(fadeFrames) || fadeFrames < 2 || fadeFrames % 2 !== 0) {
+    throw new TypeError("顺序场景淡化必须使用不小于 2 的偶数帧数");
+  }
+  if (frame < startFrame || frame >= endFrame) return 0;
+  const halfFadeFrames = fadeFrames / 2;
+  const fadeIn = startFrame < 0
+    ? 1
+    : visualSystemV1ProgressAtFrame(
+      frame,
+      startFrame + halfFadeFrames - 1,
+      halfFadeFrames
+    );
+  const fadeOut = 1 - visualSystemV1ProgressAtFrame(
+    frame,
+    endFrame - fadeFrames,
+    halfFadeFrames
+  );
   return Math.min(fadeIn, fadeOut);
 }
 

@@ -32,6 +32,93 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
     subtitleColor: "#000000",
     subtitleMotion: "none"
   }),
+  chapterProgress: Object.freeze({
+    enabled: true,
+    placement: "bottom",
+    mode: "duration-proportional-segmented",
+    segmentBreaks: true,
+    labelFormat: "index-and-title",
+    showDurationText: false,
+    showElapsedTime: false,
+    showTotalTime: false,
+    themeColorCount: 1
+  }),
+  cardDeck: Object.freeze({
+    mode: "fill-safe-viewport",
+    compositionMode: "visible-node-count",
+    sceneAdaptive: true,
+    outputFormat: "wide-only",
+    sameLevelEqualSize: true,
+    contentVerticalAlignment: "center",
+    safeLeftPx: 90,
+    safeRightPx: 90,
+    safeTopPx: 342,
+    safeBottomPx: 837,
+    copyClearancePx: 24,
+    subtitleClearancePx: 24,
+    contentFitRequired: true,
+    minimumGapXPx: 36,
+    maximumGapXPx: 56,
+    gapYPx: 36,
+    maximumSingleCardWidthPx: 920,
+    maximumTwoColumnCardWidthPx: 760,
+    maximumDefaultCardWidthPx: 620,
+    minimumCardWidthPx: 240,
+    minimumCardHeightPx: 219,
+    maximumCardHeightPx: 520,
+    singleRowMaximumItems: 5,
+    maximumItems: 12
+  }),
+  cardTypography: Object.freeze({
+    mode: "geometry-responsive-uniform-per-deck",
+    sameLevelUniform: true,
+    compactHeightPx: 229,
+    expandedHeightPx: 494,
+    compactWidthPx: 256,
+    wideCompactWidthPx: 543,
+    expandedWidthPx: 920,
+    marker: Object.freeze({
+      compactPx: 13,
+      expandedPx: 16,
+      wideCompactBoostPx: 1,
+      wideExpandedBoostPx: 2,
+      lineHeight: 1.2,
+      letterSpacingEm: 0.08,
+      maximumLines: 1
+    }),
+    label: Object.freeze({
+      compactPx: 30,
+      expandedPx: 42,
+      wideCompactBoostPx: 2,
+      wideExpandedBoostPx: 14,
+      lineHeight: 1.12,
+      letterSpacingEm: -0.025,
+      maximumLines: 2
+    }),
+    detail: Object.freeze({
+      compactPx: 18,
+      expandedPx: 24,
+      wideCompactBoostPx: 1,
+      wideExpandedBoostPx: 4,
+      lineHeight: 1.35,
+      maximumLines: 2
+    }),
+    spacing: Object.freeze({
+      markerTitleCompactPx: 11,
+      markerTitleExpandedPx: 20,
+      markerTitleWideCompactBoostPx: 1,
+      markerTitleWideExpandedBoostPx: 4,
+      titleDetailCompactPx: 7,
+      titleDetailExpandedPx: 12,
+      titleDetailWideExpandedBoostPx: 2,
+      dotCompactPx: 8,
+      dotExpandedPx: 10,
+      dotWideExpandedBoostPx: 2,
+      dotMarkerGapCompactPx: 10,
+      dotMarkerGapExpandedPx: 12,
+      dotMarkerGapWideExpandedBoostPx: 2
+    })
+  }),
   palette: Object.freeze({
     paper: "#F2F6F3",
     paperWarm: "#F8FAF8",
@@ -108,6 +195,9 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
   motion: Object.freeze({
     textEnterFrames: 12,
     nodeSpringFrames: 18,
+    cardReflowFrames: 8,
+    cardFocusFrames: 12,
+    nodeEnterTranslateYPx: 12,
     shallowDepthEnterFrames: 18,
     connectorDrawFrames: 14,
     sceneFadeFrames: 8,
@@ -138,6 +228,7 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
     "animated-subtitles",
     "default-vertical-output",
     "large-content-wrapper",
-    "default-top-header"
+    "default-top-header",
+    "chapter-duration-text"
   ])
 });

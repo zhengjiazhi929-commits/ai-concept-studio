@@ -27,6 +27,22 @@ const EPISODE_PATH = resolve(
 );
 const PLAN_PATH = resolve(studioRoot, "src", "video", "agent-skill-long-review-plan.mjs");
 const COMPONENT_PATH = resolve(studioRoot, "src", "video", "agent-skill-long-review.jsx");
+const VISUAL_COMPONENTS_PATH = resolve(
+  studioRoot,
+  "src",
+  "video",
+  "components",
+  "visual-system-v1",
+  "components.jsx"
+);
+const VISUAL_MOTION_PATH = resolve(
+  studioRoot,
+  "src",
+  "video",
+  "components",
+  "visual-system-v1",
+  "motion.mjs"
+);
 const INDEX_PATH = resolve(studioRoot, "src", "video", "agent-skill-long-review-index.jsx");
 const ROOT_PATH = resolve(studioRoot, "src", "video", "agent-skill-long-review-root.jsx");
 const RENDER_PATH = resolve(studioRoot, "scripts", "render-agent-skill-long-review.mjs");
@@ -167,7 +183,7 @@ test("每个镜头边界使用守恒交叉淡化，任一帧都不会闪空", ()
   }
 });
 
-test("节点焦点在固定窗口内连续交接，八个证据镜头全部改为原生图", async () => {
+test("节点焦点连续交接，八个证据镜头使用自适应平面节点图", async () => {
   const scene = AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.find((item) => item.id === "S11");
   const methodStage = scene.stages.find((item) => item.id === "method");
   const userProgress = [];
@@ -214,37 +230,45 @@ test("节点焦点在固定窗口内连续交接，八个证据镜头全部改�
   }
 
   const component = await readFile(COMPONENT_PATH, "utf8");
-  assert.match(component, /function EvidenceSourceChip/u);
-  assert.match(component, /data-evidence-source/u);
+  assert.match(component, /VisualSystemV1FlatNode/u);
+  assert.match(component, /data-visual-system-content="open-canvas"/u);
+  assert.match(component, /data-same-level-surfaces="flat"/u);
   assert.match(component, /spec\.kind === "native-evidence"/u);
+  assert.doesNotMatch(component, /function EvidenceSourceChip|data-evidence-source/u);
   assert.doesNotMatch(component, /function EvidencePanel|<Img\b|staticFile\(spec\.material\)|objectFit:\s*"cover"/u);
   assert.doesNotMatch(component, /currentStageProgress|continuousStage|translateY\(\$\{translateY/u);
 });
 
-test("审阅版进度连续且组件只用 scaleX 驱动", async () => {
+test("审阅版总进度连续，底部按章节时长分段并用 scale 驱动", async () => {
   assert.equal(longReviewProgressAtFrame(-1), 0);
   assert.equal(longReviewProgressAtFrame(0), 0);
   assert.equal(longReviewProgressAtFrame(9_000), 0.5);
   assert.equal(longReviewProgressAtFrame(18_000), 1);
   assert.equal(longReviewProgressAtFrame(18_001), 1);
 
-  const component = await readFile(COMPONENT_PATH, "utf8");
-  assert.match(component, /scaleX\(\$\{progress/u);
-  assert.match(component, /transformOrigin:\s*["']left/u);
-  assert.doesNotMatch(component, /width:\s*(?:progress|progressPixels)/u);
+  const [component, visualComponents] = await Promise.all([
+    readFile(COMPONENT_PATH, "utf8"),
+    readFile(VISUAL_COMPONENTS_PATH, "utf8")
+  ]);
+  assert.match(component, /VisualSystemV1ChapterProgress/u);
+  assert.match(visualComponents, /gridTemplateColumns:\s*columns/u);
+  assert.match(visualComponents, /scale:\s*`\$\{segment\.progress\} 1`/u);
+  assert.match(visualComponents, /transformOrigin:\s*"left center"/u);
+  assert.doesNotMatch(visualComponents, /width:\s*(?:progress|progressPixels)/u);
 });
 
-test("审阅动画完全由逐帧状态驱动，不使用 spring、CSS 动画或 TransitionSeries", async () => {
-  const [plan, component] = await Promise.all([
+test("审阅动画由逐帧状态与 Remotion spring 驱动，不使用 CSS 动画或 TransitionSeries", async () => {
+  const [plan, component, visualMotion] = await Promise.all([
     readFile(PLAN_PATH, "utf8"),
-    readFile(COMPONENT_PATH, "utf8")
+    readFile(COMPONENT_PATH, "utf8"),
+    readFile(VISUAL_MOTION_PATH, "utf8")
   ]);
-  const source = `${plan}\n${component}`;
+  const source = `${plan}\n${component}\n${visualMotion}`;
   assert.match(component, /useCurrentFrame\(\)/u);
   assert.match(component, /longReviewSceneLayersAtFrame\(frame\)/u);
-  assert.match(component, /function EvidenceSourceChip/u);
+  assert.match(component, /VisualSystemV1FlatNode/u);
+  assert.match(visualMotion, /\bspring\s*\(/u);
   assert.doesNotMatch(component, /panProgress|continuousStage|currentStageProgress/u);
-  assert.doesNotMatch(source, /\bspring\s*\(/u);
   assert.doesNotMatch(source, /\bTransitionSeries\b/u);
   assert.doesNotMatch(source, /transition:\s*["'`]/u);
   assert.doesNotMatch(source, /\banimation(?:Name)?\s*:/u);

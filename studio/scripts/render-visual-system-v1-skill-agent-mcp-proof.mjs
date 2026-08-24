@@ -22,12 +22,16 @@ import {
   workspaceRoot
 } from "../src/shared/paths.mjs";
 import { VISUAL_SYSTEM_V1 } from "../src/video/components/visual-system-v1/tokens.mjs";
-import { VISUAL_SYSTEM_V1_SKILL_AGENT_MCP_PROOF } from "../src/video/visual-system-v1-skill-agent-mcp-proof-plan.mjs";
+import {
+  VISUAL_SYSTEM_V1_SKILL_AGENT_MCP_LAYOUT_STAGES,
+  VISUAL_SYSTEM_V1_SKILL_AGENT_MCP_PROOF,
+  visualSystemV1SkillAgentMcpProofLayout
+} from "../src/video/visual-system-v1-skill-agent-mcp-proof-plan.mjs";
 
 export const VISUAL_SYSTEM_V1_SKILL_AGENT_MCP_RENDER_CONTRACT = Object.freeze({
-  schemaVersion: "visual-system-v1-skill-agent-mcp-render-v7",
-  candidateVersion: 7,
-  candidateDirectoryName: "visual-system-v1-skill-agent-mcp-proof-v007",
+  schemaVersion: "visual-system-v1-skill-agent-mcp-render-v13",
+  candidateVersion: 13,
+  candidateDirectoryName: "visual-system-v1-skill-agent-mcp-proof-v013",
   fps: 30,
   durationSeconds: 12,
   durationInFrames: 360,
@@ -105,6 +109,10 @@ const PROTECTED_TREE_PATHS = Object.freeze([
   "outputs/studio/design-system/review-candidates/visual-system-v1-skill-agent-mcp-proof-v004",
   "outputs/studio/design-system/review-candidates/visual-system-v1-skill-agent-mcp-proof-v005",
   "outputs/studio/design-system/review-candidates/visual-system-v1-skill-agent-mcp-proof-v006",
+  "outputs/studio/design-system/review-candidates/visual-system-v1-skill-agent-mcp-proof-v007",
+  "outputs/studio/design-system/review-candidates/visual-system-v1-skill-agent-mcp-proof-v010",
+  "outputs/studio/design-system/review-candidates/visual-system-v1-skill-agent-mcp-proof-v011",
+  "outputs/studio/design-system/review-candidates/visual-system-v1-skill-agent-mcp-proof-v012",
   "outputs/studio/design-system/review-candidates/visual-system-v1-ai-watermark-motion-proof-v011",
   "outputs/studio/design-system/review-candidates/visual-system-v1-ai-watermark-motion-proof-v012",
   "outputs/studio/design-system/review-candidates/visual-system-v1-ai-watermark-size-proof-v002"
@@ -121,6 +129,7 @@ const WATERMARK_RASTER_ASSET_PATHS = Object.freeze([
 
 const SOURCE_PATHS = Object.freeze([
   "studio/src/video/components/visual-system-v1/tokens.mjs",
+  "studio/src/video/components/visual-system-v1/chapter-progress.mjs",
   "studio/src/video/components/visual-system-v1/layout.mjs",
   "studio/src/video/components/visual-system-v1/motion.mjs",
   "studio/src/video/components/visual-system-v1/ai-watermark.mjs",
@@ -416,7 +425,7 @@ export async function renderVisualSystemV1SkillAgentMcpProof() {
     await assertFormalOutputsAbsent();
 
     const manifest = {
-      schemaVersion: "visual-system-v1-skill-agent-mcp-proof-manifest-v7",
+      schemaVersion: "visual-system-v1-skill-agent-mcp-proof-manifest-v13",
       candidateVersion: contract.candidateVersion,
       reviewOnly: true,
       registered: false,
@@ -425,15 +434,18 @@ export async function renderVisualSystemV1SkillAgentMcpProof() {
       authorizesPublication: false,
       createdAt: new Date().toISOString(),
       supersedes: {
-        candidateVersion: 6,
-        candidateDirectoryName: "visual-system-v1-skill-agent-mcp-proof-v006",
+        candidateVersion: 12,
+        candidateDirectoryName: "visual-system-v1-skill-agent-mcp-proof-v012",
         reason:
-          "Replace long-running live CSS 3D watermark rendering with a validated transparent frame sequence"
+          "Keep visible-node-count scene-adaptive composition while synchronizing each connector with its target card and replacing overlapping title crossfades with an eight-frame sequential copy handoff"
       },
       visualSystem: {
         schemaVersion: VISUAL_SYSTEM_V1.schemaVersion,
         balance: VISUAL_SYSTEM_V1.balance,
         defaults: VISUAL_SYSTEM_V1.defaults,
+        chapterProgress: VISUAL_SYSTEM_V1.chapterProgress,
+        cardDeck: VISUAL_SYSTEM_V1.cardDeck,
+        cardTypography: VISUAL_SYSTEM_V1.cardTypography,
         depthRoles: VISUAL_SYSTEM_V1.depth.roles,
         motion: VISUAL_SYSTEM_V1.motion,
         forbidden: VISUAL_SYSTEM_V1.forbidden
@@ -470,10 +482,43 @@ export async function renderVisualSystemV1SkillAgentMcpProof() {
           segmentFrames: [72, 120, 168],
           ratio: "3:5:7",
           labels: true,
+          labelFormat: "index-and-title",
+          durationText: false,
+          elapsedTime: false,
+          totalTime: false,
           breakpoints: 2,
           themeColorCount: 1,
           visualStateDifference: "fill-length-only"
         },
+        adaptiveCardDeck: (() => {
+          const proofLayout = visualSystemV1SkillAgentMcpProofLayout(1920, 1080);
+          const layoutsByVisibleCount = Object.fromEntries(
+            Object.entries(proofLayout.cardDecksByCount).map(([itemCount, layout]) => [
+              itemCount,
+              {
+                itemCount: layout.itemCount,
+                rows: layout.rows,
+                columns: layout.columns,
+                gapX: layout.gapX,
+                gapY: layout.gapY,
+                cardWidth: layout.cardWidth,
+                cardHeight: layout.cardHeight,
+                safeArea: layout.safeArea,
+                cards: layout.cards,
+                typography: proofLayout.cardTypographyByCount[itemCount]
+              }
+            ])
+          );
+          return {
+            mode: "scene-adaptive-visible-node-count",
+            reflowFrames: VISUAL_SYSTEM_V1.motion.cardReflowFrames,
+            focusFrames: VISUAL_SYSTEM_V1.motion.cardFocusFrames,
+            stages: VISUAL_SYSTEM_V1_SKILL_AGENT_MCP_LAYOUT_STAGES,
+            layoutsByVisibleCount,
+            contentVerticalAlignment: VISUAL_SYSTEM_V1.cardDeck.contentVerticalAlignment,
+            sameLevelEqualSize: VISUAL_SYSTEM_V1.cardDeck.sameLevelEqualSize
+          };
+        })(),
         subtitleStyle: "stable-black-no-shadow",
         semanticContentSource: "single-wide-composition"
       },

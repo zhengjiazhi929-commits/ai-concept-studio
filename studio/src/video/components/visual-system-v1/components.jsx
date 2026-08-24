@@ -1,12 +1,17 @@
 import React from "react";
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
 
-import { visualSystemV1Layout } from "./layout.mjs";
+import {
+  visualSystemV1AdaptiveCardTypography,
+  visualSystemV1Layout
+} from "./layout.mjs";
+import { visualSystemV1ChapterDisplayLabel } from "./chapter-progress.mjs";
 import {
   visualSystemV1ChapterProgressAtFrame,
   visualSystemV1ConnectorMotionAtFrame,
   visualSystemV1DepthMotionAtFrame,
   visualSystemV1SceneOpacityAtFrame,
+  visualSystemV1SequentialSceneOpacityAtFrame,
   visualSystemV1SpringMotionAtFrame,
   visualSystemV1TextMotionAtFrame,
   visualSystemV1WallpaperMotionAtFrame
@@ -14,6 +19,34 @@ import {
 import { VISUAL_SYSTEM_V1, VISUAL_SYSTEM_V1_DEPTH_ROLES } from "./tokens.mjs";
 
 const { palette, typography } = VISUAL_SYSTEM_V1;
+const SceneOpacityContext = React.createContext(1);
+
+function colorWithAlpha(color, opacity) {
+  const match = typeof color === "string" ? /^#([0-9a-f]{6})$/iu.exec(color) : null;
+  if (!match) return color;
+  const value = Number.parseInt(match[1], 16);
+  const red = (value >> 16) & 255;
+  const green = (value >> 8) & 255;
+  const blue = value & 255;
+  return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
+}
+
+function mixHexColors(from, to, progress, alpha = 1) {
+  const parse = (color) => {
+    const match = /^#([0-9a-f]{6})$/iu.exec(color);
+    if (!match) return null;
+    const value = Number.parseInt(match[1], 16);
+    return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+  };
+  const fromRgb = parse(from);
+  const toRgb = parse(to);
+  if (!fromRgb || !toRgb) return from;
+  const normalizedProgress = Math.max(0, Math.min(1, progress));
+  const mixed = fromRgb.map((channel, index) =>
+    Math.round(channel + (toRgb[index] - channel) * normalizedProgress)
+  );
+  return `rgba(${mixed[0]}, ${mixed[1]}, ${mixed[2]}, ${alpha})`;
+}
 
 function assertDepthRole(role) {
   if (!VISUAL_SYSTEM_V1_DEPTH_ROLES.includes(role)) {
@@ -162,17 +195,21 @@ export function VisualSystemV1SingleContentWindow({
 
 export function VisualSystemV1PopText({ startFrame, children, style = {}, as = "div" }) {
   const frame = useCurrentFrame();
+  const sceneOpacity = React.useContext(SceneOpacityContext);
   const state = visualSystemV1TextMotionAtFrame(frame, startFrame);
+  if (state.progress <= 0) return null;
+  const settled = state.progress >= 1;
+  const animatedTop = Number.isFinite(style.top) && !settled
+    ? style.top + state.translateY
+    : style.top;
   const Tag = as;
   return (
     <Tag
       data-visual-system-motion="text-pop-12f"
       style={{
         ...style,
-        opacity: state.opacity,
-        translate: `0 ${state.translateY}px`,
-        scale: state.scale,
-        transformOrigin: "left center"
+        top: animatedTop,
+        color: colorWithAlpha(style.color, state.opacity * sceneOpacity)
       }}
     >
       {children}
@@ -180,66 +217,160 @@ export function VisualSystemV1PopText({ startFrame, children, style = {}, as = "
   );
 }
 
-export function VisualSystemV1SceneLayer({ startFrame, endFrame, children, style = {} }) {
+export function VisualSystemV1SceneLayer({
+  startFrame,
+  endFrame,
+  children,
+  style = {},
+  transitionMode = "crossfade"
+}) {
   const frame = useCurrentFrame();
-  const opacity = visualSystemV1SceneOpacityAtFrame(frame, { startFrame, endFrame });
+  if (!["crossfade", "sequential-copy"].includes(transitionMode)) {
+    throw new TypeError(`未知场景淡化模式：${transitionMode}`);
+  }
+  const opacity = transitionMode === "sequential-copy"
+    ? visualSystemV1SequentialSceneOpacityAtFrame(frame, { startFrame, endFrame })
+    : visualSystemV1SceneOpacityAtFrame(frame, { startFrame, endFrame });
   if (opacity <= 0.0001) return null;
   return (
-    <div
-      data-visual-system-motion="scene-fade-8f"
-      style={{ position: "absolute", inset: 0, ...style, opacity }}
-    >
-      {children}
-    </div>
+    <SceneOpacityContext.Provider value={opacity}>
+      <div
+        data-visual-system-motion={
+          transitionMode === "sequential-copy"
+            ? "scene-copy-sequential-fade-8f"
+            : "scene-fade-8f"
+        }
+        data-scene-opacity={opacity}
+        style={{ position: "absolute", inset: 0, ...style }}
+      >
+        {children}
+      </div>
+    </SceneOpacityContext.Provider>
   );
 }
 
 export function VisualSystemV1FlatNode({
+  nodeId = null,
   label,
   detail,
   startFrame,
   style = {},
   marker = null,
-  accent = "mint"
+  accent = "mint",
+  focusProgress = 0,
+  layoutMode = "content-sized"
 }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const state = visualSystemV1SpringMotionAtFrame(frame, startFrame, fps);
+  if (state.progress <= 0) return null;
+  const settled = state.progress >= 1;
+  const animatedTop = Number.isFinite(style.top) && !settled
+    ? style.top + state.translateY
+    : style.top;
   const accentColor = accent === "purple" ? palette.purpleDeep : palette.mintDeep;
   const dotColor = accent === "purple" ? palette.purple : palette.mint;
+  const normalizedFocus = Math.max(0, Math.min(1, focusProgress));
+  const focusSurface = accent === "purple" ? palette.purpleSoft : palette.mintSoft;
+  const focusBorder = accent === "purple" ? palette.purple : palette.mint;
+  const fillsSafeViewport = layoutMode === "fill-safe-viewport";
+  if (!fillsSafeViewport && layoutMode !== "content-sized") {
+    throw new TypeError(`未知平面卡片布局模式：${layoutMode}`);
+  }
+  const cardWidth = Number.isFinite(style.width) ? style.width : 300;
+  const cardHeight = Number.isFinite(style.height) ? style.height : 166;
+  const paddingX = fillsSafeViewport ? Math.max(24, Math.min(36, cardWidth * 0.08)) : 24;
+  const paddingY = fillsSafeViewport ? Math.max(24, Math.min(44, cardHeight * 0.1)) : 20;
+  const cardTypography = fillsSafeViewport
+    ? visualSystemV1AdaptiveCardTypography(cardWidth, cardHeight)
+    : null;
   return (
     <div
       data-visual-system-surface="flat"
+      data-visual-system-node-id={nodeId ?? undefined}
+      data-visual-system-focus={normalizedFocus >= 0.5 ? "primary" : "context"}
+      data-visual-system-focus-progress={normalizedFocus}
+      data-visual-system-card-layout={layoutMode}
+      data-visual-system-card-typography={cardTypography?.mode ?? "legacy-content-sized"}
+      data-card-marker-font-size={cardTypography?.markerFontSizePx}
+      data-card-label-font-size={cardTypography?.labelFontSizePx}
+      data-card-detail-font-size={cardTypography?.detailFontSizePx}
       style={{
         position: "absolute",
         boxSizing: "border-box",
-        border: `1px solid ${palette.line}`,
+        border: `1px solid ${mixHexColors(palette.line, focusBorder, normalizedFocus)}`,
         borderRadius: 18,
-        backgroundColor: "rgba(252, 254, 252, 0.72)",
+        backgroundColor: mixHexColors(palette.paperWarm, focusSurface, normalizedFocus, 0.76),
         backgroundImage: "none",
         boxShadow: "none",
         filter: "none",
-        padding: "20px 24px",
         ...style,
-        opacity: state.opacity,
-        translate: `0 ${state.translateY}px`,
-        scale: state.scale,
-        transformOrigin: "center center"
+        top: animatedTop,
+        padding: `${paddingY}px ${paddingX}px`,
+        display: fillsSafeViewport ? "flex" : "block",
+        flexDirection: fillsSafeViewport ? "column" : undefined,
+        justifyContent: fillsSafeViewport ? "center" : undefined
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: dotColor }} />
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: cardTypography?.dotMarkerGapPx ?? 12
+        }}
+      >
+        <span
+          style={{
+            width: cardTypography?.dotSizePx ?? 8,
+            height: cardTypography?.dotSizePx ?? 8,
+            flex: "0 0 auto",
+            borderRadius: "50%",
+            backgroundColor: dotColor
+          }}
+        />
         {marker ? (
-          <span style={{ color: accentColor, fontSize: 13, fontWeight: 900, letterSpacing: ".1em" }}>
+          <span
+            style={{
+              color: accentColor,
+              fontSize: cardTypography?.markerFontSizePx ?? 13,
+              fontWeight: 900,
+              lineHeight: cardTypography?.marker.lineHeight ?? 1.2,
+              letterSpacing: `${cardTypography?.marker.letterSpacingEm ?? 0.1}em`,
+              whiteSpace: "nowrap"
+            }}
+          >
             {marker}
           </span>
         ) : null}
       </div>
-      <div style={{ marginTop: 13, color: palette.ink, fontSize: 28, fontWeight: 860, letterSpacing: "-.025em" }}>
+      <div
+        data-card-text-role="label"
+        data-card-maximum-lines={cardTypography?.label.maximumLines}
+        style={{
+          marginTop: cardTypography?.markerTitleGapPx ?? 13,
+          color: palette.ink,
+          fontSize: cardTypography?.labelFontSizePx ?? 28,
+          fontWeight: 860,
+          lineHeight: cardTypography?.label.lineHeight ?? 1.12,
+          letterSpacing: `${cardTypography?.label.letterSpacingEm ?? -0.025}em`,
+          overflowWrap: "break-word"
+        }}
+      >
         {label}
       </div>
       {detail ? (
-        <div style={{ marginTop: 7, color: palette.muted, fontSize: 18, fontWeight: 620, lineHeight: 1.35 }}>
+        <div
+          data-card-text-role="detail"
+          data-card-maximum-lines={cardTypography?.detail.maximumLines}
+          style={{
+            marginTop: cardTypography?.titleDetailGapPx ?? 7,
+            color: palette.muted,
+            fontSize: cardTypography?.detailFontSizePx ?? 18,
+            fontWeight: 620,
+            lineHeight: cardTypography?.detail.lineHeight ?? 1.35,
+            overflowWrap: "break-word"
+          }}
+        >
           {detail}
         </div>
       ) : null}
@@ -456,7 +587,7 @@ export function VisualSystemV1ChapterProgress({ chapters }) {
                 whiteSpace: "nowrap"
               }}
             >
-              {String(index + 1).padStart(2, "0")} · {chapter.label}
+              {visualSystemV1ChapterDisplayLabel(chapter.label, index)}
             </div>
             <div
               style={{
