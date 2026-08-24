@@ -7,6 +7,7 @@ export const WORKER_MANIFESTS = Object.freeze({
     patchFields: [],
     productionFields: [],
     allowedTools: ["trend.read"],
+    sideEffectScopes: ["state.write", "filesystem.write"],
     maxAttempts: 1
   },
   "research-agent": {
@@ -15,6 +16,7 @@ export const WORKER_MANIFESTS = Object.freeze({
     patchFields: ["research", "approvals", "sourceDocs"],
     productionFields: [],
     allowedTools: ["research.read", "artifact.write"],
+    sideEffectScopes: ["state.write", "filesystem.write", "network.request"],
     maxAttempts: 2
   },
   "script-agent": {
@@ -23,6 +25,13 @@ export const WORKER_MANIFESTS = Object.freeze({
     patchFields: ["production", "approvals", "routingHistory", "control"],
     productionFields: ["ai", "scriptDraft", "quality"],
     allowedTools: ["artifact.read", "artifact.write"],
+    sideEffectScopes: [
+      "state.write",
+      "filesystem.write",
+      "model.invoke",
+      "network.request",
+      "paid.invoke"
+    ],
     maxAttempts: 2
   },
   "storyboard-agent": {
@@ -31,6 +40,13 @@ export const WORKER_MANIFESTS = Object.freeze({
     patchFields: ["production", "approvals", "routingHistory", "control", "scenes", "subtitles", "render"],
     productionFields: ["ai", "storyboardDraft", "quality"],
     allowedTools: ["artifact.read", "artifact.write"],
+    sideEffectScopes: [
+      "state.write",
+      "filesystem.write",
+      "model.invoke",
+      "network.request",
+      "paid.invoke"
+    ],
     maxAttempts: 2
   },
   "asset-agent": {
@@ -45,6 +61,13 @@ export const WORKER_MANIFESTS = Object.freeze({
       "aihubmix.images.generate",
       "volcengine.video.generate"
     ],
+    sideEffectScopes: [
+      "state.write",
+      "filesystem.write",
+      "model.invoke",
+      "network.request",
+      "paid.invoke"
+    ],
     maxAttempts: 2
   },
   "voice-agent": {
@@ -53,6 +76,7 @@ export const WORKER_MANIFESTS = Object.freeze({
     patchFields: ["production"],
     productionFields: ["voicePlan", "quality"],
     allowedTools: ["artifact.read", "media.inspect"],
+    sideEffectScopes: ["state.write", "filesystem.write"],
     maxAttempts: 1
   },
   "render-agent": {
@@ -61,6 +85,7 @@ export const WORKER_MANIFESTS = Object.freeze({
     patchFields: ["render", "qa", "approvals"],
     productionFields: [],
     allowedTools: ["render.local"],
+    sideEffectScopes: ["state.write", "filesystem.write"],
     maxAttempts: 1
   },
   "qa-agent": {
@@ -69,6 +94,7 @@ export const WORKER_MANIFESTS = Object.freeze({
     patchFields: ["qa"],
     productionFields: [],
     allowedTools: ["media.inspect"],
+    sideEffectScopes: ["state.write", "filesystem.write"],
     maxAttempts: 1
   }
 });

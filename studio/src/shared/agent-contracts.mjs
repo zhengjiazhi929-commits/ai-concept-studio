@@ -76,6 +76,7 @@ function nullableNonEmptyString(value) {
 
 function budgetReservations(value) {
   if (!Array.isArray(value)) return [];
+  const dispatchStates = new Set(["reserved", "dispatching", "ambiguous"]);
   return value.flatMap((item) => {
     if (!isRecord(item) || typeof item.id !== "string" || !item.id.trim()) return [];
     return [{
@@ -84,7 +85,14 @@ function budgetReservations(value) {
       calls: Number.isInteger(item.calls) && item.calls >= 0 ? item.calls : 0,
       costUsd: finiteNonNegative(item.costUsd),
       costKnown: booleanControl(item.costKnown, false, true),
-      reservedAt: typeof item.reservedAt === "string" ? item.reservedAt : null
+      reservedAt: typeof item.reservedAt === "string" ? item.reservedAt : null,
+      dispatchState: dispatchStates.has(item.dispatchState)
+        ? item.dispatchState
+        : "reserved",
+      dispatchedAt: typeof item.dispatchedAt === "string" ? item.dispatchedAt : null,
+      providerId: nullableNonEmptyString(item.providerId),
+      model: nullableNonEmptyString(item.model),
+      attempt: Number.isInteger(item.attempt) && item.attempt > 0 ? item.attempt : null
     }];
   });
 }

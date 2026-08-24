@@ -21,6 +21,10 @@ import {
   assetExecutionPreflightValid,
   assertAssetExecutionAuthorized
 } from "../reviews/asset-execution-checkpoint.mjs";
+import {
+  consumeSideEffectGrantUsage,
+  requireSideEffectGrant
+} from "../security/side-effect-capability.mjs";
 
 export const EXTERNAL_ASSET_EXECUTOR_VERSION = "approved-external-assets-v1";
 
@@ -318,6 +322,7 @@ function completionTokens(value) {
 async function executeImage(call, credential, options) {
   const fetchImpl = options.fetch ?? globalThis.fetch;
   const usesGeminiNative = call.endpoint.startsWith("https://aihubmix.com/gemini/");
+  options.consumePaidAttempt?.();
   const value = await fetchJson(fetchImpl, call.endpoint, {
     method: "POST",
     headers: usesGeminiNative
@@ -354,6 +359,7 @@ async function executeVideo(call, credential, options) {
   let id = options.existingTaskId ?? null;
   let executedCalls = 0;
   if (!id) {
+    options.consumePaidAttempt?.();
     const submitted = await fetchJson(fetchImpl, call.endpoint, {
       method: "POST",
       headers: {
@@ -439,15 +445,46 @@ export async function executeApprovedExternalAssetCall(
   }
   assertAssetExecutionAuthorized(episode, authorizationRequest(item, call));
   const toolId = assertExecutionToolAllowed(episode, call, options.allowedToolIds ?? []);
-  const credential = credentialFor(call, await executionCredentials(options));
-  const result = call.providerId === "aihubmix"
-    ? await executeImage(call, credential, options)
-    : call.providerId === "volcengine-ark"
-      ? await executeVideo(call, credential, options)
-      : null;
-  if (!result) {
+  const providerSupported = new Set(["aihubmix", "volcengine-ark"]).has(call.providerId);
+  if (!providerSupported) {
     throw executionError("外部素材 Provider 不受支持", "external_asset_provider_unsupported");
   }
+  const injectedExternalBoundary = typeof options.fetch === "function";
+  const capabilityRequired = options.requireSideEffectCapability === true ||
+    !injectedExternalBoundary ||
+    Boolean(options.sideEffectGrant) ||
+    typeof options.authorizeSideEffect === "function";
+  let sideEffectGrant = null;
+  let consumePaidAttempt = null;
+  if (capabilityRequired) {
+    const attemptCostUsd = Number(call.maximumCostUsd);
+    if (!Number.isFinite(attemptCostUsd) || attemptCostUsd < 0) {
+      throw executionError(
+        "外部素材批准没有有限费用上限",
+        "side_effect_capability_budget_unbounded",
+        { statusCode: 403 }
+      );
+    }
+    const capabilitySpec = {
+      episodeId: episode.id,
+      operation: options.capabilityOperation ?? "external-asset:execute",
+      scopes: ["network.request", "paid.invoke"],
+      maxCalls: 1,
+      maxCostUsd: attemptCostUsd
+    };
+    sideEffectGrant = requireSideEffectGrant(options, capabilitySpec);
+    consumePaidAttempt = () => consumeSideEffectGrantUsage(
+      sideEffectGrant,
+      capabilitySpec,
+      { calls: 1, costUsd: attemptCostUsd }
+    );
+  }
+  const credential = credentialFor(call, await executionCredentials(options));
+  const result = call.providerId === "aihubmix"
+    ? await executeImage(call, credential, { ...options, consumePaidAttempt })
+    : call.providerId === "volcengine-ark"
+      ? await executeVideo(call, credential, { ...options, consumePaidAttempt })
+      : null;
   return {
     ...result,
     toolId,
@@ -683,6 +720,30 @@ export async function adjudicateAmbiguousExternalAssetReceipt(
   input = {},
   options = {}
 ) {
+  const actor = String(options.actor ?? "").trim();
+  if (!actor.startsWith("human:") || actor.length > 128) {
+    throw executionError(
+      "人工重试裁决缺少可信服务端操作者身份",
+      "external_asset_retry_operator_required",
+      { statusCode: 403 }
+    );
+  }
+  const injectedSideEffectDependencies = Boolean(
+    options.outputDirectory &&
+    typeof options.readEpisode === "function" &&
+    typeof options.writeEpisode === "function" &&
+    typeof options.appendEvent === "function"
+  );
+  if (options.requireSideEffectCapability === true || !injectedSideEffectDependencies) {
+    requireSideEffectGrant(options, {
+      episodeId,
+      operation: options.capabilityOperation ??
+        "external-asset:retry-adjudication",
+      scopes: ["state.write", "filesystem.write"],
+      maxCalls: 0,
+      maxCostUsd: 0
+    });
+  }
   const readState = options.readEpisode ?? readEpisode;
   const writeState = options.writeEpisode ?? writeEpisode;
   const recordEvent = options.appendEvent ?? appendEvent;
@@ -792,12 +853,11 @@ export async function adjudicateAmbiguousExternalAssetReceipt(
         journal.startedAt
       );
       const at = timestamp(options.now);
-      const actor = String(options.actor ?? "human:local-operator").slice(0, 80);
       const review = {
         schemaVersion: 1,
         id: `external-asset-retry:${episodeId}:${randomUUID()}`,
         decision: "provider_no_record_no_charge",
-        actor,
+        actor: actor.slice(0, 80),
         decidedAt: at,
         note,
         sourceAttempt: journal.attempt,
@@ -908,6 +968,41 @@ export async function buildApprovedExternalAssets(episode, options = {}) {
     );
   }
   const items = externalAssetItems(episode);
+  const candidateSummary = episode.reviewCheckpoints?.assetExecution
+    ?.currentCandidate?.summary;
+  const maximumCalls = Number.isInteger(candidateSummary?.externalApiCallCount)
+    ? candidateSummary.externalApiCallCount
+    : items.length;
+  const maximumCostUsd = Number.isFinite(candidateSummary?.maximumPaidCostUsd)
+    ? Number(candidateSummary.maximumPaidCostUsd.toFixed(6))
+    : Number.POSITIVE_INFINITY;
+  const injectedExternalBoundary = Boolean(
+    options.outputDirectory && typeof options.fetch === "function"
+  );
+  const capabilityRequired = options.requireSideEffectCapability === true ||
+    !injectedExternalBoundary ||
+    Boolean(options.sideEffectGrant) ||
+    typeof options.authorizeSideEffect === "function";
+  let sideEffectGrant = null;
+  if (capabilityRequired) {
+    if (!Number.isFinite(maximumCostUsd)) {
+      throw executionError(
+        "外部素材批准没有有限费用上限",
+        "side_effect_capability_budget_unbounded",
+        { statusCode: 403 }
+      );
+    }
+    sideEffectGrant = requireSideEffectGrant(options, {
+      episodeId: episode.id,
+      operation: options.capabilityOperation ?? "external-asset:execute",
+      scopes: ["filesystem.write", "network.request", "paid.invoke"],
+      maxCalls: maximumCalls,
+      maxCostUsd: maximumCostUsd
+    });
+  }
+  const executionOptions = { ...options };
+  delete executionOptions.authorizeSideEffect;
+  delete executionOptions.sideEffectGrant;
   const existingByItem = new Map((episode.assets ?? [])
     .filter((asset) => asset.planItemId)
     .map((asset) => [asset.planItemId, asset]));
@@ -1040,7 +1135,9 @@ export async function buildApprovedExternalAssets(episode, options = {}) {
         itemId: item.id,
         callId: call.id
       }, {
-        ...options,
+        ...executionOptions,
+        sideEffectGrant: sideEffectGrant ?? undefined,
+        requireSideEffectCapability: Boolean(sideEffectGrant),
         existingTaskId: activeJournal.status === "submitted"
           ? activeJournal.providerExecutionId
           : null,

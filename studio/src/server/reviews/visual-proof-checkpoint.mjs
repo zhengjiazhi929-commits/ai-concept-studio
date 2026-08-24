@@ -344,13 +344,15 @@ export async function approveVisualProofCandidate(episodeId, input = {}, options
   }
   const at = timestamp(options.now);
   const note = String(input.note ?? "").trim();
+  const actor = typeof options.actor === "string" ? options.actor.slice(0, 128) : null;
   const humanApproval = {
     decision: "approved",
     at,
     note,
     version: inspected.candidate.version,
     candidateHash: expectedCandidateHash,
-    machineReviewId: previous.machineReview.id
+    machineReviewId: previous.machineReview.id,
+    ...(actor ? { actor } : {})
   };
   const checkpoint = {
     ...previous,
@@ -366,7 +368,8 @@ export async function approveVisualProofCandidate(episodeId, input = {}, options
         candidateHash: expectedCandidateHash,
         machineReviewId: previous.machineReview.id,
         decision: "approved",
-        note
+        note,
+        ...(actor ? { actor } : {})
       }
     ]
   };
@@ -384,7 +387,8 @@ export async function approveVisualProofCandidate(episodeId, input = {}, options
       status: "approved",
       version: inspected.candidate.version,
       candidateHash: expectedCandidateHash,
-      message: note || `Zhengjiazhi 已批准视觉样片 v${inspected.candidate.version}`
+      ...(actor ? { actor } : {}),
+      message: note || `人工操作者已批准视觉样片 v${inspected.candidate.version}`
     }
   ];
   await writeState(episode);
@@ -393,6 +397,7 @@ export async function approveVisualProofCandidate(episodeId, input = {}, options
     episodeId,
     version: inspected.candidate.version,
     candidateHash: expectedCandidateHash,
+    actor,
     message: note || `视觉样片 v${inspected.candidate.version} 已通过人工审批`,
     idempotencyKey: `visual-proof.approved:${episodeId}:${expectedCandidateHash}`
   });

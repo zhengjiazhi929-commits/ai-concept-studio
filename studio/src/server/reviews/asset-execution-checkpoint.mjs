@@ -909,6 +909,7 @@ export async function approveAssetExecutionCandidate(episodeId, input = {}, opti
   }
   const at = timestamp(options.now);
   const note = String(input.note ?? "").trim();
+  const actor = typeof options.actor === "string" ? options.actor.slice(0, 128) : null;
   const authorizedToolIds = externalExecutionToolIds(inspected.plan);
   const humanApproval = {
     decision: "approved",
@@ -921,7 +922,8 @@ export async function approveAssetExecutionCandidate(episodeId, input = {}, opti
     billingCurrencies: structuredClone(inspected.candidate.summary.billingCurrencies ?? []),
     nativeCurrencyCaps: structuredClone(inspected.candidate.summary.nativeCurrencyCaps ?? []),
     externalApiCallCount: inspected.candidate.summary.externalApiCallCount,
-    authorizedToolIds
+    authorizedToolIds,
+    ...(actor ? { actor } : {})
   };
   const checkpoint = {
     ...previous,
@@ -937,7 +939,8 @@ export async function approveAssetExecutionCandidate(episodeId, input = {}, opti
         candidateHash,
         machineReviewId: previous.machineReview.id,
         decision: "approved",
-        note
+        note,
+        ...(actor ? { actor } : {})
       }
     ]
   };
@@ -964,7 +967,8 @@ export async function approveAssetExecutionCandidate(episodeId, input = {}, opti
       status: "approved",
       version: inspected.candidate.version,
       candidateHash,
-      message: note || `Zhengjiazhi 已批准素材执行方案 v${inspected.candidate.version}`
+      ...(actor ? { actor } : {}),
+      message: note || `人工操作者已批准素材执行方案 v${inspected.candidate.version}`
     }
   ];
   await writeState(episode);
@@ -973,6 +977,7 @@ export async function approveAssetExecutionCandidate(episodeId, input = {}, opti
     episodeId,
     version: inspected.candidate.version,
     candidateHash,
+    actor,
     maximumPaidCostUsd: inspected.candidate.summary.maximumPaidCostUsd,
     nativeCurrencyCaps: structuredClone(inspected.candidate.summary.nativeCurrencyCaps ?? []),
     externalApiCallCount: inspected.candidate.summary.externalApiCallCount,
@@ -1487,6 +1492,7 @@ export async function rejectAssetExecutionCandidate(episodeId, input = {}, optio
     throw error;
   }
   const at = timestamp(options.now);
+  const actor = typeof options.actor === "string" ? options.actor.slice(0, 128) : null;
   const checkpoint = {
     ...previous,
     status: "rejected",
@@ -1496,7 +1502,8 @@ export async function rejectAssetExecutionCandidate(episodeId, input = {}, optio
       note: feedback,
       version: previous.currentCandidate.version,
       candidateHash,
-      machineReviewId: previous.machineReview?.id ?? null
+      machineReviewId: previous.machineReview?.id ?? null,
+      ...(actor ? { actor } : {})
     },
     history: [
       ...previous.history,
@@ -1507,7 +1514,8 @@ export async function rejectAssetExecutionCandidate(episodeId, input = {}, optio
         candidateHash,
         machineReviewId: previous.machineReview?.id ?? null,
         decision: "rejected",
-        note: feedback
+        note: feedback,
+        ...(actor ? { actor } : {})
       }
     ]
   };
@@ -1555,6 +1563,7 @@ export async function rejectAssetExecutionCandidate(episodeId, input = {}, optio
       status: "rejected",
       version: previous.currentCandidate.version,
       candidateHash,
+      ...(actor ? { actor } : {}),
       message: feedback
     }
   ];
@@ -1564,6 +1573,7 @@ export async function rejectAssetExecutionCandidate(episodeId, input = {}, optio
     episodeId,
     version: previous.currentCandidate.version,
     candidateHash,
+    actor,
     message: feedback,
     idempotencyKey: `asset-execution.rejected:${episodeId}:${candidateHash}:${integrityHash(feedback)}`
   });

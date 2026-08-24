@@ -18,6 +18,10 @@ import {
   adaptApprovedStoryboardToShortAssetPlan,
   APPROVED_STORYBOARD_SHORT_ASSET_ADAPTER_VERSION
 } from "./short-asset-plan-adapter.mjs";
+import {
+  requireSideEffectGrant,
+  SideEffectAuthorizationError
+} from "../security/side-effect-capability.mjs";
 
 const closedObject = (properties, required = Object.keys(properties)) => ({
   type: "object",
@@ -259,12 +263,72 @@ function episodeContext(episode) {
   };
 }
 
-function routingContext(episode) {
+function routingContext(episode, capabilityOperation) {
   return {
     episodeId: episode.id,
     control: episode.control,
-    persistBudget: true
+    persistBudget: true,
+    ...(capabilityOperation ? { capabilityOperation } : {})
   };
+}
+
+function requireGeneratorSideEffects(episode, options, input) {
+  const explicitlyRequired = options.requireSideEffectCapability === true;
+  const usesDefaultModel = input.usesModel &&
+    (explicitlyRequired || options.client === undefined);
+  const usesDefaultArtifactWriter = explicitlyRequired ||
+    options.writeArtifact === undefined;
+  if (!usesDefaultModel && !usesDefaultArtifactWriter) return null;
+  if (!options.sideEffectGrant && typeof options.authorizeSideEffect !== "function") {
+    throw new SideEffectAuthorizationError(
+      "缺少服务端签发的副作用 Capability",
+      "side_effect_capability_missing",
+      {},
+      403
+    );
+  }
+  const scopes = new Set();
+  if (usesDefaultArtifactWriter) scopes.add("filesystem.write");
+  let maxCalls = 0;
+  let maxCostUsd = 0;
+  if (usesDefaultModel) {
+    scopes.add("model.invoke");
+    scopes.add("network.request");
+    scopes.add("paid.invoke");
+    const budget = episode.control?.budget;
+    if (!Number.isInteger(budget?.maxCalls) || !Number.isFinite(budget?.maxCostUsd)) {
+      throw new SideEffectAuthorizationError(
+        "真实模型生成必须先配置有限的调用次数和费用预算",
+        "side_effect_capability_budget_unbounded",
+        {},
+        403
+      );
+    }
+    maxCalls = 1;
+    maxCostUsd = Number((
+      budget.maxCostUsd
+      - (budget.usedCostUsd ?? 0)
+      - (budget.reservedCostUsd ?? 0)
+    ).toFixed(6));
+    const remainingCalls = budget.maxCalls
+      - (budget.usedCalls ?? 0)
+      - (budget.reservedCalls ?? 0);
+    if (remainingCalls < 1 || maxCostUsd <= 0) {
+      throw new SideEffectAuthorizationError(
+        "真实模型生成的调用次数或费用预算已经耗尽",
+        "side_effect_capability_budget_exhausted",
+        {},
+        403
+      );
+    }
+  }
+  return requireSideEffectGrant(options, {
+    episodeId: episode.id,
+    operation: options.capabilityOperation ?? input.operation,
+    scopes: [...scopes],
+    maxCalls,
+    maxCostUsd
+  });
 }
 
 function generationReviewFeedback(episode, gate, explicitFeedback) {
@@ -291,7 +355,13 @@ async function nextRequestCount(episode) {
 export async function generateScriptDraft(episode, options = {}) {
   const profile = productionProfileForEpisode(episode);
   const writeArtifact = options.writeArtifact ?? writeVersionedArtifact;
-  if (episode.derivation?.kind === "approved-script-section-v1") {
+  const deterministic = episode.derivation?.kind === "approved-script-section-v1";
+  const capabilityOperation = options.capabilityOperation ?? "generator:script";
+  const sideEffectGrant = requireGeneratorSideEffects(episode, options, {
+    operation: "generator:script",
+    usesModel: !deterministic
+  });
+  if (deterministic) {
     const value = adaptApprovedSourceToShortScript(episode);
     const requestCount = episode.production?.ai?.requestCount ?? 0;
     const generatedAt = new Date().toISOString();
@@ -320,7 +390,11 @@ export async function generateScriptDraft(episode, options = {}) {
   }
 
   const requestCount = await nextRequestCount(episode);
-  const client = options.client ?? (await createAiClient());
+  const client = options.client ?? (await createAiClient({
+    sideEffectGrant,
+    capabilityOperation,
+    requireSideEffectCapability: true
+  }));
   const result = await client.generateStructured("script", {
     schemaName: "episode_script_draft",
     schema: scriptSchemaForProfile(profile),
@@ -331,7 +405,7 @@ export async function generateScriptDraft(episode, options = {}) {
       reviewFeedback: generationReviewFeedback(episode, "script", options.reviewFeedback)
     }),
     taskProfile: options.taskProfile,
-    routingContext: routingContext(episode),
+    routingContext: routingContext(episode, capabilityOperation),
     maxOutputTokens: profile.maximumScriptTokens
   });
   const artifact = await writeArtifact(episode.id, "script-draft", {
@@ -397,7 +471,13 @@ function buildTimeline(draft, profile) {
 export async function generateStoryboardDraft(episode, options = {}) {
   const profile = productionProfileForEpisode(episode);
   const writeArtifact = options.writeArtifact ?? writeVersionedArtifact;
-  if (episode.derivation?.kind === "approved-script-section-v1") {
+  const deterministic = episode.derivation?.kind === "approved-script-section-v1";
+  const capabilityOperation = options.capabilityOperation ?? "generator:storyboard";
+  const sideEffectGrant = requireGeneratorSideEffects(episode, options, {
+    operation: "generator:storyboard",
+    usesModel: !deterministic
+  });
+  if (deterministic) {
     const value = adaptApprovedScriptToShortStoryboard(episode);
     const requestCount = episode.production?.ai?.requestCount ?? 0;
     const generatedAt = new Date().toISOString();
@@ -433,7 +513,11 @@ export async function generateStoryboardDraft(episode, options = {}) {
 
   const requestCount = await nextRequestCount(episode);
   const scriptDraft = await readApprovedScriptInput(episode);
-  const client = options.client ?? (await createAiClient());
+  const client = options.client ?? (await createAiClient({
+    sideEffectGrant,
+    capabilityOperation,
+    requireSideEffectCapability: true
+  }));
   const result = await client.generateStructured("storyboard", {
     schemaName: "episode_storyboard_draft",
     schema: storyboardSchemaForProfile(profile),
@@ -449,7 +533,7 @@ export async function generateStoryboardDraft(episode, options = {}) {
       )
     }),
     taskProfile: options.taskProfile,
-    routingContext: routingContext(episode),
+    routingContext: routingContext(episode, capabilityOperation),
     maxOutputTokens: profile.maximumStoryboardTokens
   });
   const timeline = buildTimeline(result.value, profile);
@@ -485,7 +569,13 @@ export async function generateAssetPlan(episode, options = {}) {
     throw new Error("缺少已批准的分镜，不能生成素材清单");
   }
   const writeArtifact = options.writeArtifact ?? writeVersionedArtifact;
-  if (episode.derivation?.kind === "approved-script-section-v1") {
+  const deterministic = episode.derivation?.kind === "approved-script-section-v1";
+  const capabilityOperation = options.capabilityOperation ?? "generator:assets";
+  const sideEffectGrant = requireGeneratorSideEffects(episode, options, {
+    operation: "generator:assets",
+    usesModel: !deterministic
+  });
+  if (deterministic) {
     const value = adaptApprovedStoryboardToShortAssetPlan(episode);
     const result = {
       provider: "deterministic-local",
@@ -518,7 +608,11 @@ export async function generateAssetPlan(episode, options = {}) {
   }
 
   const requestCount = await nextRequestCount(episode);
-  const client = options.client ?? (await createAiClient());
+  const client = options.client ?? (await createAiClient({
+    sideEffectGrant,
+    capabilityOperation,
+    requireSideEffectCapability: true
+  }));
   const result = await client.generateStructured("assets", {
     schemaName: "episode_asset_plan",
     schema: assetPlanSchema,
@@ -531,7 +625,7 @@ export async function generateAssetPlan(episode, options = {}) {
       reviewFeedback: generationReviewFeedback(episode, "assets", options.reviewFeedback)
     }),
     taskProfile: options.taskProfile,
-    routingContext: routingContext(episode),
+    routingContext: routingContext(episode, capabilityOperation),
     maxOutputTokens: 6000
   });
   const sourceStoryboard = {
@@ -565,8 +659,13 @@ export async function generateAssetPlan(episode, options = {}) {
   };
 }
 
-export async function createVoicePlan(episode) {
-  const artifact = await writeVersionedArtifact(episode.id, "voice-plan", {
+export async function createVoicePlan(episode, options = {}) {
+  requireGeneratorSideEffects(episode, options, {
+    operation: "generator:voice-plan",
+    usesModel: false
+  });
+  const writeArtifact = options.writeArtifact ?? writeVersionedArtifact;
+  const artifact = await writeArtifact(episode.id, "voice-plan", {
     generatedAt: new Date().toISOString(),
     episodeId: episode.id,
     durationSeconds: episode.render?.durationSeconds ?? 0,

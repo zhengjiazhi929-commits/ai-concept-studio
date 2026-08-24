@@ -262,13 +262,23 @@ export function applyApprovalDecision(sourceEpisode, options) {
     throw new Error(`Unknown approval decision: ${decision}`);
   }
   const note = String(options.note ?? "").trim();
+  const actor = typeof options.actor === "string" && options.actor.startsWith("human:")
+    ? options.actor.slice(0, 128)
+    : null;
   if (decision === "rejected" && !note) throw new Error("驳回时必须填写修改意见");
 
   const episode = structuredClone(sourceEpisode);
   const at = timestamp(options.now);
   const version = currentGateVersion(episode, gate);
   const previous = createApprovalState(episode.approvals?.[gate]);
-  const record = { at, gate, decision, note, version };
+  const record = {
+    at,
+    gate,
+    decision,
+    note,
+    version,
+    ...(actor ? { actor } : {})
+  };
   episode.approvals = episode.approvals ?? {};
   episode.approvals[gate] = {
     ...previous,

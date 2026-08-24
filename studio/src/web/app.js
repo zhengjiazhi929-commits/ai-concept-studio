@@ -54,19 +54,105 @@ const trendPoolLabels = {
   already_covered: "已制作"
 };
 
+let operatorCsrfToken = null;
+let operatorUnlockPromise = null;
+const operatorSessionRecoveryCodes = new Set([
+  "operator_auth_forbidden",
+  "operator_session_expired",
+  "operator_session_csrf_forbidden"
+]);
+
+function cookieValue(name) {
+  const prefix = `${name}=`;
+  const entry = document.cookie
+    .split(";")
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(prefix));
+  return entry ? entry.slice(prefix.length) : null;
+}
+
+function mutatingMethod(method) {
+  return !new Set(["GET", "HEAD", "OPTIONS"]).has(String(method).toUpperCase());
+}
+
+function clearOperatorSessionClientState() {
+  operatorCsrfToken = null;
+  document.cookie = "acs_operator_csrf=; Path=/; SameSite=Strict; Max-Age=0";
+}
+
+async function unlockOperatorSession() {
+  if (operatorUnlockPromise) return operatorUnlockPromise;
+  operatorUnlockPromise = (async () => {
+    let unlockCode = window.prompt("请输入启动窗口显示的一次性操作解锁码");
+    if (!unlockCode?.trim()) {
+      const error = new Error("未输入操作解锁码，本次写操作已取消");
+      error.code = "operator_unlock_cancelled";
+      throw error;
+    }
+    try {
+      const response = await fetch("/api/operator/session", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ unlockCode: unlockCode.trim() })
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(body.error || `解锁失败：${response.status}`);
+        error.status = response.status;
+        error.code = typeof body.code === "string"
+          ? body.code
+          : "operator_session_failed";
+        throw error;
+      }
+      operatorCsrfToken = body.csrfToken;
+      return operatorCsrfToken;
+    } finally {
+      unlockCode = null;
+    }
+  })();
+  try {
+    return await operatorUnlockPromise;
+  } finally {
+    operatorUnlockPromise = null;
+  }
+}
+
 async function api(path, options = {}) {
-  const response = await fetch(path, {
-    headers: { "content-type": "application/json", ...(options.headers ?? {}) },
-    ...options
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
+  const method = String(options.method ?? "GET").toUpperCase();
+  const mutating = mutatingMethod(method);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const headers = {
+      "content-type": "application/json",
+      ...(options.headers ?? {})
+    };
+    if (mutating) {
+      operatorCsrfToken = operatorCsrfToken ?? cookieValue("acs_operator_csrf");
+      if (!operatorCsrfToken) operatorCsrfToken = await unlockOperatorSession();
+      headers["x-operator-csrf"] = operatorCsrfToken;
+    }
+    const response = await fetch(path, {
+      ...options,
+      method,
+      credentials: "same-origin",
+      headers
+    });
+    const body = await response.json().catch(() => ({}));
+    if (response.ok) return body;
+    if (
+      mutating &&
+      attempt === 0 &&
+      operatorSessionRecoveryCodes.has(body.code)
+    ) {
+      clearOperatorSessionClientState();
+      operatorCsrfToken = await unlockOperatorSession();
+      continue;
+    }
     const error = new Error(body.error || `请求失败：${response.status}`);
     error.status = response.status;
     error.code = typeof body.code === "string" ? body.code : "request_failed";
     throw error;
   }
-  return body;
 }
 
 function assetUrl(path = "") {

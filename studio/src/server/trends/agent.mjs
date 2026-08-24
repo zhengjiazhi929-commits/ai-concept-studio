@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { trendSnapshotsRoot } from "../../shared/paths.mjs";
 import { appendEvent, listEpisodes } from "../../shared/store.mjs";
+import { requireSideEffectGrant } from "../security/side-effect-capability.mjs";
 import { createEpisodeFromTrendSelection } from "../research/episode.mjs";
 import { normalizeSearchText } from "./schema.mjs";
 import { discoverTrendCandidates } from "./engine.mjs";
@@ -18,26 +19,91 @@ import {
 
 const DEFAULT_SNAPSHOT = resolve(trendSnapshotsRoot, "2026-08-03-public-signal-snapshot.json");
 
-export async function ensureDefaultTrendSignals() {
-  const current = await readTrendSignals();
+const trendSideEffectDependencyNames = Object.freeze([
+  "appendEvent",
+  "importTrendSnapshot",
+  "listEpisodes",
+  "readConceptTaxonomy",
+  "readTrendRadarConfig",
+  "readTrendSignals",
+  "readTrendSources",
+  "writeTrendRun"
+]);
+
+function trendDependencies(options = {}) {
+  const injected = options.dependencies ?? {};
+  const defaults = {
+    appendEvent,
+    importTrendSnapshot,
+    listEpisodes,
+    readConceptTaxonomy,
+    readTrendRadarConfig,
+    readTrendSignals,
+    readTrendSources,
+    writeTrendRun
+  };
+  return {
+    values: Object.fromEntries(
+      trendSideEffectDependencyNames.map((name) => [name, injected[name] ?? defaults[name]])
+    ),
+    fullyInjected: trendSideEffectDependencyNames.every(
+      (name) => typeof injected[name] === "function"
+    )
+  };
+}
+
+function requireTrendSideEffects(options, fullyInjected, operation, scopes) {
+  // Test-only seam: every side-effect dependency must be injected, and an
+  // explicit capability requirement always wins. Default/HTTP paths cannot
+  // enter this branch because at least one production dependency remains.
+  if (fullyInjected && options.requireSideEffectCapability !== true) return null;
+  return requireSideEffectGrant(options, {
+    episodeId: options.episodeId ?? "studio",
+    operation: options.capabilityOperation ?? operation,
+    scopes,
+    maxCalls: 0,
+    maxCostUsd: 0
+  });
+}
+
+async function ensureDefaultTrendSignalsWith(dependencies) {
+  const current = await dependencies.readTrendSignals();
   if (current.signals.length > 0) return { imported: 0, total: current.signals.length };
-  return importTrendSnapshot(DEFAULT_SNAPSHOT);
+  return dependencies.importTrendSnapshot(DEFAULT_SNAPSHOT);
+}
+
+export async function ensureDefaultTrendSignals(options = {}) {
+  const { values: dependencies, fullyInjected } = trendDependencies(options);
+  requireTrendSideEffects(
+    options,
+    fullyInjected,
+    "trend:ensure-default-signals",
+    ["filesystem.write"]
+  );
+  return ensureDefaultTrendSignalsWith(dependencies);
 }
 
 export async function runTrendRadarAgent(options = {}) {
-  await appendEvent({
+  const { values: dependencies, fullyInjected } = trendDependencies(options);
+  requireTrendSideEffects(
+    options,
+    fullyInjected,
+    "trend:run",
+    ["state.write", "filesystem.write"]
+  );
+  await dependencies.appendEvent({
     type: "agent.started",
     agentId: "trend-radar-agent",
     message: "热点概念发现开始运行"
   });
   try {
-    await ensureDefaultTrendSignals();
+    await ensureDefaultTrendSignalsWith(dependencies);
     const [signalDocument, sources, taxonomy, config, episodes] = await Promise.all([
-      readTrendSignals(),
-      readTrendSources(),
-      readConceptTaxonomy(),
-      readTrendRadarConfig(),
-      listEpisodes()
+      dependencies.readTrendSignals(),
+      dependencies.readTrendSources(),
+      dependencies.readConceptTaxonomy(),
+      dependencies.readTrendRadarConfig(),
+      dependencies.listEpisodes()
     ]);
     const coveredConceptIds = episodes
       .map((episode) => {
@@ -69,8 +135,8 @@ export async function runTrendRadarAgent(options = {}) {
       selectedAt: null,
       ...result
     };
-    const runPath = await writeTrendRun(run);
-    await appendEvent({
+    const runPath = await dependencies.writeTrendRun(run);
+    await dependencies.appendEvent({
       type: "agent.finished",
       agentId: "trend-radar-agent",
       status: "complete",
@@ -78,7 +144,7 @@ export async function runTrendRadarAgent(options = {}) {
     });
     return { run, runPath };
   } catch (error) {
-    await appendEvent({
+    await dependencies.appendEvent({
       type: "agent.failed",
       agentId: "trend-radar-agent",
       message: error instanceof Error ? error.message : "热点概念发现失败"
@@ -107,10 +173,25 @@ export async function getTrendRadarState() {
   };
 }
 
-export async function approveTrendCandidate(candidateId, note = "") {
-  const result = await selectTrendCandidate(candidateId, note);
-  const episode = await createEpisodeFromTrendSelection(result.selection);
-  await appendEvent({
+export async function approveTrendCandidate(candidateId, note = "", options = {}) {
+  const injected = options.dependencies ?? {};
+  const fullyInjected = [
+    "appendEvent",
+    "createEpisodeFromTrendSelection",
+    "selectTrendCandidate"
+  ].every((name) => typeof injected[name] === "function");
+  requireTrendSideEffects(
+    options,
+    fullyInjected,
+    "trend:approve-candidate",
+    ["state.write", "filesystem.write"]
+  );
+  const selectCandidate = injected.selectTrendCandidate ?? selectTrendCandidate;
+  const createEpisode = injected.createEpisodeFromTrendSelection ?? createEpisodeFromTrendSelection;
+  const recordEvent = injected.appendEvent ?? appendEvent;
+  const result = await selectCandidate(candidateId, note);
+  const episode = await createEpisode(result.selection);
+  await recordEvent({
     type: "trend.candidate-selected",
     agentId: "trend-radar-agent",
     candidateId,
@@ -119,9 +200,21 @@ export async function approveTrendCandidate(candidateId, note = "") {
   return { ...result, episode };
 }
 
-export async function ingestTrendSignal(signal) {
-  const document = await appendTrendSignal(signal);
-  await appendEvent({
+export async function ingestTrendSignal(signal, options = {}) {
+  const injected = options.dependencies ?? {};
+  const fullyInjected = ["appendEvent", "appendTrendSignal"].every(
+    (name) => typeof injected[name] === "function"
+  );
+  requireTrendSideEffects(
+    options,
+    fullyInjected,
+    "trend:ingest-signal",
+    ["state.write", "filesystem.write"]
+  );
+  const appendSignal = injected.appendTrendSignal ?? appendTrendSignal;
+  const recordEvent = injected.appendEvent ?? appendEvent;
+  const document = await appendSignal(signal);
+  await recordEvent({
     type: "trend.signal-ingested",
     agentId: "trend-radar-agent",
     signalId: signal.id,

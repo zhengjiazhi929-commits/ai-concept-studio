@@ -40,11 +40,19 @@ import { approvedAssetExecutionToolIds } from "./reviews/asset-execution-checkpo
 import { recoverInterruptedPlan } from "./control/plan-store.mjs";
 import { recoverInterruptedDispatch } from "./control/controlled-dispatch.mjs";
 import {
+  getAmbiguousBudgetReservationIds,
+  markInterruptedBudgetReservationsAmbiguous
+} from "./control/budget-ledger.mjs";
+import {
   acquireEpisodeOperation,
   claimPersistedEpisodeOperation,
   isEpisodeOperationActive,
   releasePersistedEpisodeOperation
 } from "./control/episode-operation-lock.mjs";
+import {
+  requireSideEffectGrant,
+  SideEffectAuthorizationError
+} from "./security/side-effect-capability.mjs";
 
 function mergePatch(target, patch) {
   const result = { ...target };
@@ -71,6 +79,14 @@ function assertValidWorkerMutation(sourceEpisode, agentId, output) {
     throw new Error(`Worker 状态或补丁越权：${validation.errors.join("；")}`);
   }
   return output;
+}
+
+function workerExternalAssetOptions(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const sanitized = { ...value };
+  delete sanitized.authorizeSideEffect;
+  delete sanitized.sideEffectGrant;
+  return sanitized;
 }
 
 function assertWorkerToolIdsAllowed(episode, agentId, toolIds = []) {
@@ -118,6 +134,82 @@ function assertWorkerToolIdsAllowed(episode, agentId, toolIds = []) {
     if (!normalized.includes(toolId)) normalized.push(toolId);
   }
   return normalized;
+}
+
+function workerSideEffectCapabilitySpec(episode, agentId, options = {}) {
+  const manifest = workerManifest(agentId);
+  if (!manifest) {
+    throw new SideEffectAuthorizationError(
+      `Worker Manifest 不存在：${agentId}`,
+      "worker_manifest_missing",
+      {},
+      403
+    );
+  }
+  const scopes = [...(manifest.sideEffectScopes ?? ["state.write"])];
+  const paid = scopes.includes("paid.invoke") || scopes.includes("model.invoke");
+  if (!paid) {
+    return {
+      episodeId: episode.id,
+      operation: options.capabilityOperation ?? `worker:${agentId}`,
+      scopes,
+      maxCalls: 0,
+      maxCostUsd: 0
+    };
+  }
+  const budget = episode.control?.budget;
+  if (!Number.isInteger(budget?.maxCalls) || !Number.isFinite(budget?.maxCostUsd)) {
+    throw new SideEffectAuthorizationError(
+      "真实模型 Worker 必须先配置有限的调用次数和费用预算",
+      "side_effect_capability_budget_unbounded",
+      {},
+      403
+    );
+  }
+  const remainingCalls = budget.maxCalls
+    - (budget.usedCalls ?? 0)
+    - (budget.reservedCalls ?? 0);
+  const remainingCostUsd = Number((
+    budget.maxCostUsd
+    - (budget.usedCostUsd ?? 0)
+    - (budget.reservedCostUsd ?? 0)
+  ).toFixed(6));
+  if (remainingCalls <= 0 || remainingCostUsd <= 0) {
+    throw new SideEffectAuthorizationError(
+      "真实模型 Worker 的调用次数或费用预算已经耗尽",
+      "side_effect_capability_budget_exhausted",
+      {},
+      403
+    );
+  }
+  const approvedExternalCalls = agentId === "asset-agent" &&
+    Number.isInteger(
+      episode.reviewCheckpoints?.assetExecution?.currentCandidate?.summary
+        ?.externalApiCallCount
+    )
+    ? episode.reviewCheckpoints.assetExecution.currentCandidate.summary
+        .externalApiCallCount
+    : 0;
+  const operationCallLimit = Math.max(1, approvedExternalCalls);
+  return {
+    episodeId: episode.id,
+    operation: options.capabilityOperation ?? `worker:${agentId}`,
+    scopes,
+    maxCalls: Math.min(remainingCalls, operationCallLimit),
+    maxCostUsd: remainingCostUsd
+  };
+}
+
+function successfulProviderSettlementsAfter(episode, since) {
+  const sinceMs = Date.parse(since ?? "");
+  if (!Number.isFinite(sinceMs)) return [];
+  return (episode.history ?? []).filter((entry) => (
+    entry?.type === "budget-reservation-settled" &&
+    entry?.status === "settled" &&
+    entry?.settlementStatus === "completed_success" &&
+    Number.isFinite(Date.parse(entry.at ?? "")) &&
+    Date.parse(entry.at) >= sinceMs
+  ));
 }
 
 function markReviewChecking(sourceEpisode, output) {
@@ -367,6 +459,32 @@ export async function runAgent(episodeId, agentId, options = {}) {
     const initialStep = initialEpisode.pipeline.find((step) => step.agent === agentId);
     if (!initialStep) throw new Error(`Episode has no step for ${agentId}`);
     assertWorkerRunAllowed(initialEpisode, agentId, { initiator: options.initiator });
+    const defaultStateDependencies =
+      options.readEpisode === undefined &&
+      options.writeEpisode === undefined &&
+      options.appendEvent === undefined;
+    const capabilityRequired = options.requireSideEffectCapability === true
+      || defaultStateDependencies;
+    if (
+      capabilityRequired &&
+      !options.sideEffectGrant &&
+      typeof options.authorizeSideEffect !== "function"
+    ) {
+      throw new SideEffectAuthorizationError(
+        "缺少服务端签发的副作用 Capability",
+        "side_effect_capability_missing",
+        {},
+        403
+      );
+    }
+    let sideEffectGrant = options.sideEffectGrant ?? null;
+    if (capabilityRequired) {
+      sideEffectGrant = requireSideEffectGrant(options, workerSideEffectCapabilitySpec(
+        initialEpisode,
+        agentId,
+        options
+      ));
+    }
     const workerToolIds = assertWorkerToolIdsAllowed(
       initialEpisode,
       agentId,
@@ -436,7 +554,8 @@ export async function runAgent(episodeId, agentId, options = {}) {
           writeArtifact: options.writeArtifact ?? null,
           readFile: options.readFile ?? null,
           inspectFileIntegrity: options.inspectFileIntegrity ?? null,
-          externalAssetOptions: options.externalAssetOptions ?? null,
+          externalAssetOptions: workerExternalAssetOptions(options.externalAssetOptions),
+          sideEffectGrant,
           now: options.now ?? null,
           onProgress: reportProgress
         });
@@ -625,8 +744,30 @@ export async function runAgent(episodeId, agentId, options = {}) {
   } catch (error) {
     const loadedEpisode = await readState(episodeId).catch(() => null);
     let episode = loadedEpisode ? recoverCheckingReviews(loadedEpisode).episode : null;
-    const pausedForHuman = error?.code === "manual_intervention_required";
-    const failureMessage = safeErrorMessage(error, "Agent 运行失败");
+    const runningStep = episode?.pipeline.find((item) => item.agent === agentId);
+    const uncommittedProviderResults = successfulProviderSettlementsAfter(
+      episode ?? {},
+      runningStep?.startedAt
+    );
+    const providerResultCommitUnknown = uncommittedProviderResults.length > 0;
+    const pausedForHuman = providerResultCommitUnknown
+      || error?.requiresHuman === true
+      || error?.code === "manual_intervention_required"
+      || error?.code === "provider_call_ambiguous";
+    const failureCode = providerResultCommitUnknown
+      ? "provider_result_commit_unknown"
+      : typeof error?.code === "string" && error.code.trim()
+        ? error.code.trim().slice(0, 120)
+        : null;
+    const reservationId = typeof error?.details?.reservationId === "string"
+      ? error.details.reservationId.trim().slice(0, 200)
+      : "";
+    const reservationIds = reservationId
+      ? [reservationId]
+      : uncommittedProviderResults.map((entry) => entry.reservationId);
+    const failureMessage = providerResultCommitUnknown
+      ? "Provider 已成功结算，但产物与 Episode 是否完成提交无法确认；已禁止自动重试，必须人工核对"
+      : safeErrorMessage(error, "Agent 运行失败");
     const safeAttempts = sanitizeAttemptRecords(Array.isArray(error?.attempts) ? error.attempts : []);
     if (episode && operationClaimed) {
       if (error?.routingDecision) {
@@ -644,15 +785,22 @@ export async function runAgent(episodeId, agentId, options = {}) {
       }
       const index = episode.pipeline.findIndex((item) => item.agent === agentId);
       if (index >= 0) {
+        const failureAt = new Date().toISOString();
+        const requiresHumanAdded = pausedForHuman
+          && episode.pipeline[index].requiresHuman !== true;
         episode.pipeline[index] = {
           ...episode.pipeline[index],
           status: pausedForHuman ? "blocked" : "failed",
           message: failureMessage,
-          lastRunAt: new Date().toISOString(),
-          finishedAt: new Date().toISOString(),
-          lastError: failureMessage,
+          lastRunAt: failureAt,
+          finishedAt: failureAt,
+          lastError: failureCode ?? failureMessage,
           requiresHuman: pausedForHuman,
-          attemptLog: safeAttempts
+          attemptLog: safeAttempts,
+          ...(reservationId ? { ambiguousReservationIds: reservationIds } : {}),
+          ...(providerResultCommitUnknown
+            ? { uncommittedProviderResultIds: reservationIds }
+            : {})
         };
         if (safeAttempts.length > 0) {
           episode.production = episode.production ?? {};
@@ -664,10 +812,14 @@ export async function runAgent(episodeId, agentId, options = {}) {
           };
         }
         episode.history.push({
-          at: new Date().toISOString(),
+          at: failureAt,
           type: "agent-run",
           agentId,
           status: pausedForHuman ? "blocked" : "failed",
+          failureCode,
+          reservationId: reservationId || null,
+          reservationIds,
+          requiresHumanAdded,
           message: failureMessage
         });
         episode.updatedAt = new Date().toISOString();
@@ -680,6 +832,8 @@ export async function runAgent(episodeId, agentId, options = {}) {
       type: pausedForHuman ? "agent.paused" : "agent.failed",
       episodeId,
       agentId,
+      failureCode,
+      reservationId: reservationId || null,
       message: failureMessage
     });
     throw error;
@@ -721,8 +875,9 @@ export async function runNextReadyAgent(episodeId, options = {}) {
   return runAgent(episodeId, legal.workerId, { ...options, toolIds });
 }
 
-export async function getWorkflowState(episodeId) {
-  const episode = await readEpisode(episodeId);
+export async function getWorkflowState(episodeId, options = {}) {
+  const readState = options.readEpisode ?? readEpisode;
+  const episode = await readState(episodeId);
   return kernelSnapshot(episode, {
     activeRun: isEpisodeOperationActive(episodeId) || Boolean(episode.control.activeOperation)
   });
@@ -834,10 +989,17 @@ export async function approveGate(episodeId, gate, input = {}, options = {}) {
   const { episode } = applyApprovalDecision(sourceEpisode, {
     gate,
     decision: "approved",
-    note
+    note,
+    actor: options.actor
   });
   await writeState(episode);
-  await recordEvent({ type: "approval.granted", episodeId, gate, message: note || `${gate} 已批准` });
+  await recordEvent({
+    type: "approval.granted",
+    episodeId,
+    gate,
+    actor: options.actor ?? null,
+    message: note || `${gate} 已批准`
+  });
   return episode;
 }
 
@@ -858,13 +1020,15 @@ export async function rejectGate(episodeId, gate, input = {}, options = {}) {
   const { episode, record } = applyApprovalDecision(sourceEpisode, {
     gate,
     decision: "rejected",
-    note: feedbackText
+    note: feedbackText,
+    actor: options.actor
   });
   await writeState(episode);
   await recordEvent({
     type: "approval.rejected",
     episodeId,
     gate,
+    actor: options.actor ?? null,
     message: `已驳回 ${gate} v${record.version ?? "?"}：${record.note}`
   });
   return episode;
@@ -907,12 +1071,35 @@ export function recoverInterruptedEpisode(sourceEpisode, now = new Date()) {
   const checking = recoverCheckingReviews(sourceEpisode);
   const planning = recoverInterruptedPlan(checking.episode, { now });
   const dispatching = recoverInterruptedDispatch(planning.episode, { now });
-  const episode = dispatching.episode;
+  const budgetRecovery = markInterruptedBudgetReservationsAmbiguous(
+    dispatching.episode,
+    { now }
+  );
+  const episode = budgetRecovery.episode;
   const at = now.toISOString();
   const recoveredAgents = [];
+  const recoveredBudgetReservations = budgetRecovery.reservationIds;
+  const ambiguousBudgetReservations = getAmbiguousBudgetReservationIds(episode);
+  const hasAmbiguousProviderCalls = ambiguousBudgetReservations.length > 0;
   const recoveredOperation = episode.control.activeOperation
     ? structuredClone(episode.control.activeOperation)
     : null;
+  const planningProviderResults = recoveredOperation?.kind === "main-agent-planning"
+    ? successfulProviderSettlementsAfter(episode, recoveredOperation.startedAt)
+    : [];
+  if (planningProviderResults.length > 0) {
+    episode.control.budget.overrun = true;
+    episode.history.push({
+      at,
+      type: "provider-result-commit-unknown",
+      status: "blocked",
+      agentId: "main-agent",
+      failureCode: "provider_result_commit_unknown",
+      reservationIds: planningProviderResults.map((entry) => entry.reservationId),
+      message:
+        "Main Agent 的 Provider 结果已成功结算，但计划是否完成提交无法确认；已禁止自动重试"
+    });
+  }
   if (recoveredOperation) {
     episode.control.activeOperation = null;
     episode.history.push({
@@ -922,50 +1109,57 @@ export function recoverInterruptedEpisode(sourceEpisode, now = new Date()) {
       message: `进程中断后释放未完成操作：${recoveredOperation.kind}`
     });
   }
-  const recoveredBudgetReservations = [...(episode.control.budget.reservations ?? [])];
-  if (recoveredBudgetReservations.length > 0) {
-    const reservedCalls = recoveredBudgetReservations.reduce(
-      (sum, reservation) => sum + reservation.calls,
-      0
-    );
-    const reservedCostUsd = recoveredBudgetReservations.reduce(
-      (sum, reservation) => sum + reservation.costUsd,
-      0
-    );
-    episode.control.budget.reservations = [];
-    episode.control.budget.reservedCalls = Math.max(
-      0,
-      episode.control.budget.reservedCalls - reservedCalls
-    );
-    episode.control.budget.reservedCostUsd = Number(
-      Math.max(0, episode.control.budget.reservedCostUsd - reservedCostUsd).toFixed(6)
-    );
-    episode.history.push({
-      at,
-      type: "budget-reservation-recovered",
-      status: "released",
-      message: `进程中断后释放 ${recoveredBudgetReservations.length} 项未结算预算预留`
-    });
-  }
   for (let index = 0; index < episode.pipeline.length; index += 1) {
     const step = episode.pipeline[index];
     if (step.status !== "running") continue;
+    const uncommittedProviderResults = successfulProviderSettlementsAfter(
+      episode,
+      step.startedAt
+    );
+    const providerResultCommitUnknown = uncommittedProviderResults.length > 0;
+    const requiresHuman = hasAmbiguousProviderCalls
+      || providerResultCommitUnknown
+      || step.requiresHuman === true;
+    const requiresHumanAdded = requiresHuman && step.requiresHuman !== true;
+    const failureCode = hasAmbiguousProviderCalls
+      ? "provider_call_ambiguous"
+      : providerResultCommitUnknown
+        ? "provider_result_commit_unknown"
+        : "process_interrupted";
+    const reservationIds = hasAmbiguousProviderCalls
+      ? [...ambiguousBudgetReservations]
+      : uncommittedProviderResults.map((entry) => entry.reservationId);
     recoveredAgents.push(step.agent);
     episode.pipeline[index] = {
       ...step,
       status: "failed",
       progress: 0,
-      message: "上次运行被进程中断，可以安全重试",
+      message: hasAmbiguousProviderCalls
+        ? "上次运行在 Provider 调用结算前中断，必须先人工核对调用结果和费用"
+        : providerResultCommitUnknown
+          ? "Provider 已成功结算，但产物与 Episode 是否完成提交无法确认；必须人工核对，不能自动重试"
+          : "上次运行被进程中断，可以安全重试",
       finishedAt: at,
       lastRunAt: at,
-      lastError: "process_interrupted"
+      lastError: failureCode,
+      requiresHuman,
+      ...(providerResultCommitUnknown
+        ? { uncommittedProviderResultIds: reservationIds }
+        : {})
     };
     episode.history.push({
       at,
       type: "agent-recovered",
       agentId: step.agent,
       status: "failed",
-      message: "检测到未完成运行，已恢复为可重试状态"
+      failureCode,
+      reservationIds,
+      requiresHumanAdded,
+      message: hasAmbiguousProviderCalls
+        ? "检测到未结算 Provider 调用，Worker 重试和预算已冻结等待人工核对"
+        : providerResultCommitUnknown
+          ? "检测到已结算但未确认提交的 Provider 结果，Worker 已冻结等待人工核对"
+          : "检测到未完成运行，已恢复为可重试状态"
     });
   }
   if (recoveredAgents.length > 0) episode.updatedAt = at;
@@ -977,7 +1171,12 @@ export function recoverInterruptedEpisode(sourceEpisode, now = new Date()) {
     recoveredAgents,
     recoveredReviewStages: checking.recoveredStages,
     recoveredOperation,
-    recoveredBudgetReservations: recoveredBudgetReservations.map((item) => item.id),
+    recoveredBudgetReservations,
+    ambiguousBudgetReservations,
+    uncommittedProviderResultIds: [
+      ...planningProviderResults.map((entry) => entry.reservationId),
+      ...episode.pipeline.flatMap((step) => step.uncommittedProviderResultIds ?? [])
+    ],
     recoveredPlan: planning.recovered,
     recoveredDispatch: dispatching.recovered
   };
@@ -1008,7 +1207,11 @@ export async function recoverInterruptedRuns(options = {}) {
         type: "agent.recovered",
         episodeId: sourceEpisode.id,
         agentId,
-        message: "进程中断的任务已恢复，可从失败状态重试"
+        message: interrupted.ambiguousBudgetReservations.length > 0
+          ? "进程中断的任务已恢复，但 Provider 调用仍有歧义，必须人工对账后再重试"
+          : interrupted.uncommittedProviderResultIds.length > 0
+            ? "Provider 已成功结算但产物提交状态不明，任务已冻结，禁止自动重试"
+            : "进程中断的任务已恢复，可从失败状态重试"
       });
     }
     for (const stage of interrupted.recoveredReviewStages) {
@@ -1021,9 +1224,11 @@ export async function recoverInterruptedRuns(options = {}) {
     }
     if (interrupted.recoveredBudgetReservations.length > 0) {
       await appendEvent({
-        type: "budget.reservations.recovered",
+        type: "budget.reservations.ambiguous",
         episodeId: sourceEpisode.id,
-        message: `已释放 ${interrupted.recoveredBudgetReservations.length} 项中断的模型预算预留`
+        status: "ambiguous",
+        message:
+          `已冻结 ${interrupted.recoveredBudgetReservations.length} 项中断的 Provider 调用预算，等待人工核对后显式结算`
       });
     }
     if (interrupted.recoveredOperation) {
@@ -1033,11 +1238,23 @@ export async function recoverInterruptedRuns(options = {}) {
         message: `已释放中断的 ${interrupted.recoveredOperation.kind} 操作锁`
       });
     }
+    if (interrupted.uncommittedProviderResultIds.length > 0) {
+      await appendEvent({
+        type: "provider.result_commit_unknown",
+        episodeId: sourceEpisode.id,
+        status: "blocked",
+        reservationIds: interrupted.uncommittedProviderResultIds,
+        message:
+          "Provider 已成功结算但本地产物提交状态不明；必须人工核对，禁止自动重复调用"
+      });
+    }
     if (interrupted.recoveredPlan) {
       await appendEvent({
         type: "main-agent.plan.recovered",
         episodeId: sourceEpisode.id,
-        message: "中断的 Main Agent 计划已恢复为失败记录，可安全重试"
+        message: interrupted.uncommittedProviderResultIds.length > 0
+          ? "中断的 Main Agent 计划包含已结算但未确认提交的 Provider 结果，已禁止自动重试"
+          : "中断的 Main Agent 计划已恢复为失败记录，可安全重试"
       });
     }
     if (interrupted.recoveredDispatch) {
@@ -1069,6 +1286,7 @@ export async function recoverInterruptedRuns(options = {}) {
       reviewStages: interrupted.recoveredReviewStages,
       operation: interrupted.recoveredOperation,
       budgetReservations: interrupted.recoveredBudgetReservations,
+      ambiguousBudgetReservations: interrupted.ambiguousBudgetReservations,
       planRecovered: interrupted.recoveredPlan,
       dispatchRecovered: interrupted.recoveredDispatch,
       missingRender: artifacts.missingRender,
