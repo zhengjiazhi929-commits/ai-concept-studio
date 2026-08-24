@@ -22,8 +22,8 @@ export function AgentSkillLongReviewRoot() {
       component={AgentSkillLongReview}
       durationInFrames={AGENT_SKILL_LONG_REVIEW_DURATION_SECONDS * AGENT_SKILL_LONG_REVIEW_FPS}
       fps={AGENT_SKILL_LONG_REVIEW_FPS}
-      width={540}
-      height={960}
+      width={1920}
+      height={1080}
       defaultProps={{ episode: defaultEpisode }}
     />
   );

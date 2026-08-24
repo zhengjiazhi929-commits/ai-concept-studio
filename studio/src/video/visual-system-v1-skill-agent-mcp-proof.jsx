@@ -35,11 +35,13 @@ export function VisualSystemV1SkillAgentMcpProof() {
     <VisualSystemV1Canvas>
       <div
         data-visual-system-content="open-canvas"
-        style={{ position: "absolute", inset: 0, opacity: masterOpacity }}
+        style={{ position: "absolute", inset: 0 }}
       >
         <VisualSystemV1SceneLayer
           startFrame={boundaryScene.startFrame}
           endFrame={boundaryScene.endFrame}
+          transitionMode="sequential-copy"
+          style={{ zIndex: 1 }}
         >
           <VisualSystemV1BoundaryScene
             layout={layout}
@@ -49,6 +51,8 @@ export function VisualSystemV1SkillAgentMcpProof() {
         <VisualSystemV1SceneLayer
           startFrame={executionScene.startFrame}
           endFrame={executionScene.endFrame}
+          transitionMode="sequential-copy"
+          style={{ zIndex: 1 }}
         >
           <VisualSystemV1ExecutionScene
             layout={layout}
@@ -58,6 +62,8 @@ export function VisualSystemV1SkillAgentMcpProof() {
         <VisualSystemV1SceneLayer
           startFrame={reviewScene.startFrame}
           endFrame={reviewScene.endFrame}
+          transitionMode="sequential-copy"
+          style={{ zIndex: 1 }}
         >
           <VisualSystemV1ReviewScene
             layout={layout}
@@ -65,6 +71,18 @@ export function VisualSystemV1SkillAgentMcpProof() {
           />
         </VisualSystemV1SceneLayer>
         <VisualSystemV1SkillAgentMcpWorkflow layout={layout} />
+        {masterOpacity < 1 ? (
+          <div
+            data-visual-system-master-fade="paint-overlay"
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 3,
+              pointerEvents: "none",
+              backgroundColor: `rgba(242, 246, 243, ${1 - masterOpacity})`
+            }}
+          />
+        ) : null}
       </div>
       <VisualSystemV1AiWatermark
         size={watermark.placement.size}

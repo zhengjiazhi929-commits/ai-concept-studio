@@ -8,150 +8,302 @@ import {
 } from "remotion";
 
 import {
-  AGENT_SKILL_LONG_BACKGROUND_VARIANTS,
-  AgentSkillLongBackdrop
-} from "./agent-skill-long-backgrounds.jsx";
-import { PhraseText, Subtitle, phraseAwareTextStyle } from "./components/chrome.jsx";
+  VISUAL_SYSTEM_V1,
+  VisualSystemV1AiWatermark,
+  VisualSystemV1ChapterProgress,
+  VisualSystemV1FlatNode,
+  VisualSystemV1PlainSubtitle,
+  VisualSystemV1PopText,
+  visualSystemV1AdaptiveCardLayout,
+  visualSystemV1SmoothStep
+} from "./components/visual-system-v1/index.jsx";
 import {
   AGENT_SKILL_LONG_REVIEW_CHAPTERS,
   AGENT_SKILL_LONG_REVIEW_SCENE_SPECS,
   longReviewDiagramStateAtFrame,
-  longReviewProgressAtFrame,
   longReviewSceneLayersAtFrame
 } from "./agent-skill-long-review-plan.mjs";
 
-const palette = Object.freeze({
-  paper: "#F4F6F3",
-  panel: "#FFFFFF",
-  ink: "#17201D",
-  muted: "#69726E",
-  line: "#D2D9D5",
-  lineStrong: "#89948F",
-  mint: "#47C4A1",
-  mintSoft: "#DFF6EE",
-  blue: "#5276E6",
-  blueSoft: "#E8EDFF",
-  purple: "#765BD8",
-  purpleSoft: "#EEE9FF",
-  orange: "#F2783A",
-  orangeSoft: "#FFE9DD",
-  red: "#CF5B56",
-  redSoft: "#FBE5E3"
+const { palette, typography } = VISUAL_SYSTEM_V1;
+const CARD_CONSTRAINTS = Object.freeze({
+  copyBottomPx: 318,
+  subtitleTopPx: 872,
+  minimumCardWidthPx: VISUAL_SYSTEM_V1.cardDeck.minimumCardWidthPx,
+  minimumCardHeightPx: VISUAL_SYSTEM_V1.cardDeck.minimumCardHeightPx
 });
 
-const accents = Object.freeze({
-  mint: { stroke: palette.mint, soft: palette.mintSoft },
-  blue: { stroke: palette.blue, soft: palette.blueSoft },
-  purple: { stroke: palette.purple, soft: palette.purpleSoft },
-  orange: { stroke: palette.orange, soft: palette.orangeSoft },
-  red: { stroke: palette.red, soft: palette.redSoft }
-});
+const humanNodePattern = /(?:\bhuman\b|人工(?:决定|确认)|等待人工)/iu;
+const WIDE_BACKDROP_LOOP_SECONDS = 25;
 
-const chapterGrid = AGENT_SKILL_LONG_REVIEW_CHAPTERS
-  .map((chapter) => `${chapter.endSecond - chapter.startSecond}fr`)
-  .join(" ");
-
-function activeTimedItem(items, second) {
-  return items.find((item) => second >= item.start && second < item.end) ?? null;
+function interpolateBackdropAnchor(phase, phaseOffset, width, height) {
+  const loopProgress = ((phase + phaseOffset) % 1 + 1) % 1;
+  const perimeter = 2 * (width + height);
+  const distance = loopProgress * perimeter;
+  let x;
+  let y;
+  if (distance < width) {
+    x = distance;
+    y = 0;
+  } else if (distance < width + height) {
+    x = width;
+    y = distance - width;
+  } else if (distance < 2 * width + height) {
+    x = width - (distance - width - height);
+    y = height;
+  } else {
+    x = 0;
+    y = height - (distance - 2 * width - height);
+  }
+  return {
+    x,
+    y,
+    scale: 0.88 + 0.2 * (0.5 + 0.5 * Math.cos(2 * Math.PI * loopProgress))
+  };
 }
 
-function smoothStep(value) {
-  const clamped = Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
-  return clamped * clamped * (3 - 2 * clamped);
-}
-
-function SceneHeader({ scene, spec }) {
+function WideMovingBackdrop() {
+  const frame = useCurrentFrame();
+  const { width, height, fps } = useVideoConfig();
+  const periodFrames = WIDE_BACKDROP_LOOP_SECONDS * fps;
+  const phase = (((frame % periodFrames) + periodFrames) % periodFrames) / periodFrames;
+  const blobs = [
+    {
+      id: "mint-a",
+      offset: 0,
+      width: width * 0.54,
+      height: height * 0.7,
+      opacity: 0.18,
+      color: palette.mintSoft
+    },
+    {
+      id: "mint-b",
+      offset: 1 / 3,
+      width: width * 0.46,
+      height: height * 0.62,
+      opacity: 0.14,
+      color: palette.mintFace
+    },
+    {
+      id: "purple",
+      offset: 2 / 3,
+      width: width * 0.44,
+      height: height * 0.58,
+      opacity: 0.07,
+      color: palette.purpleSoft
+    }
+  ];
   return (
-    <div style={{ position: "absolute", top: 50, left: 24, right: 24 }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          color: palette.muted,
-          fontSize: 12,
-          fontWeight: 840,
-          letterSpacing: "0.04em"
-        }}
-      >
-        <span>{spec.chapterLabel}</span>
-        <span>{spec.id}</span>
-      </div>
-      <div
-        style={{
-          marginTop: 10,
-          color: palette.ink,
-          fontSize: 31,
-          fontWeight: 920,
-          lineHeight: 1.08,
-          letterSpacing: "-0.035em",
-          ...phraseAwareTextStyle
-        }}
-      >
-        <PhraseText text={scene.title ?? spec.title} />
-      </div>
-      <div
-        style={{
-          marginTop: 7,
-          color: palette.muted,
-          fontSize: 15,
-          fontWeight: 720,
-          lineHeight: 1.26,
-          ...phraseAwareTextStyle
-        }}
-      >
-        <PhraseText text={spec.deck ?? scene.statement ?? ""} />
-      </div>
+    <div
+      data-visual-system-wallpaper="three-edge-blobs-25s-seamless"
+      data-wallpaper-loop-frames={periodFrames}
+      style={{ position: "absolute", inset: 0, overflow: "hidden", backgroundColor: palette.paper }}
+    >
+      {blobs.map((blob) => {
+        const position = interpolateBackdropAnchor(phase, blob.offset, width, height);
+        return (
+          <div
+            key={blob.id}
+            data-wallpaper-blob={blob.id}
+            style={{
+              position: "absolute",
+              left: -blob.width / 2,
+              top: -blob.height / 2,
+              width: blob.width,
+              height: blob.height,
+              borderRadius: "50%",
+              opacity: blob.opacity,
+              background: `radial-gradient(ellipse at center, ${blob.color} 0%, ${blob.color} 34%, rgba(242,246,243,0) 74%)`,
+              filter: "blur(88px)",
+              translate: `${position.x}px ${position.y}px`,
+              scale: position.scale,
+              transformOrigin: "center center",
+              willChange: "translate, scale"
+            }}
+          />
+        );
+      })}
     </div>
   );
 }
 
-function Edge({ edge, lineProgress, arrowProgress, activeProgress, sceneId }) {
-  const color = edge.relation === "warning"
-    ? palette.orange
-    : (accents[edge.accent]?.stroke ?? palette.mint);
-  const markerId = `long-review-arrow-${sceneId}-${edge.id}`;
-  return (
-    <>
-      <defs>
-        <marker
-          id={markerId}
-          viewBox="0 0 10 10"
-          refX="8"
-          refY="5"
-          markerWidth="5.4"
-          markerHeight="5.4"
-          orient="auto-start-reverse"
-        >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill={color} opacity={arrowProgress} />
-        </marker>
-      </defs>
-      <path
-        d={edge.path}
-        fill="none"
-        stroke={color}
-        strokeWidth={2 + 1.1 * activeProgress}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        pathLength={1}
-        strokeDasharray={1}
-        strokeDashoffset={1 - lineProgress}
-        markerEnd={`url(#${markerId})`}
-        opacity={lineProgress * (0.62 + 0.38 * activeProgress)}
-      />
-    </>
-  );
+function normalizeNodeCopy(value) {
+  const text = Array.isArray(value) ? value.join(" ") : String(value ?? "");
+  return text.replace(/\s*\n+\s*/gu, " · ").trim();
 }
 
-function SvgTextLines({ x, y, lines, fontSize, fontWeight, fill, lineGap }) {
+function isHumanNode(node) {
+  return humanNodePattern.test(`${node.id} ${normalizeNodeCopy(node.label)} ${normalizeNodeCopy(node.detail)}`);
+}
+
+function nodeMarker(node, spec) {
+  if (isHumanNode(node)) return "HUMAN GATE";
+  if (node.dashed) return "BOUNDARY";
+  if (spec.kind === "native-evidence") return "EVIDENCE";
+  if (spec.kind === "summary") return "SUMMARY";
+  return "NODE";
+}
+
+function uniqueNodeIds(stages) {
+  return [...new Set(stages.flatMap((stage) => stage.nodeIds))];
+}
+
+function cardGeometry(card) {
+  return {
+    left: card.left,
+    top: card.top,
+    width: card.width,
+    height: card.height
+  };
+}
+
+function interpolateGeometry(from, to, progress) {
+  const amount = visualSystemV1SmoothStep(progress);
+  const interpolate = (start, end) => start + (end - start) * amount;
+  return {
+    left: interpolate(from.left, to.left),
+    top: interpolate(from.top, to.top),
+    width: interpolate(from.width, to.width),
+    height: interpolate(from.height, to.height)
+  };
+}
+
+function adaptiveNodeLayout(spec, state, width, height) {
+  const targetNodeIds = uniqueNodeIds(spec.stages.slice(0, state.stageIndex + 1));
+  if (targetNodeIds.length === 0) {
+    return { nodeIds: [], geometryById: {}, visibleCount: 0 };
+  }
+  const previousNodeIds = uniqueNodeIds(spec.stages.slice(0, state.stageIndex));
+  const targetDeck = visualSystemV1AdaptiveCardLayout(
+    width,
+    height,
+    targetNodeIds.length,
+    CARD_CONSTRAINTS
+  );
+  const targetGeometry = Object.fromEntries(
+    targetNodeIds.map((nodeId, index) => [nodeId, cardGeometry(targetDeck.cards[index])])
+  );
+  if (
+    previousNodeIds.length === 0 ||
+    previousNodeIds.length === targetNodeIds.length ||
+    state.stageTransitionProgress >= 1
+  ) {
+    return {
+      nodeIds: targetNodeIds,
+      geometryById: targetGeometry,
+      visibleCount: targetNodeIds.length
+    };
+  }
+  const previousDeck = visualSystemV1AdaptiveCardLayout(
+    width,
+    height,
+    previousNodeIds.length,
+    CARD_CONSTRAINTS
+  );
+  const previousGeometry = Object.fromEntries(
+    previousNodeIds.map((nodeId, index) => [nodeId, cardGeometry(previousDeck.cards[index])])
+  );
+  return {
+    nodeIds: targetNodeIds,
+    geometryById: Object.fromEntries(targetNodeIds.map((nodeId) => [
+      nodeId,
+      previousGeometry[nodeId]
+        ? interpolateGeometry(
+          previousGeometry[nodeId],
+          targetGeometry[nodeId],
+          state.stageTransitionProgress
+        )
+        : targetGeometry[nodeId]
+    ])),
+    visibleCount: targetNodeIds.length
+  };
+}
+
+function firstRevealFrame(spec, nodeId) {
+  return spec.stages.find((stage) => stage.nodeIds.includes(nodeId))?.startFrame ?? spec.startFrame;
+}
+
+function connectorEndpoints(from, to) {
+  const fromCenter = { x: from.left + from.width / 2, y: from.top + from.height / 2 };
+  const toCenter = { x: to.left + to.width / 2, y: to.top + to.height / 2 };
+  const dx = toCenter.x - fromCenter.x;
+  const dy = toCenter.y - fromCenter.y;
+  if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) return null;
+  const fromScale = Math.min(
+    from.width / (2 * Math.max(Math.abs(dx), 0.001)),
+    from.height / (2 * Math.max(Math.abs(dy), 0.001))
+  );
+  const toScale = Math.min(
+    to.width / (2 * Math.max(Math.abs(dx), 0.001)),
+    to.height / (2 * Math.max(Math.abs(dy), 0.001))
+  );
+  return {
+    from: {
+      x: fromCenter.x + dx * fromScale,
+      y: fromCenter.y + dy * fromScale
+    },
+    to: {
+      x: toCenter.x - dx * toScale,
+      y: toCenter.y - dy * toScale
+    }
+  };
+}
+
+function AdaptiveConnectors({ spec, state, layout, width, height }) {
   return (
-    <text x={x} y={y} fill={fill} fontSize={fontSize} fontWeight={fontWeight}>
-      {lines.map((line, index) => (
-        <tspan key={`${index}-${line}`} x={x} dy={index === 0 ? 0 : lineGap}>
-          {line}
-        </tspan>
-      ))}
-    </text>
+    <svg
+      data-visual-system-connectors="adaptive-flat-graph"
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      style={{ position: "absolute", inset: 0, overflow: "visible", zIndex: 1 }}
+    >
+      <defs>
+        {spec.edges.map((edge) => (
+          <marker
+            key={edge.id}
+            id={`long-review-arrow-${spec.id}-${edge.id}`}
+            viewBox="0 0 10 10"
+            refX="8"
+            refY="5"
+            markerWidth="5.5"
+            markerHeight="5.5"
+            orient="auto"
+          >
+            <path
+              d="M 0 0 L 10 5 L 0 10 z"
+              fill={palette.mintDeep}
+              opacity={state.edgeArrowProgress[edge.id] ?? 0}
+            />
+          </marker>
+        ))}
+      </defs>
+      {spec.edges.map((edge) => {
+        const from = layout.geometryById[edge.from];
+        const to = layout.geometryById[edge.to];
+        const endpoints = from && to ? connectorEndpoints(from, to) : null;
+        const progress = state.edgeProgress[edge.id] ?? 0;
+        const focus = state.edgeHighlightProgress[edge.id] ?? 0;
+        if (!endpoints || progress <= 0) return null;
+        return (
+          <line
+            key={edge.id}
+            x1={endpoints.from.x}
+            y1={endpoints.from.y}
+            x2={endpoints.to.x}
+            y2={endpoints.to.y}
+            pathLength={1}
+            stroke={palette.mintDeep}
+            strokeWidth={2 + focus}
+            strokeLinecap="round"
+            strokeDasharray={1}
+            strokeDashoffset={1 - progress}
+            markerEnd={`url(#long-review-arrow-${spec.id}-${edge.id})`}
+            opacity={progress * (0.42 + focus * 0.42)}
+            vectorEffect="non-scaling-stroke"
+          />
+        );
+      })}
+    </svg>
   );
 }
 
@@ -163,27 +315,25 @@ function StageCaption({ state }) {
     position: "absolute",
     inset: 0,
     display: "flex",
-    flexDirection: "column",
-    justifyContent: "center"
+    alignItems: "center"
   };
   const renderText = (label, index, opacity) => (
     <div key={`${index}-${label}`} style={{ ...captionStyle, opacity }}>
       <div
         style={{
-          marginTop: 0,
-          color: palette.ink,
-          fontSize: 13,
-          fontWeight: 780,
-          lineHeight: 1.28,
-          ...phraseAwareTextStyle
+          color: palette.mintDeep,
+          fontSize: 24,
+          fontWeight: 760,
+          lineHeight: 1.25,
+          letterSpacing: "-.015em"
         }}
       >
-        <PhraseText text={label ?? ""} />
+        {label ?? ""}
       </div>
     </div>
   );
   return (
-    <div style={{ position: "relative", width: "100%", minHeight: 42 }}>
+    <div style={{ position: "relative", width: "100%", height: 34 }}>
       {state.previousStageLabel != null
         ? renderText(state.previousStageLabel, Math.max(0, state.stageIndex - 1), 1 - progress)
         : null}
@@ -192,304 +342,166 @@ function StageCaption({ state }) {
   );
 }
 
-function EvidenceSourceChip({ material }) {
-  if (!material) return null;
-  const match = String(material).match(/material-v(\d+)\.png$/u);
-  const label = match ? `原始材料 ${match[1]}` : "原始材料";
-  return (
-    <div
-      data-evidence-source={material}
-      style={{
-        flex: "0 0 auto",
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "0 2px",
-        color: palette.muted,
-        fontSize: 9.5,
-        fontWeight: 800,
-        letterSpacing: "0.02em",
-        whiteSpace: "nowrap"
-      }}
-    >
-      <span
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: 999,
-          backgroundColor: palette.orange
-        }}
-      />
-      {label}
-    </div>
-  );
-}
-
-function Node({ node, progress, activeProgress, sceneId }) {
-  const accent = accents[node.accent] ?? accents.mint;
-  const labelLines = Array.isArray(node.label) ? node.label : String(node.label ?? "").split("\n");
-  const detailLines = Array.isArray(node.detail) ? node.detail : String(node.detail ?? "").split("\n").filter(Boolean);
-  const compact = node.width <= 142;
-  const labelSize = compact ? 14 : 16;
-  const detailSize = compact ? 10.5 : 11.5;
-  const dashed = node.dashed === true;
-  return (
-    <g
-      opacity={progress}
-      transform={`translate(0 ${(1 - progress) * 12})`}
-      data-node-id={node.id}
-      data-active-progress={activeProgress.toFixed(4)}
-    >
-      <rect
-        x={node.x}
-        y={node.y}
-        width={node.width}
-        height={node.height}
-        rx={14}
-        fill={dashed ? "rgba(255,255,255,0.58)" : "rgba(255,255,255,0.96)"}
-        stroke={accent.stroke}
-        strokeOpacity={dashed ? 0.7 : 0.34 + 0.66 * activeProgress}
-        strokeWidth={dashed ? 1.5 : 1 + 1.6 * activeProgress}
-        strokeDasharray={dashed ? "7 6" : undefined}
-        filter={`url(#long-review-shadow-${sceneId})`}
-      />
-      <rect
-        x={node.x + 1}
-        y={node.y + 1}
-        width={5}
-        height={node.height - 2}
-        rx={3}
-        fill={accent.stroke}
-        opacity={0.72 + 0.28 * activeProgress}
-      />
-      <rect
-        x={node.x + 1}
-        y={node.y + 1}
-        width={node.width - 2}
-        height={node.height - 2}
-        rx={13}
-        fill={accent.soft}
-        opacity={0.7 * activeProgress}
-      />
-      <SvgTextLines
-        x={node.x + 16}
-        y={node.y + 28}
-        lines={labelLines}
-        fontSize={labelSize}
-        fontWeight={860}
-        fill={dashed ? palette.orange : palette.ink}
-        lineGap={18}
-      />
-      {detailLines.length > 0 ? (
-        <SvgTextLines
-          x={node.x + 16}
-          y={node.y + node.height - 19 - Math.max(0, detailLines.length - 1) * 14}
-          lines={detailLines}
-          fontSize={detailSize}
-          fontWeight={650}
-          fill={palette.muted}
-          lineGap={14}
-        />
-      ) : null}
-    </g>
-  );
-}
-
 function TechnicalDiagram({ spec, globalFrame }) {
   const state = longReviewDiagramStateAtFrame(spec.id, globalFrame);
+  const { width, height } = useVideoConfig();
+  const adaptiveLayout = adaptiveNodeLayout(spec, state, width, height);
   return (
     <div
-      style={{ position: "absolute", top: 150, left: 30, width: 480, height: 650 }}
+      style={{ position: "absolute", inset: 0 }}
       data-scene-id={spec.id}
       data-stage-id={state.stageId ?? "none"}
       data-final-hold={state.finalHold ? "true" : "false"}
+      data-scene-adaptive-layout="visible-node-count"
+      data-visible-card-count={adaptiveLayout.visibleCount}
+      data-surface-mode="flat-only"
     >
-      <svg width="100%" height="100%" viewBox="0 0 480 650" preserveAspectRatio="xMidYMin meet">
-        <defs>
-          <filter id={`long-review-shadow-${spec.id}`} x="-20%" y="-25%" width="140%" height="160%">
-            <feDropShadow dx="0" dy="7" stdDeviation="8" floodColor="#183129" floodOpacity="0.08" />
-          </filter>
-        </defs>
-        {spec.groups?.map((group) => {
-          const visible = Math.max(...group.nodeIds.map((id) => state.nodeProgress[id] ?? 0), 0);
-          return (
-            <rect
-              key={group.id}
-              x={group.x}
-              y={group.y}
-              width={group.width}
-              height={group.height}
-              rx={18}
-              fill="rgba(255,255,255,0.22)"
-              stroke="rgba(105,114,110,0.27)"
-              strokeWidth={1}
-              strokeDasharray="5 6"
-              opacity={visible}
-            />
-          );
-        })}
-        {spec.edges.map((edge) => (
-          <Edge
-            key={edge.id}
-            edge={edge}
-            lineProgress={state.edgeProgress[edge.id] ?? 0}
-            arrowProgress={state.edgeArrowProgress[edge.id] ?? 0}
-            activeProgress={state.edgeHighlightProgress[edge.id] ?? 0}
-            sceneId={spec.id}
-          />
-        ))}
-        {spec.nodes.map((node) => (
-          <Node
+      <AdaptiveConnectors
+        spec={spec}
+        state={state}
+        layout={adaptiveLayout}
+        width={width}
+        height={height}
+      />
+      {adaptiveLayout.nodeIds.map((nodeId) => {
+        const node = spec.nodes.find((candidate) => candidate.id === nodeId);
+        const geometry = adaptiveLayout.geometryById[nodeId];
+        if (!node || !geometry) return null;
+        return (
+          <VisualSystemV1FlatNode
             key={node.id}
-            node={node}
-            progress={state.nodeProgress[node.id] ?? 0}
-            activeProgress={state.nodeHighlightProgress[node.id] ?? 0}
-            sceneId={spec.id}
+            nodeId={node.id}
+            marker={nodeMarker(node, spec)}
+            label={normalizeNodeCopy(node.label)}
+            detail={normalizeNodeCopy(node.detail)}
+            startFrame={firstRevealFrame(spec, node.id)}
+            accent={isHumanNode(node) ? "purple" : "mint"}
+            focusProgress={state.nodeHighlightProgress[node.id] ?? 0}
+            layoutMode="fill-safe-viewport"
+            style={{ ...geometry, zIndex: 2 }}
           />
-        ))}
-      </svg>
+        );
+      })}
       <div
         style={{
           position: "absolute",
-          left: 14,
-          right: 14,
-          bottom: 12,
-          minHeight: 42,
-          display: "flex",
-          alignItems: "center",
-          padding: "0 13px",
-          border: `1px solid ${palette.line}`,
-          borderRadius: 12,
-          backgroundColor: "rgba(255,255,255,0.9)",
-          color: palette.ink,
-          fontSize: 13,
-          fontWeight: 780,
-          lineHeight: 1.28,
-          gap: 10,
-          ...phraseAwareTextStyle
+          left: 120,
+          right: 280,
+          top: 298,
+          height: 34,
+          zIndex: 3
         }}
       >
-        <div style={{ minWidth: 0, flex: "1 1 auto" }}>
-          <StageCaption state={state} />
-        </div>
-        {spec.kind === "native-evidence" ? <EvidenceSourceChip material={spec.material} /> : null}
+        <StageCaption state={state} />
       </div>
     </div>
   );
 }
 
+function titleFontSize(title) {
+  const length = [...String(title ?? "")].length;
+  if (length >= 22) return 66;
+  if (length >= 17) return 74;
+  return typography.headlineWidePx;
+}
+
 function SceneLayer({ episode, layer, globalFrame }) {
   const spec = AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.find((item) => item.id === layer.sceneId);
-  const scene = episode.scenes.find((item) => item.id === layer.sceneId) ?? spec;
   if (!spec) return null;
+  const scene = episode?.scenes?.find((item) => item.id === layer.sceneId) ?? spec;
+  const title = scene.title ?? spec.title;
   return (
-    <div style={{ position: "absolute", inset: 0, opacity: layer.opacity }} data-layer-scene-id={layer.sceneId}>
-      <SceneHeader scene={scene} spec={spec} />
+    <div
+      style={{ position: "absolute", inset: 0, opacity: layer.opacity }}
+      data-layer-scene-id={layer.sceneId}
+      data-scene-kind={spec.kind}
+    >
+      <VisualSystemV1PopText
+        startFrame={spec.startFrame}
+        style={{
+          position: "absolute",
+          left: 120,
+          right: 280,
+          top: 110,
+          zIndex: 4,
+          color: palette.ink,
+          fontSize: titleFontSize(title),
+          fontWeight: 900,
+          lineHeight: 1.08,
+          letterSpacing: "-.045em",
+          whiteSpace: "nowrap"
+        }}
+      >
+        {title}
+      </VisualSystemV1PopText>
+      <VisualSystemV1PopText
+        startFrame={spec.startFrame + 4}
+        style={{
+          position: "absolute",
+          left: 122,
+          right: 280,
+          top: 238,
+          zIndex: 4,
+          color: palette.muted,
+          fontSize: typography.supportingWidePx,
+          fontWeight: 650,
+          lineHeight: 1.34,
+          letterSpacing: "-.02em",
+          whiteSpace: "nowrap"
+        }}
+      >
+        {spec.deck ?? scene.statement ?? ""}
+      </VisualSystemV1PopText>
       <TechnicalDiagram spec={spec} globalFrame={globalFrame} />
     </div>
   );
 }
 
-function ChapterProgress({ frame }) {
-  const progress = longReviewProgressAtFrame(frame);
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: 0,
-        right: 0,
-        bottom: 0,
-        height: 36,
-        overflow: "hidden",
-        borderTop: `1px solid ${palette.line}`,
-        backgroundColor: "rgba(239,242,239,0.76)"
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: 540,
-          backgroundColor: "rgba(128,139,133,0.22)",
-          transform: `scaleX(${progress})`,
-          transformOrigin: "left center",
-          willChange: "transform",
-          backfaceVisibility: "hidden"
-        }}
-      />
-      <div style={{ position: "absolute", inset: 0, display: "grid", gridTemplateColumns: chapterGrid }}>
-        {AGENT_SKILL_LONG_REVIEW_CHAPTERS.map((chapter, index) => (
-          <div
-            key={chapter.id}
-            style={{
-              display: "grid",
-              placeItems: "center",
-              borderLeft: index === 0 ? "none" : "1px solid rgba(113,124,118,0.26)",
-              color: palette.ink,
-              fontSize: 11,
-              fontWeight: 820,
-              whiteSpace: "nowrap",
-              overflow: "hidden"
-            }}
-          >
-            {chapter.label}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+function subtitleCaptions(episode) {
+  return (episode?.subtitles ?? []).map((subtitle) => ({
+    text: subtitle.text,
+    startMs: subtitle.start * 1000,
+    endMs: subtitle.end * 1000,
+    timestampMs: null,
+    confidence: null
+  }));
 }
 
-export function AgentSkillLongReview({
-  episode,
-  backgroundVariant = AGENT_SKILL_LONG_BACKGROUND_VARIANTS.paper,
-  backgroundMaterial = null,
-  backgroundFrameOffset = 0
-}) {
+export function AgentSkillLongReview({ episode }) {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const second = frame / fps;
   const layers = longReviewSceneLayersAtFrame(frame);
-  const subtitle = activeTimedItem(episode.subtitles ?? [], second);
-  const subtitleStartFrame = subtitle ? Math.ceil(subtitle.start * fps) : frame;
-  const subtitleOpacity = smoothStep((frame - subtitleStartFrame + 1) / 5);
+  const captions = subtitleCaptions(episode);
   return (
     <AbsoluteFill
       lang="zh-CN"
       style={{
+        backgroundColor: palette.paper,
         color: palette.ink,
-        fontFamily: '"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif',
+        fontFamily: typography.fontFamily,
         overflow: "hidden"
       }}
     >
-      <AgentSkillLongBackdrop
-        variant={backgroundVariant}
-        material={backgroundMaterial}
-        frame={frame - backgroundFrameOffset}
-        fps={fps}
-      />
-      {episode.voice?.publicPath ? <Audio src={staticFile(episode.voice.publicPath)} /> : null}
-      {layers.map((layer) => (
-        <SceneLayer
-          key={`${layer.sceneId}-${layer.role ?? "current"}`}
-          episode={episode}
-          layer={layer}
-          globalFrame={frame}
-        />
-      ))}
-      <div style={{ opacity: subtitleOpacity }}>
-        <Subtitle
-          text={subtitle?.text ?? ""}
-          variant="outline"
-          bottom={46}
-          horizontalInset={5}
-          fontSize={18}
-          lineHeight={1.18}
-        />
+      <WideMovingBackdrop />
+      {episode?.voice?.publicPath ? <Audio src={staticFile(episode.voice.publicPath)} /> : null}
+      <div
+        data-visual-system="visual-system-v1"
+        data-visual-system-content="open-canvas"
+        data-output-format="wide-only"
+        data-same-level-surfaces="flat"
+        style={{ position: "absolute", inset: 0 }}
+      >
+        {layers.map((layer) => (
+          <SceneLayer
+            key={`${layer.sceneId}-${layer.role ?? "current"}`}
+            episode={episode}
+            layer={layer}
+            globalFrame={frame}
+          />
+        ))}
       </div>
-      <ChapterProgress frame={frame} />
+      <VisualSystemV1AiWatermark size={40} top={18} right={18} />
+      <VisualSystemV1PlainSubtitle captions={captions} />
+      <VisualSystemV1ChapterProgress chapters={AGENT_SKILL_LONG_REVIEW_CHAPTERS} />
     </AbsoluteFill>
   );
 }

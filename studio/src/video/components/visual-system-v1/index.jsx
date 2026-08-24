@@ -4,7 +4,15 @@ export {
   visualSystemV1AiWatermarkGeometry,
   visualSystemV1AiWatermarkScale
 } from "./ai-watermark.mjs";
-export { visualSystemV1Layout, visualSystemV1Orientation } from "./layout.mjs";
+export {
+  visualSystemV1AdaptiveCardTypography,
+  visualSystemV1AdaptiveCardLayout,
+  visualSystemV1HorizontalCardConnectors,
+  visualSystemV1InterpolateCardDeck,
+  visualSystemV1Layout,
+  visualSystemV1Orientation
+} from "./layout.mjs";
+export { visualSystemV1ChapterDisplayLabel } from "./chapter-progress.mjs";
 export {
   visualSystemV1Clamp01,
   visualSystemV1ChapterProgressAtFrame,
@@ -13,6 +21,7 @@ export {
   visualSystemV1HoverProgressAtFrame,
   visualSystemV1ProgressAtFrame,
   visualSystemV1SceneOpacityAtFrame,
+  visualSystemV1SequentialSceneOpacityAtFrame,
   visualSystemV1SmoothStep,
   visualSystemV1SpringMotionAtFrame,
   visualSystemV1TextMotionAtFrame,
