@@ -4,7 +4,8 @@
 
 项目目标不是自动搬运资讯，而是把新出现或正在快速发展的 AI 技术概念，转化为准确、可验证、具有产品决策价值的 8～12 分钟视频。
 
-当前阶段：`Phase 1 — 本地 Agent 制作系统 v0.1`
+当前准确状态以 [`docs/STATUS.md`](./docs/STATUS.md) 为唯一来源。当前是受控本地
+Agent 原型与整改阶段，不代表 `assisted`、`active` 或正式发布完成。
 
 可运行系统位于 [`studio/`](./studio/)。Windows 双击 [`studio/启动AI视频系统.cmd`](./studio/启动AI视频系统.cmd)，macOS 双击 [`studio/启动AI视频系统.command`](./studio/启动AI视频系统.command)，即可打开本地控制台。当前已经能从结构化分镜和真实产品截图生成竖屏 MP4，并执行自动技术 QA。
 
@@ -17,6 +18,8 @@
 - `docs/05-visual-system.md`：16:9 桌面窗口母版、9:16 重构、安全区、字幕、概念图、转场与可复用组件规范
 - `docs/06-agent-architecture-v2.md`：混合式 Main Agent、模型路由、审核协调 Agent、迁移阶段和文件级改造清单
 - `docs/07-motion-library.md`：筛选后的横版视频动效组件库、逐项 GIF 和 Remotion 调用方式
+- `docs/08-development-governance.md`：仓库采用的 Agent 开发、验证、评测与交付规范
+- `docs/STATUS.md`：项目当前状态、验证结果、阻断项和下一准入门槛的唯一真源
 - `research/2026-07-30-golden-topic-candidates.md`：已撤回的技术新颖性优先候选，仅保留审计记录
 - `research/2026-07-30-creator-heat-audit.md`：热门创作者近期内容与事件信号审计
 - `research/2026-07-31-hot-concept-candidates.md`：从热点信号中抽取的纯概念候选，当前正式选题依据
