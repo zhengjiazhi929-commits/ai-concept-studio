@@ -10,7 +10,7 @@ import {
   latestReviewFeedback,
   resetApprovalForVersion
 } from "../src/shared/workflow.mjs";
-import { readEpisode } from "../src/shared/store.mjs";
+import { readFixtureEpisode } from "./episode-fixture.mjs";
 
 test("生产流程只有五个人工审批闸门", () => {
   assert.deepEqual(
@@ -27,7 +27,7 @@ test("生产流程只有五个人工审批闸门", () => {
 });
 
 test("驳回脚本保留旧版本和意见，并只从脚本阶段重新开始", async () => {
-  const source = await readEpisode("golden-001");
+  const source = await readFixtureEpisode();
   source.production.scriptDraft = {
     ...(source.production.scriptDraft ?? {}),
     version: 3,
@@ -136,7 +136,7 @@ test("素材 Bundle 修订号独立递增，不会因素材与旁白子版本相
 });
 
 test("下游素材绑定不会篡改已批准分镜的内容哈希", async () => {
-  const episode = structuredClone(await readEpisode("golden-001"));
+  const episode = structuredClone(await readFixtureEpisode());
   const before = currentGateArtifactHash(episode, "storyboard");
   episode.scenes[0].asset = "episodes/golden-001/materials/new.png";
   episode.scenes[0].audio = "episodes/golden-001/new.wav";
@@ -144,7 +144,7 @@ test("下游素材绑定不会篡改已批准分镜的内容哈希", async () =>
 });
 
 test("最终成片批准后整期进入 approved 状态", async () => {
-  const source = await readEpisode("golden-001");
+  const source = await readFixtureEpisode();
   source.qa.status = "passed";
   const qaStep = source.pipeline.find((step) => step.id === "qa");
   qaStep.status = "waiting_approval";

@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readEpisode } from "../src/shared/store.mjs";
+import {
+  fixtureAssetFileDependencies,
+  readFixtureEpisode
+} from "./episode-fixture.mjs";
 import {
   approveGate,
   exactApprovalBinding,
@@ -44,7 +47,7 @@ function memoryStore(initialEpisode) {
 }
 
 test("通过报告绑定当前版本并追加到阶段历史", async () => {
-  const source = await readEpisode("golden-001");
+  const source = await readFixtureEpisode();
   const result = await reviewAgentOutput({
     sourceEpisode: source,
     candidateEpisode: source,
@@ -59,7 +62,7 @@ test("通过报告绑定当前版本并追加到阶段历史", async () => {
 });
 
 test("编排接缝会把未通过审核的等待审批输出改为阻塞", async () => {
-  const source = await readEpisode("golden-001");
+  const source = await readFixtureEpisode();
   source.thesis = "";
   const result = await reviewCandidateOutput({
     sourceEpisode: source,
@@ -75,7 +78,7 @@ test("编排接缝会把未通过审核的等待审批输出改为阻塞", async
 });
 
 test("连续两轮出现同类阻断问题时升级人工且不覆盖旧报告", async () => {
-  const source = await readEpisode("golden-001");
+  const source = await readFixtureEpisode();
   const candidate = structuredClone(source);
   candidate.thesis = "";
   const first = await reviewAgentOutput({
@@ -100,7 +103,7 @@ test("连续两轮出现同类阻断问题时升级人工且不覆盖旧报告",
 });
 
 test("假语义 Reviewer 的低置信度会安全升级，且不会调用真实模型", async () => {
-  const source = await readEpisode("golden-001");
+  const source = await readFixtureEpisode();
   const config = await readReviewConfig();
   config.stages.script.semanticReview = true;
   const result = await reviewAgentOutput({
@@ -136,7 +139,7 @@ test("假语义 Reviewer 的低置信度会安全升级，且不会调用真实�
 });
 
 test("语义 Reviewer 只收到阶段最小上下文，并明确候选产物是不可信数据", async () => {
-  const source = await readEpisode("golden-001");
+  const source = await readFixtureEpisode();
   source.system = { localPath: "/private/path" };
   source.history.push({ at: "2026-08-06", type: "secret-history", message: "hidden" });
   const config = await readReviewConfig();
@@ -171,7 +174,7 @@ test("语义 Reviewer 只收到阶段最小上下文，并明确候选产物是�
 });
 
 test("语义 Reviewer 不能一边通过一边返回阻断问题", async () => {
-  const source = await readEpisode("golden-001");
+  const source = await readFixtureEpisode();
   const config = await readReviewConfig();
   config.stages.script.semanticReview = true;
   await assert.rejects(
@@ -198,7 +201,7 @@ test("语义 Reviewer 不能一边通过一边返回阻断问题", async () => {
 });
 
 test("语义审核问题完整保留位置和建议修法并交回产出 Agent", async () => {
-  const source = await readEpisode("golden-001");
+  const source = await readFixtureEpisode();
   const config = await readReviewConfig();
   config.stages.script.semanticReview = true;
   const result = await reviewAgentOutput({
@@ -229,7 +232,7 @@ test("语义审核问题完整保留位置和建议修法并交回产出 Agent",
 });
 
 test("Main Agent 指定的审核规则必须与阶段实际 Rubric 一致", async () => {
-  const source = await readEpisode("golden-001");
+  const source = await readFixtureEpisode();
   await assert.rejects(
     reviewAgentOutput({
       sourceEpisode: source,
@@ -242,7 +245,7 @@ test("Main Agent 指定的审核规则必须与阶段实际 Rubric 一致", asyn
 });
 
 test("等待人工审批的旧候选可按新规则复审，失败后会阻塞且不能批准", async () => {
-  const source = await readEpisode("golden-001");
+  const source = await readFixtureEpisode();
   const scriptStep = source.pipeline.find((step) => step.gate === "script");
   scriptStep.status = "waiting_approval";
   scriptStep.message = "旧规则下等待审批的脚本";
@@ -299,7 +302,7 @@ test("等待人工审批的旧候选可按新规则复审，失败后会阻塞�
 });
 
 test("旧审核配置留下的通过报告不能直接用于人工批准", async () => {
-  const source = await readEpisode("golden-001");
+  const source = await readFixtureEpisode();
   const scriptStep = source.pipeline.find((step) => step.gate === "script");
   scriptStep.status = "waiting_approval";
   source.approvals.script = {
@@ -331,10 +334,12 @@ test("旧审核配置留下的通过报告不能直接用于人工批准", async
 });
 
 test("素材总审能把资产计划问题退回真正的 Asset Agent", async () => {
-  const source = await readEpisode("golden-001");
+  const source = await readFixtureEpisode();
   source.pipeline.find((step) => step.agent === "voice-agent").status = "ready";
   source.approvals.assets.status = "pending";
   const config = await readReviewConfig();
+  const fixtureFiles = fixtureAssetFileDependencies(source);
+  let reviewAccessCalls = 0;
   config.stages.assets.semanticReview = true;
   const result = await reviewAgentOutput({
     sourceEpisode: source,
@@ -350,6 +355,10 @@ test("素材总审能把资产计划问题退回真正的 Asset Agent", async ()
     }
   }, {
     config,
+    access: async (path) => {
+      reviewAccessCalls += 1;
+      return fixtureFiles.access(path);
+    },
     semanticReviewer: async ({ context }) => ({
       stage: "assets",
       decision: "revise",
@@ -368,6 +377,7 @@ test("素材总审能把资产计划问题退回真正的 Asset Agent", async ()
       passedChecks: []
     })
   });
+  assert.equal(reviewAccessCalls, source.assets.length);
   assert.equal(result.report.decision, "revise");
   assert.deepEqual(result.revisionTargets, ["asset-agent"]);
   assert.equal(result.shouldAutoRevise, false);
@@ -387,7 +397,7 @@ test("素材总审能把资产计划问题退回真正的 Asset Agent", async ()
 });
 
 test("最终 QA 发现字幕硬切时退回 Storyboard Agent 并失效下游审批", async () => {
-  const source = structuredClone(await readEpisode("golden-001"));
+  const source = structuredClone(await readFixtureEpisode());
   source.render = {
     ...source.render,
     version: 1,
@@ -447,7 +457,7 @@ test("最终 QA 发现字幕硬切时退回 Storyboard Agent 并失效下游审�
 });
 
 test("编排器会持久化审核状态并在一次自动修改后进入人工审批", async () => {
-  let stored = await readEpisode("golden-001");
+  let stored = await readFixtureEpisode();
   const originalThesis = stored.thesis;
   stored.sourceDocs = stored.sourceDocs.filter((source) => !source.path.endsWith("07-script.md"));
   stored.approvals.research.artifactHash = currentGateArtifactHash(stored, "research");
@@ -533,7 +543,7 @@ test("编排器会持久化审核状态并在一次自动修改后进入人工�
 });
 
 test("Main Agent 的能力档位和执行上限会传入 Worker 上下文", async () => {
-  let stored = await readEpisode("golden-001");
+  let stored = await readFixtureEpisode();
   stored.pipeline.find((item) => item.agent === "script-agent").status = "ready";
   stored.control.allowedTools = ["artifact.read"];
   let received = null;
@@ -571,7 +581,7 @@ test("Main Agent 的能力档位和执行上限会传入 Worker 上下文", asyn
 });
 
 test("编排器拒绝 Worker 越权补丁并保留原审批状态", async () => {
-  let stored = await readEpisode("golden-001");
+  let stored = await readFixtureEpisode();
   const step = stored.pipeline.find((item) => item.agent === "script-agent");
   step.status = "ready";
   stored.approvals.script.status = "pending";
@@ -606,7 +616,7 @@ test("编排器拒绝 Worker 越权补丁并保留原审批状态", async () => 
 });
 
 test("编排器持久化失败时会清除错误中的疑似凭据文本", async () => {
-  let stored = await readEpisode("golden-001");
+  let stored = await readFixtureEpisode();
   stored.pipeline.find((item) => item.agent === "script-agent").status = "ready";
   const marker = ["Bearer", "unit-marker-12345678"].join(" ");
   await assert.rejects(

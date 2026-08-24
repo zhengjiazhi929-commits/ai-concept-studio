@@ -743,8 +743,12 @@ test("普通 Gate 批准和驳回都只接受当前版本、哈希与机器报�
 
 test("HTTP 审批单 GET 可读，所有正式缺绑定批准和驳回均返回 409", async () => {
   const episode = fixtureEpisode();
+  const operatorToken = "human-approval-http-test-operator-token-20260824";
   const { server } = await createStudioServer({
     recoverOnStart: false,
+    operatorActor: "human:approval-http-test",
+    operatorToken,
+    capabilitySecret: "human-approval-http-test-capability-secret-20260824",
     readEpisode: async () => structuredClone(episode),
     writeEpisode: async () => {
       throw new Error("409 路径不应写状态");
@@ -780,7 +784,10 @@ test("HTTP 审批单 GET 可读，所有正式缺绑定批准和驳回均返回 
     for (const [path, body, code] of cases) {
       const response = await fetch(`${base}${path}`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "x-operator-token": operatorToken
+        },
         body: JSON.stringify(body)
       });
       assert.equal(response.status, 409, path);

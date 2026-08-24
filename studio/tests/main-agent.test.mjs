@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readEpisode } from "../src/shared/store.mjs";
+import { readFixtureEpisode } from "./episode-fixture.mjs";
 import { buildMainAgentContext } from "../src/server/control/context-builder.mjs";
 import {
   evaluateShadowPlan,
@@ -10,6 +10,10 @@ import {
   generateShadowPlan,
   runShadowPlanning
 } from "../src/server/control/main-agent.mjs";
+import {
+  MAIN_AGENT_PROMPT_VERSION,
+  buildMainAgentInstructions
+} from "../src/server/control/main-agent-prompt.mjs";
 import { runAgent } from "../src/server/orchestrator.mjs";
 
 function validPlan(overrides = {}) {
@@ -29,8 +33,25 @@ function validPlan(overrides = {}) {
   };
 }
 
+function completedPlanningRoute(sequence) {
+  return {
+    id: `route-shadow-bootstrap-${sequence}`,
+    profile: "creative-structured",
+    reason: "测试本次 shadow planning route 的审计语义",
+    candidates: [],
+    selected: { providerId: "test-provider", model: "test-model" },
+    estimatedCostUsd: 0,
+    outcome: {
+      status: "succeeded",
+      actualCostUsd: 0,
+      accountedCostUsd: 0,
+      budgetAccounted: true
+    }
+  };
+}
+
 async function shadowEpisode() {
-  const episode = await readEpisode("golden-001");
+  const episode = await readFixtureEpisode();
   for (const step of episode.pipeline) step.status = "pending";
   episode.pipeline.find((step) => step.agent === "script-agent").status = "ready";
   episode.approvals.research.status = "approved";
@@ -85,15 +106,26 @@ test("Main Agent 将缺少授权旁白识别为等待人工输入，而不是重
   );
 });
 
-test("影子模式保存合法建议但不改变流水线状态", async () => {
+test("Main Agent 未启用时 shadow bootstrap 只保存建议且可持续积累影子证据", async () => {
   let stored = await shadowEpisode();
   const pipelineBefore = JSON.stringify(stored.pipeline);
   const events = [];
+  let modelPlanningCalls = 0;
+  let modelInstructions = null;
+  const client = {
+    generateStructured: async (_taskId, request) => {
+      modelPlanningCalls += 1;
+      modelInstructions = request.instructions;
+      assert.equal(request.routingContext.persistBudget, true);
+      return {
+        value: validPlan(),
+        routingDecision: completedPlanningRoute(modelPlanningCalls),
+        attempts: [{ status: "succeeded" }]
+      };
+    }
+  };
   const result = await runShadowPlanning(stored.id, {
-    planner: async (context) => {
-      assert.equal(context.fixedFallbackAction.workerId, "script-agent");
-      return validPlan();
-    },
+    client,
     readEpisode: async () => structuredClone(stored),
     writeEpisode: async (episode) => {
       stored = JSON.parse(JSON.stringify(episode));
@@ -103,10 +135,211 @@ test("影子模式保存合法建议但不改变流水线状态", async () => {
   });
   assert.equal(result.record.status, "proposed");
   assert.equal(result.record.evaluation.matchesFixedFallback, true);
+  assert.equal(result.record.bootstrap, true);
+  assert.equal(result.record.planningOnly, true);
+  assert.equal(result.record.routingUsed, true);
   assert.equal(stored.control.planVersion, 1);
   assert.equal(stored.planHistory.length, 1);
   assert.equal(JSON.stringify(stored.pipeline), pipelineBefore);
-  assert.equal(events.at(-1).message, "shadow 计划已记录，尚未执行");
+  assert.equal(stored.control.mainAgentEnabled, false);
+  assert.equal(stored.control.modelRouterEnabled, false);
+  assert.equal(stored.control.fixedFallbackEnabled, true);
+  assert.equal(stored.control.pendingDispatch, null);
+  assert.equal(MAIN_AGENT_PROMPT_VERSION, "main-agent-planner-prompt-v1");
+  assert.equal(modelInstructions, buildMainAgentInstructions("shadow"));
+  assert.equal(
+    events.at(-1).message,
+    "shadow bootstrap 计划已记录；Model Router 仅用于本次受预算约束的规划选路，Main Agent 控制开关保持关闭，未派发 Worker"
+  );
+  assert.equal(events.at(-1).routingUsed, true);
+
+  await runShadowPlanning(stored.id, {
+    client,
+    readEpisode: async () => structuredClone(stored),
+    writeEpisode: async (episode) => {
+      stored = JSON.parse(JSON.stringify(episode));
+    },
+    appendEvent: async (event) => events.push(structuredClone(event)),
+    now: new Date("2026-08-06T02:00:01.000Z")
+  });
+  assert.equal(modelPlanningCalls, 2);
+  assert.equal(stored.planHistory.length, 2);
+  assert.equal(stored.control.mainAgentEnabled, false);
+  assert.equal(stored.control.modelRouterEnabled, false);
+  assert.equal(stored.control.pendingDispatch, null);
+  assert.equal(JSON.stringify(stored.pipeline), pipelineBefore);
+  assert.equal(stored.routingHistory.length, 2);
+});
+
+test("注入 planner 的 shadow bootstrap 明确记录未使用 Model Router", async () => {
+  let stored = await shadowEpisode();
+  const events = [];
+  const result = await runShadowPlanning(stored.id, {
+    planner: async () => validPlan(),
+    readEpisode: async () => structuredClone(stored),
+    writeEpisode: async (episode) => {
+      stored = structuredClone(episode);
+    },
+    appendEvent: async (event) => events.push(structuredClone(event)),
+    now: new Date("2026-08-06T02:00:02.000Z")
+  });
+  assert.equal(result.record.bootstrap, true);
+  assert.equal(result.record.planningOnly, true);
+  assert.equal(result.record.routingUsed, false);
+  assert.equal(events.at(-1).routingUsed, false);
+  assert.equal(
+    events.at(-1).message,
+    "shadow bootstrap 计划已记录；本次使用注入 planner 且未使用 Model Router，Main Agent 控制开关保持关闭，未派发 Worker"
+  );
+  assert.equal(stored.routingHistory.length, 0);
+  assert.equal(stored.control.mainAgentEnabled, false);
+  assert.equal(stored.control.modelRouterEnabled, false);
+  assert.equal(stored.control.pendingDispatch, null);
+});
+
+test("shadow bootstrap 在非 shadow、关闭固定回退或存在待派发动作时失败关闭", async () => {
+  const assisted = await shadowEpisode();
+  assisted.control.mode = "assisted";
+  await assert.rejects(
+    generateShadowPlan(assisted, { planner: async () => validPlan() }),
+    (error) => error.code === "main_agent_bootstrap_not_allowed"
+  );
+
+  const noFallback = await shadowEpisode();
+  noFallback.control.fixedFallbackEnabled = false;
+  await assert.rejects(
+    generateShadowPlan(noFallback, { planner: async () => validPlan() }),
+    (error) => error.code === "main_agent_bootstrap_not_allowed"
+  );
+
+  const pending = await shadowEpisode();
+  pending.control.pendingDispatch = { id: "pending-bootstrap-test" };
+  await assert.rejects(
+    generateShadowPlan(pending, { planner: async () => validPlan() }),
+    (error) => error.code === "main_agent_bootstrap_not_allowed"
+  );
+});
+
+test("未对账 Provider 调用会在写入新计划或发起模型请求前冻结 shadow 重试", async () => {
+  let stored = await shadowEpisode();
+  stored.control.budget.reservations = [{
+    id: "route-shadow-ambiguous:attempt:1",
+    decisionId: "route-shadow-ambiguous",
+    calls: 1,
+    costUsd: 0.2,
+    costKnown: true,
+    reservedAt: "2026-08-06T02:00:00.000Z"
+  }];
+  stored.control.budget.reservedCalls = 1;
+  stored.control.budget.reservedCostUsd = 0.2;
+  stored.control.budget.overrun = true;
+  stored.history.push({
+    at: "2026-08-06T02:00:01.000Z",
+    type: "budget-reservation-ambiguous",
+    status: "ambiguous",
+    reservationIds: ["route-shadow-ambiguous:attempt:1"]
+  });
+  let modelPlanningCalls = 0;
+  await assert.rejects(
+    runShadowPlanning(stored.id, {
+      client: {
+        generateStructured: async () => {
+          modelPlanningCalls += 1;
+          return { value: validPlan(), routingDecision: null, attempts: [] };
+        }
+      },
+      readEpisode: async () => structuredClone(stored),
+      writeEpisode: async (episode) => {
+        stored = structuredClone(episode);
+      },
+      appendEvent: async () => {}
+    }),
+    (error) => error.code === "budget_reconciliation_required" && error.requiresHuman
+  );
+  assert.equal(modelPlanningCalls, 0);
+  assert.equal(stored.control.planVersion, 0);
+  assert.equal(stored.control.currentPlan, null);
+  assert.equal(stored.control.activeOperation, null);
+  assert.equal(stored.control.budget.reservedCalls, 1);
+});
+
+test("Provider 成功结算后计划落盘失败会冻结 Main Agent，禁止再次付费规划", async () => {
+  let stored = await shadowEpisode();
+  let failCompletedPlanWrite = true;
+  let modelPlanningCalls = 0;
+  const now = new Date("2026-08-06T02:00:10.000Z");
+  const dependencies = {
+    readEpisode: async () => structuredClone(stored),
+    writeEpisode: async (episode) => {
+      if (
+        failCompletedPlanWrite &&
+        episode.control?.currentPlan?.status === "proposed"
+      ) {
+        failCompletedPlanWrite = false;
+        const error = new Error("模拟计划最终写入失败");
+        error.code = "fixture_plan_write_failed";
+        throw error;
+      }
+      stored = structuredClone(episode);
+    },
+    appendEvent: async () => {},
+    now
+  };
+  await assert.rejects(
+    runShadowPlanning(stored.id, {
+      ...dependencies,
+      client: {
+        generateStructured: async () => {
+          modelPlanningCalls += 1;
+          stored.history.push({
+            at: now.toISOString(),
+            type: "budget-reservation-settled",
+            status: "settled",
+            settlementStatus: "completed_success",
+            reservationId: "route-shadow-commit-window:attempt:1"
+          });
+          return {
+            value: validPlan(),
+            routingDecision: completedPlanningRoute(modelPlanningCalls),
+            attempts: [{ status: "succeeded" }]
+          };
+        }
+      }
+    }),
+    (error) => error.code === "provider_result_commit_unknown" &&
+      error.requiresHuman === true
+  );
+  assert.equal(modelPlanningCalls, 1);
+  assert.equal(stored.control.currentPlan.status, "failed");
+  assert.equal(
+    stored.control.currentPlan.errorCode,
+    "provider_result_commit_unknown"
+  );
+  assert.deepEqual(
+    stored.control.currentPlan.uncommittedProviderResultIds,
+    ["route-shadow-commit-window:attempt:1"]
+  );
+  assert.equal(stored.control.budget.overrun, true);
+  assert.equal(stored.control.activeOperation, null);
+  assert.equal(
+    stored.history.some((entry) => (
+      entry.type === "provider-result-commit-unknown" &&
+      entry.status === "blocked"
+    )),
+    true
+  );
+
+  await assert.rejects(
+    runShadowPlanning(stored.id, {
+      ...dependencies,
+      planner: async () => {
+        modelPlanningCalls += 1;
+        return validPlan();
+      }
+    }),
+    (error) => error.code === "cost_budget_overrun" && error.requiresHuman === true
+  );
+  assert.equal(modelPlanningCalls, 1);
 });
 
 test("规划期间的新停止请求不会被旧 Episode 覆盖，计划会按最新状态重新校验", async () => {

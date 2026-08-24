@@ -17,14 +17,9 @@ import {
   longReviewSceneLayersAtFrame,
   validateAgentSkillLongReviewEpisode
 } from "../src/video/agent-skill-long-review-plan.mjs";
+import { agentSkillLongReviewEpisodeFixture } from
+  "./agent-skill-long-review.fixture.mjs";
 
-const EPISODE_PATH = resolve(
-  studioRoot,
-  "data",
-  "episodes",
-  "agent-skill-20260806",
-  "episode.json"
-);
 const PLAN_PATH = resolve(studioRoot, "src", "video", "agent-skill-long-review-plan.mjs");
 const COMPONENT_PATH = resolve(studioRoot, "src", "video", "agent-skill-long-review.jsx");
 const VISUAL_COMPONENTS_PATH = resolve(
@@ -49,10 +44,6 @@ const RENDER_PATH = resolve(studioRoot, "scripts", "render-agent-skill-long-revi
 const PRODUCTION_ROOT_PATH = resolve(studioRoot, "src", "video", "root.jsx");
 const PRODUCTION_PREVIEW_PATH = resolve(studioRoot, "src", "video", "episode-preview.jsx");
 
-async function readFixtureEpisode() {
-  return JSON.parse(await readFile(EPISODE_PATH, "utf8"));
-}
-
 function assertMonotonic(values, label) {
   for (let index = 1; index < values.length; index += 1) {
     assert.ok(
@@ -71,7 +62,7 @@ test("十分钟审阅版固定为 600 秒、30fps、18000 帧，并保留正式 
     AGENT_SKILL_LONG_REVIEW_FRAME_COUNT
   );
 
-  const episode = await readFixtureEpisode();
+  const episode = agentSkillLongReviewEpisodeFixture();
   assert.equal(episode.id, "agent-skill-20260806");
   assert.equal(episode.scenes.length, 18);
   assert.equal(episode.subtitles.length, 107);

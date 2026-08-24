@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import {
   link,
   lstat,
@@ -12,11 +11,11 @@ import {
   symlink,
   writeFile
 } from "node:fs/promises";
-import { resolve } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { isAbsolute, relative, resolve } from "node:path";
 
 import { validateEpisode } from "../src/shared/schema.mjs";
 import { integrityHash } from "../src/shared/integrity.mjs";
-import { readEpisode } from "../src/shared/store.mjs";
 import { currentGateArtifactHash } from "../src/shared/workflow.mjs";
 import {
   LOCAL_TTS_MODEL,
@@ -26,10 +25,13 @@ import {
   LOCAL_OFFLINE_TTS_V002_REGISTRATION,
   LOCAL_OFFLINE_TTS_REBIND_INSPECTION,
   assertNoSymlinkRegularFile,
-  inspectLocalOfflineTtsCandidate,
-  inspectRegisteredLocalOfflineTtsRebindCandidate,
-  registerApprovedLocalOfflineTts,
-  verifyRegisteredLocalOfflineVoiceForAssets
+  inspectLocalOfflineTtsCandidate as inspectProductionLocalOfflineTtsCandidate,
+  inspectPcmWav,
+  inspectRegisteredLocalOfflineTtsRebindCandidate as
+    inspectProductionRegisteredLocalOfflineTtsRebindCandidate,
+  registerApprovedLocalOfflineTts as registerProductionApprovedLocalOfflineTts,
+  verifyRegisteredLocalOfflineVoiceForAssets as
+    verifyProductionRegisteredLocalOfflineVoiceForAssets
 } from "../src/server/production/local-offline-voice.mjs";
 import { validateAssetsForReview } from "../src/server/reviews/validators/assets.mjs";
 import {
@@ -41,496 +43,320 @@ import { approvalValidForGate } from "../src/server/control/policy-engine.mjs";
 import { adaptApprovedStoryboardToShortAssetPlan } from
   "../src/server/production/short-asset-plan-adapter.mjs";
 import { studioRoot, workspaceRoot } from "../src/shared/paths.mjs";
+import {
+  LOCAL_OFFLINE_VOICE_FIXTURE_ROOT,
+  createDeterministicPcmTestWav,
+  createLocalOfflineVoiceFixture
+} from "./local-offline-voice.fixture.mjs";
+import { createLocalOfflineVoiceFixtureHarness } from
+  "./local-offline-voice.fixture-harness.mjs";
 
-const episodeId = LOCAL_OFFLINE_TTS_V002_REGISTRATION.episodeId;
-const historicAssetPlanPath =
-  `studio/data/production/episodes/${episodeId}/asset-plan-v009.json`;
-const historicAssetPlanArtifact = JSON.parse(await readFile(
-  resolve(workspaceRoot, historicAssetPlanPath),
-  "utf8"
-));
-const historicVoiceCandidateManifest = JSON.parse(await readFile(
-  resolve(
-    workspaceRoot,
-    "outputs",
-    "studio",
-    episodeId,
-    LOCAL_OFFLINE_TTS_V002_REGISTRATION.manifestFileName
-  ),
-  "utf8"
-));
-const historicStoryboardBinding = historicVoiceCandidateManifest.source.storyboard;
-const historicStoryboardArtifact = JSON.parse(await readFile(
-  resolve(workspaceRoot, historicStoryboardBinding.artifactPath),
-  "utf8"
-));
-const historicRebindStoryboardBinding = {
-  version: 4,
-  artifactPath:
-    `studio/data/production/episodes/${episodeId}/storyboard-draft-v004.json`,
-  artifactHash: "c6bf111531e14a4a42fd26b55c3d1135c53ff64e19b5f2c2804e7d58c57f3a30",
-  reviewReportId: "review-storyboard-v4-5-2026-08-17T11-38-18-288Z"
-};
-const historicRebindStoryboardArtifact = JSON.parse(await readFile(
-  resolve(workspaceRoot, historicRebindStoryboardBinding.artifactPath),
-  "utf8"
-));
-const historicRebindAssetPlanPath =
-  `studio/data/production/episodes/${episodeId}/asset-plan-v013.json`;
-const historicRebindAssetPlanArtifact = JSON.parse(await readFile(
-  resolve(workspaceRoot, historicRebindAssetPlanPath),
-  "utf8"
-));
-const historicRebindAssetBinding = {
-  version: 13,
-  candidateHash: "2b511e3685940b12240942812697c373d8f78f88eaddb94819f306465ee76edb",
-  planHash: "a776121354841411ab0d6f05570d0e3be9980c29a1a4b667a6c7595a3dc320d8",
-  approvedAt: "2026-08-17T16:38:14.435Z",
-  authorizedToolIds: []
-};
-const historicAssetBundleRevisionBeforeVoice = 10;
-
-function restoreHistoricVoiceSourceStoryboard(episode) {
-  const binding = historicStoryboardBinding;
-  const currentDraft = episode.production?.storyboardDraft;
-  const versions = currentDraft?.versions ?? [];
-  const historicVersion = [currentDraft, ...versions].find((entry) =>
-    entry?.version === binding.version
-      && entry.artifactPath === binding.artifactPath
-  );
-  const reports = episode.reviews?.storyboard?.reports ?? [];
-  const report = reports.find((entry) =>
-    entry.id === binding.reviewReportId
-      && entry.decision === "pass"
-      && entry.artifactVersion === binding.version
-      && entry.artifactHash === binding.artifactHash
-  );
-  const approvalRecord = (episode.approvals?.storyboard?.history ?? []).find((entry) =>
-    entry.gate === "storyboard"
-      && entry.decision === "approved"
-      && entry.version === binding.version
-  );
-  if (!historicVersion || !report || !approvalRecord) {
-    throw new Error("测试夹具缺少候选绑定的历史 Storyboard v3 审核与批准证据");
-  }
-
-  episode.production.storyboardDraft = {
-    ...structuredClone(historicVersion),
-    needsRevision: false,
-    versions: structuredClone(
-      versions.filter((entry) => entry.version <= binding.version)
-    )
-  };
-  episode.scenes = structuredClone(historicStoryboardArtifact.timeline.scenes);
-  episode.subtitles = structuredClone(historicStoryboardArtifact.timeline.subtitles);
-  episode.render.durationSeconds = historicStoryboardArtifact.timeline.durationSeconds;
-  episode.reviews.storyboard = {
-    ...episode.reviews.storyboard,
-    status: "passed",
-    artifactVersion: binding.version,
-    artifactHash: binding.artifactHash,
-    latestReportId: binding.reviewReportId,
-    reports: structuredClone(
-      reports.filter((entry) => entry.artifactVersion <= binding.version)
-    )
-  };
-  episode.approvals.storyboard = {
-    ...episode.approvals.storyboard,
-    status: "approved",
-    at: approvalRecord.at,
-    note: approvalRecord.note,
-    feedback: "",
-    currentVersion: binding.version,
-    history: [structuredClone(approvalRecord)],
-    provenance: "reviewed-v2",
-    reviewReportId: binding.reviewReportId,
-    artifactHash: binding.artifactHash
-  };
-  if (episode.production.feedback?.storyboard) {
-    delete episode.production.feedback.storyboard;
-  }
-  const storyboardStep = episode.pipeline.find((step) => step.agent === "storyboard-agent");
-  Object.assign(storyboardStep, {
-    status: "complete",
-    progress: 1,
-    message: "历史 Storyboard v3 已完成机器审核与人工批准",
-    requiresApproval: null,
-    requiresHuman: false,
-    artifacts: [binding.artifactPath],
-    lastError: null
-  });
-  if (currentGateArtifactHash(episode, "storyboard") !== binding.artifactHash) {
-    throw new Error("测试夹具重建的历史 Storyboard v3 哈希不匹配");
-  }
-  return episode;
-}
-
-function restoreHistoricVoiceSourceAssetExecution(episode) {
-  const binding = historicVoiceCandidateManifest.source.assetExecution;
-  const history = (episode.reviewCheckpoints.assetExecution.history ?? [])
-    .filter((entry) => String(entry.at ?? "") <= binding.approvedAt);
-  const machine = history.find((entry) =>
-    entry.type === "machine-review"
-      && entry.version === binding.version
-      && entry.candidateHash === binding.candidateHash
-      && entry.status === "passed"
-  );
-  episode.production.assetPlanDirection = {
-    strategy: "local-only",
-    selectedBy: "human"
-  };
-  episode.production.assetPlan = {
-    version: binding.version,
-    artifactPath: historicAssetPlanPath,
-    content: historicAssetPlanArtifact.plan,
-    needsRevision: false
-  };
-  episode.reviewCheckpoints.assetExecution = {
-    schemaVersion: 1,
-    status: "approved",
-    currentCandidate: {
-      episodeId,
-      version: binding.version,
-      artifact: {
-        path: historicAssetPlanPath,
-        bytes: 1,
-        sha256: "9".repeat(64)
-      },
-      planHash: binding.planHash,
-      candidateHash: binding.candidateHash,
-      summary: {
-        itemCount: historicAssetPlanArtifact.plan.items.length,
-        requiredVisualItemCount: historicAssetPlanArtifact.plan.items.filter(
-          (item) => item.required && item.assetType !== "voice"
-        ).length,
-        productionMethods: ["local-code-animation", "deferred-voice-agent"],
-        externalApiCallCount: 0,
-        externalApiCalls: [],
-        maximumPaidCostUsd: 0,
-        currency: "USD",
-        billingCurrencies: [],
-        nativeCurrencyCaps: [],
-        budgetNormalization: null,
-        costScope: "external-api-only",
-        pricingConfirmed: true
-      }
-    },
-    machineReview: {
-      id: machine.reviewId,
-      status: "passed",
-      candidateHash: binding.candidateHash,
-      checks: []
-    },
-    humanApproval: {
-      decision: "approved",
-      at: binding.approvedAt,
-      note: "历史 v9 本地零调用测试夹具",
-      version: binding.version,
-      candidateHash: binding.candidateHash,
-      machineReviewId: machine.reviewId,
-      maximumPaidCostUsd: 0,
-      externalApiCallCount: 0,
-      authorizedToolIds: []
-    },
-    history
-  };
-  const assetStep = episode.pipeline.find((step) => step.agent === "asset-agent");
-  Object.assign(assetStep, {
-    status: "complete",
-    progress: 1,
-    message: "历史 v9 本地零调用素材已完成机器审核与人工批准",
-    requiresApproval: null,
-    requiresHuman: false,
-    artifacts: [historicAssetPlanPath],
-    lastError: null
-  });
-  return episode;
-}
-
-function registrationEpisodeFixture(source) {
-  const episode = structuredClone(source);
-  restoreHistoricVoiceSourceStoryboard(episode);
-  restoreHistoricVoiceSourceAssetExecution(episode);
-  episode.voice = {
-    status: "unconfigured",
-    mode: null,
-    audioPath: null,
-    note: "请上传本人录音或已获授权的旁白文件，再进行素材总审"
-  };
-  const voiceStep = episode.pipeline.find((step) => step.agent === "voice-agent");
-  Object.assign(voiceStep, {
-    status: "blocked",
-    progress: 0,
-    message: "请上传本人录音或已获授权的旁白文件，再进行素材总审",
-    requiresApproval: null,
-    requiresHuman: true,
-    artifacts: [],
-    findings: [],
-    finishedAt: null,
-    lastError: null
-  });
-  episode.production.assetBundleRevision = historicAssetBundleRevisionBeforeVoice;
-  episode.approvals.assets = {
-    ...episode.approvals.assets,
-    status: "pending",
-    at: null,
-    note: "",
-    feedback: "",
-    currentVersion: historicAssetBundleRevisionBeforeVoice,
-    provenance: null,
-    reviewReportId: null,
-    artifactHash: null
-  };
-  return episode;
-}
-
-function historicRebindEpisodeFixture(source) {
-  const episode = structuredClone(source);
-  const storyboard = historicRebindStoryboardBinding;
-  const currentDraft = episode.production?.storyboardDraft;
-  const versions = currentDraft?.versions ?? [];
-  const historicVersion = [currentDraft, ...versions].find((entry) =>
-    entry?.version === storyboard.version
-      && entry.artifactPath === storyboard.artifactPath
-  );
-  const reports = episode.reviews?.storyboard?.reports ?? [];
-  const report = reports.find((entry) =>
-    entry.id === storyboard.reviewReportId
-      && entry.decision === "pass"
-      && entry.artifactVersion === storyboard.version
-      && entry.artifactHash === storyboard.artifactHash
-  );
-  const approvalHistory = episode.approvals?.storyboard?.history ?? [];
-  const approvalRecord = approvalHistory.find((entry) =>
-    entry.gate === "storyboard"
-      && entry.decision === "approved"
-      && entry.version === storyboard.version
-  );
-  if (!historicVersion || !report || !approvalRecord) {
-    throw new Error("测试夹具缺少历史 Storyboard v4 审核与批准证据");
-  }
-
-  episode.production.storyboardDraft = {
-    ...structuredClone(historicVersion),
-    needsRevision: false,
-    versions: structuredClone(
-      versions.filter((entry) => entry.version <= storyboard.version)
-    )
-  };
-  episode.scenes = structuredClone(historicRebindStoryboardArtifact.timeline.scenes);
-  episode.subtitles = structuredClone(historicRebindStoryboardArtifact.timeline.subtitles);
-  episode.render.durationSeconds =
-    historicRebindStoryboardArtifact.timeline.durationSeconds;
-  episode.reviews.storyboard = {
-    ...episode.reviews.storyboard,
-    status: "passed",
-    artifactVersion: storyboard.version,
-    artifactHash: storyboard.artifactHash,
-    latestReportId: storyboard.reviewReportId,
-    reports: structuredClone(
-      reports.filter((entry) => entry.artifactVersion <= storyboard.version)
-    )
-  };
-  episode.approvals.storyboard = {
-    ...episode.approvals.storyboard,
-    status: "approved",
-    at: approvalRecord.at,
-    note: approvalRecord.note,
-    feedback: "",
-    currentVersion: storyboard.version,
-    history: structuredClone(approvalHistory.filter((entry) =>
-      entry.decision === "approved" && entry.version <= storyboard.version
-    )),
-    provenance: "reviewed-v2",
-    reviewReportId: storyboard.reviewReportId,
-    artifactHash: storyboard.artifactHash
-  };
-  if (episode.production.feedback?.storyboard) {
-    delete episode.production.feedback.storyboard;
-  }
-  const storyboardStep = episode.pipeline.find((step) =>
-    step.agent === "storyboard-agent"
-  );
-  Object.assign(storyboardStep, {
-    status: "complete",
-    progress: 1,
-    message: "历史 Storyboard v4 已完成机器审核与人工批准",
-    requiresApproval: null,
-    requiresHuman: false,
-    artifacts: [storyboard.artifactPath],
-    lastError: null
-  });
-  if (currentGateArtifactHash(episode, "storyboard") !== storyboard.artifactHash) {
-    throw new Error("测试夹具重建的历史 Storyboard v4 哈希不匹配");
-  }
-
-  const asset = historicRebindAssetBinding;
-  const assetHistory = (episode.reviewCheckpoints.assetExecution.history ?? [])
-    .filter((entry) => String(entry.at ?? "") <= asset.approvedAt);
-  const machine = assetHistory.find((entry) =>
-    entry.type === "machine-review"
-      && entry.version === asset.version
-      && entry.candidateHash === asset.candidateHash
-      && entry.status === "passed"
-  );
-  const human = assetHistory.find((entry) =>
-    entry.type === "human-approval"
-      && entry.version === asset.version
-      && entry.candidateHash === asset.candidateHash
-      && entry.machineReviewId === machine?.reviewId
-      && entry.decision === "approved"
-      && entry.at === asset.approvedAt
-  );
-  const currentCandidate = episode.reviewCheckpoints.assetExecution.currentCandidate;
-  if (
-    !machine
-    || !human
-    || currentCandidate?.version !== asset.version
-    || currentCandidate.candidateHash !== asset.candidateHash
-  ) {
-    throw new Error("测试夹具缺少历史 Asset v13 审核与批准证据");
-  }
-  episode.production.assetPlanDirection = {
-    strategy: "local-only",
-    selectedBy: "human"
-  };
-  episode.production.assetPlan = {
-    version: asset.version,
-    artifactPath: historicRebindAssetPlanPath,
-    content: structuredClone(historicRebindAssetPlanArtifact.plan),
-    needsRevision: false
-  };
-  episode.production.assetBundleRevision = asset.version;
-  episode.reviewCheckpoints.assetExecution = {
-    schemaVersion: 1,
-    status: "approved",
-    currentCandidate: structuredClone(currentCandidate),
-    machineReview: {
-      ...structuredClone(episode.reviewCheckpoints.assetExecution.machineReview),
-      id: machine.reviewId,
-      status: "passed",
-      checkedAt: machine.at,
-      candidateHash: asset.candidateHash
-    },
-    humanApproval: {
-      decision: "approved",
-      at: asset.approvedAt,
-      note: human.note,
-      version: asset.version,
-      candidateHash: asset.candidateHash,
-      machineReviewId: machine.reviewId,
-      maximumPaidCostUsd: 0,
-      externalApiCallCount: 0,
-      authorizedToolIds: []
-    },
-    history: structuredClone(assetHistory)
-  };
-  const assetStep = episode.pipeline.find((step) => step.agent === "asset-agent");
-  Object.assign(assetStep, {
-    status: "complete",
-    progress: 1,
-    message: "历史 Asset v13 本地零调用候选已完成机器审核与人工批准",
-    requiresApproval: null,
-    requiresHuman: false,
-    artifacts: [historicRebindAssetPlanPath],
-    lastError: null
-  });
-  if (!assetExecutionApprovalRecordValid(episode)) {
-    throw new Error("测试夹具重建的历史 Asset v13 批准绑定无效");
-  }
-  return episode;
-}
-
-const currentEpisodeTemplate = await readEpisode(episodeId);
-const isolatedEpisodeTemplate = registrationEpisodeFixture(currentEpisodeTemplate);
-const currentRebindEpisodeTemplate = historicRebindEpisodeFixture(currentEpisodeTemplate);
+const voiceFixture = createLocalOfflineVoiceFixture(
+  LOCAL_OFFLINE_TTS_V002_REGISTRATION
+);
+const fixtureVoiceService = createLocalOfflineVoiceFixtureHarness({
+  registration: voiceFixture.registration,
+  priorReview: voiceFixture.priorReview,
+  candidateRoot: LOCAL_OFFLINE_VOICE_FIXTURE_ROOT,
+  candidatePaths: voiceFixture.candidateRelativePaths
+});
+const {
+  inspectLocalOfflineTtsCandidate,
+  inspectRegisteredLocalOfflineTtsRebindCandidate,
+  registerApprovedLocalOfflineTts,
+  verifyRegisteredLocalOfflineVoiceForAssets
+} = fixtureVoiceService;
+const episodeId = voiceFixture.registration.episodeId;
+const historicStoryboardBinding = voiceFixture.storyboardBinding;
+const isolatedEpisodeTemplate = structuredClone(voiceFixture.episode);
+let currentRebindEpisodeTemplate = null;
 
 function isolatedEpisode() {
   return structuredClone(isolatedEpisodeTemplate);
 }
 
 function currentRebindEpisode() {
+  assert.ok(currentRebindEpisodeTemplate, "rebind fixture must be initialized");
   return structuredClone(currentRebindEpisodeTemplate);
 }
 
-function sha256(data) {
-  return createHash("sha256").update(data).digest("hex");
+const fixtureRuntimeRoot = process.env.AI_CONCEPT_STUDIO_KOKORO_ROOT?.trim()
+  ? resolve(process.env.AI_CONCEPT_STUDIO_KOKORO_ROOT)
+  : resolve(homedir(), ".cache", "ai-concept-studio", "kokoro312");
+const fixtureRuntimePaths = Object.freeze({
+  model: resolve(fixtureRuntimeRoot, "model-v1.1-zh", LOCAL_TTS_MODEL.fileName),
+  config: resolve(fixtureRuntimeRoot, "model-v1.1-zh", "config.json"),
+  voice: resolve(fixtureRuntimeRoot, "model-v1.1-zh", "voices", "zm_010.pt")
+});
+
+function pinnedRuntimeKind(path) {
+  const absolutePath = resolve(path);
+  return Object.entries(fixtureRuntimePaths).find(([, allowedPath]) =>
+    absolutePath === allowedPath)?.[0] ?? null;
 }
 
 function isPinnedRuntimePath(path) {
-  return path.includes("/.cache/ai-concept-studio/kokoro312/model-v1.1-zh/");
+  return pinnedRuntimeKind(path) !== null;
+}
+
+function fixtureAccessError(operation, path) {
+  const error = new Error(
+    `Test fixture ${operation} denied unlisted path: ${resolve(path)}`
+  );
+  error.code = "test_fixture_path_not_allowed";
+  return error;
+}
+
+function pathInsideRoot(path, root) {
+  const pathFromRoot = relative(resolve(root), resolve(path));
+  return pathFromRoot === ""
+    || (!pathFromRoot.startsWith("..") && !isAbsolute(pathFromRoot));
+}
+
+async function sourceModuleFiles(root) {
+  const entries = await readdir(root, { withFileTypes: true });
+  const nested = await Promise.all(entries.map(async (entry) => {
+    const path = resolve(root, entry.name);
+    if (entry.isDirectory()) return sourceModuleFiles(path);
+    return entry.isFile() && /\.(?:mjs|js)$/u.test(entry.name) ? [path] : [];
+  }));
+  return nested.flat();
+}
+
+function withReportedFileSize(base, targetPath, bytes, targetReadCounter) {
+  const absoluteTarget = resolve(targetPath);
+  return {
+    ...base,
+    lstat: async (path) => {
+      const file = await base.lstat(path);
+      return resolve(path) === absoluteTarget ? { ...file, size: bytes } : file;
+    },
+    realpath: base.realpath,
+    readFile: async (path) => {
+      if (resolve(path) === absoluteTarget) targetReadCounter.count += 1;
+      return base.readFile(path);
+    }
+  };
+}
+
+function recordFixtureAccess(context, operation, path, source, allowed) {
+  context.accessLog.push({
+    operation,
+    path: resolve(path),
+    source,
+    allowed
+  });
+}
+
+function resolveFixtureAccess(path, operation, context) {
+  const absolutePath = resolve(path);
+  const data = fixtureBuffer(absolutePath);
+  if (data !== null) {
+    recordFixtureAccess(context, operation, absolutePath, "immutable-fixture", true);
+    return { absolutePath, data, source: "immutable-fixture" };
+  }
+  const temporaryRoot = context.temporaryRoots.find((root) =>
+    pathInsideRoot(absolutePath, root));
+  if (temporaryRoot) {
+    recordFixtureAccess(context, operation, absolutePath, "test-temporary", true);
+    return { absolutePath, data: null, source: "test-temporary" };
+  }
+  recordFixtureAccess(context, operation, absolutePath, "unlisted", false);
+  throw fixtureAccessError(operation, absolutePath);
 }
 
 function fakeRuntimeIntegrity(path) {
-  if (path.endsWith(LOCAL_TTS_MODEL.fileName)) {
+  const kind = pinnedRuntimeKind(path);
+  if (kind === "model") {
     return { bytes: 100, sha256: LOCAL_TTS_MODEL.sha256 };
   }
-  if (path.endsWith("config.json")) {
+  if (kind === "config") {
     return { bytes: 101, sha256: LOCAL_TTS_MODEL.configSha256 };
   }
+  if (kind === "voice") {
+    return {
+      bytes: 102,
+      sha256: LOCAL_TTS_VOICES.find(({ id }) => id === "zm_010").sha256
+    };
+  }
+  throw fixtureAccessError("inspectFileIntegrity", path);
+}
+
+function fixtureBuffer(path) {
+  const absolutePath = resolve(path);
+  for (const [relativePath, data] of voiceFixture.files) {
+    if (resolve(workspaceRoot, relativePath) === absolutePath) return data;
+  }
+  return null;
+}
+
+function createFixtureAccessContext({ temporaryRoots = [], accessLog = [] } = {}) {
   return {
-    bytes: 102,
-    sha256: LOCAL_TTS_VOICES.find(({ id }) => id === "zm_010").sha256
+    temporaryRoots: temporaryRoots.map((root) => resolve(root)),
+    accessLog
+  };
+}
+
+async function fixtureReadFile(path, context = createFixtureAccessContext()) {
+  const access = resolveFixtureAccess(path, "readFile", context);
+  return access.source === "immutable-fixture"
+    ? Buffer.from(access.data)
+    : readFile(access.absolutePath);
+}
+
+async function fixtureLstat(path, context = createFixtureAccessContext()) {
+  const access = resolveFixtureAccess(path, "lstat", context);
+  if (access.source === "immutable-fixture") {
+    return {
+      size: access.data.length,
+      nlink: 1,
+      isFile: () => true,
+      isSymbolicLink: () => false
+    };
+  }
+  return lstat(access.absolutePath);
+}
+
+async function fixtureRealpath(path, context = createFixtureAccessContext()) {
+  const access = resolveFixtureAccess(path, "realpath", context);
+  return access.source === "immutable-fixture"
+    ? access.absolutePath
+    : realpath(access.absolutePath);
+}
+
+function immutableFixtureOptions(context = createFixtureAccessContext()) {
+  return {
+    readFile: (path) => fixtureReadFile(path, context)
   };
 }
 
 function verifierOptions(extra = {}) {
+  const {
+    temporaryRoots = [],
+    fixtureAccessLog = [],
+    ...overrides
+  } = extra;
+  const context = createFixtureAccessContext({
+    temporaryRoots,
+    accessLog: fixtureAccessLog
+  });
   return {
+    ...immutableFixtureOptions(context),
     episode: isolatedEpisode(),
-    lstat: async (path) => isPinnedRuntimePath(path)
-      ? {
+    readEpisode: async () => {
+      throw new Error("candidate inspector 测试不得回退读取 live Episode");
+    },
+    lstat: async (path) => {
+      if (isPinnedRuntimePath(path)) {
+        recordFixtureAccess(context, "lstat", path, "runtime-mock", true);
+        return {
           size: fakeRuntimeIntegrity(path).bytes,
           nlink: 1,
           isFile: () => true,
           isSymbolicLink: () => false
-        }
-      : lstat(path),
-    realpath: async (path) => isPinnedRuntimePath(path) ? resolve(path) : realpath(path),
-    inspectFileIntegrity: async (path) => fakeRuntimeIntegrity(path),
+        };
+      }
+      return fixtureLstat(path, context);
+    },
+    realpath: async (path) => {
+      if (isPinnedRuntimePath(path)) {
+        recordFixtureAccess(context, "realpath", path, "runtime-mock", true);
+        return resolve(path);
+      }
+      return fixtureRealpath(path, context);
+    },
+    inspectFileIntegrity: async (path) => {
+      try {
+        const integrity = fakeRuntimeIntegrity(path);
+        recordFixtureAccess(context, "inspectFileIntegrity", path, "runtime-mock", true);
+        return integrity;
+      } catch (error) {
+        recordFixtureAccess(context, "inspectFileIntegrity", path, "unlisted", false);
+        throw error;
+      }
+    },
     validateAssetExecutionApproval: () => true,
-    ...extra
+    verifyLocalOfflineVoice: verifyRegisteredLocalOfflineVoiceForAssets,
+    ...overrides,
+    fixtureAccessLog
   };
 }
 
 function registeredRuntimeIntegrity(path, episode) {
-  if (path.endsWith(LOCAL_TTS_MODEL.fileName)) {
+  const kind = pinnedRuntimeKind(path);
+  if (kind === "model") {
     return {
       bytes: episode.voice.provenance.model.bytes,
       sha256: LOCAL_TTS_MODEL.sha256
     };
   }
-  if (path.endsWith("config.json")) {
+  if (kind === "config") {
     return {
       bytes: episode.voice.provenance.model.configBytes,
       sha256: LOCAL_TTS_MODEL.configSha256
     };
   }
-  return {
-    bytes: episode.voice.provenance.voice.packageBytes,
-    sha256: LOCAL_TTS_VOICES.find(({ id }) => id === "zm_010").sha256
-  };
+  if (kind === "voice") {
+    return {
+      bytes: episode.voice.provenance.voice.packageBytes,
+      sha256: LOCAL_TTS_VOICES.find(({ id }) => id === "zm_010").sha256
+    };
+  }
+  throw fixtureAccessError("inspectFileIntegrity", path);
 }
 
 function rebindVerifierOptions(extra = {}) {
-  const episode = extra.episode ?? currentRebindEpisode();
+  const {
+    episode: suppliedEpisode,
+    temporaryRoots = [],
+    fixtureAccessLog = [],
+    ...overrides
+  } = extra;
+  const episode = suppliedEpisode ?? currentRebindEpisode();
+  const context = createFixtureAccessContext({
+    temporaryRoots,
+    accessLog: fixtureAccessLog
+  });
   return {
+    ...immutableFixtureOptions(context),
     episode,
     readEpisode: async () => {
       throw new Error("rebind inspector 测试不得回退读取 live Episode");
     },
-    lstat: async (path) => isPinnedRuntimePath(path)
-      ? {
+    lstat: async (path) => {
+      if (isPinnedRuntimePath(path)) {
+        recordFixtureAccess(context, "lstat", path, "runtime-mock", true);
+        return {
           size: registeredRuntimeIntegrity(path, episode).bytes,
           nlink: 1,
           isFile: () => true,
           isSymbolicLink: () => false
-        }
-      : lstat(path),
-    realpath: async (path) => isPinnedRuntimePath(path) ? resolve(path) : realpath(path),
-    inspectFileIntegrity: async (path) => registeredRuntimeIntegrity(path, episode),
+        };
+      }
+      return fixtureLstat(path, context);
+    },
+    realpath: async (path) => {
+      if (isPinnedRuntimePath(path)) {
+        recordFixtureAccess(context, "realpath", path, "runtime-mock", true);
+        return resolve(path);
+      }
+      return fixtureRealpath(path, context);
+    },
+    inspectFileIntegrity: async (path) => {
+      try {
+        const integrity = registeredRuntimeIntegrity(path, episode);
+        recordFixtureAccess(context, "inspectFileIntegrity", path, "runtime-mock", true);
+        return integrity;
+      } catch (error) {
+        recordFixtureAccess(context, "inspectFileIntegrity", path, "unlisted", false);
+        throw error;
+      }
+    },
     validateAssetExecutionApproval: () => true,
-    ...extra,
-    episode
+    verifyLocalOfflineVoice: verifyRegisteredLocalOfflineVoiceForAssets,
+    ...overrides,
+    episode,
+    fixtureAccessLog
   };
 }
 
@@ -568,7 +394,7 @@ function withApprovedLocalOnlyAssetCandidate(source, version = 10) {
     selectedBy: "human"
   };
   const content = adaptApprovedStoryboardToShortAssetPlan(episode);
-  const artifactPath = `studio/data/production/episodes/${episode.id}/asset-plan-v${String(
+  const artifactPath = `${LOCAL_OFFLINE_VOICE_FIXTURE_ROOT}/carry-forward/asset-plan-v${String(
     version
   ).padStart(3, "0")}.json`;
   const planHash = integrityHash(content);
@@ -658,6 +484,438 @@ function rebindAssetPlanHash(episode, purpose) {
   checkpoint.humanApproval.candidateHash = candidateHash;
 }
 
+async function buildCurrentRebindEpisodeTemplate() {
+  const directory = await mkdtemp(resolve(studioRoot, ".test-local-tts-fixture-register-"));
+  const store = fakeStore(isolatedEpisode());
+  const options = verifierOptions({
+    ...store,
+    temporaryRoots: [directory],
+    episodePublicDirectory: () => directory,
+    now: new Date("2026-08-14T12:00:00.000Z")
+  });
+  try {
+    const inspected = await inspectLocalOfflineTtsCandidate(episodeId, options);
+    const result = await registerApprovedLocalOfflineTts(
+      episodeId,
+      inspected.registrationRequest,
+      options
+    );
+    const registered = structuredClone(result.episode);
+    const registeredRelativePath =
+      `studio/public/episodes/${episodeId}/voice-v001.wav`;
+    registered.voice.audioPath = registeredRelativePath;
+    registered.voice.publicPath = `episodes/${episodeId}/voice-v001.wav`;
+    voiceFixture.files.set(
+      registeredRelativePath,
+      voiceFixture.files.get(voiceFixture.candidateRelativePaths.wavPath)
+    );
+    return voiceFixture.createRebindEpisode(registered).episode;
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+currentRebindEpisodeTemplate = await buildCurrentRebindEpisodeTemplate();
+
+test("生产 v002 登记固定到人工批准的精确候选与哈希", () => {
+  assert.deepEqual(
+    {
+      episodeId: LOCAL_OFFLINE_TTS_V002_REGISTRATION.episodeId,
+      candidateId: LOCAL_OFFLINE_TTS_V002_REGISTRATION.candidateId,
+      candidateVersion: LOCAL_OFFLINE_TTS_V002_REGISTRATION.candidateVersion,
+      manifestFileName: LOCAL_OFFLINE_TTS_V002_REGISTRATION.manifestFileName,
+      manifestSha256: LOCAL_OFFLINE_TTS_V002_REGISTRATION.manifestSha256,
+      wavFileName: LOCAL_OFFLINE_TTS_V002_REGISTRATION.wavFileName,
+      wavSha256: LOCAL_OFFLINE_TTS_V002_REGISTRATION.wavSha256,
+      confirmation: LOCAL_OFFLINE_TTS_V002_REGISTRATION.confirmation
+    },
+    {
+      episodeId: "agent-skill-tool-mcp-60s-20260813",
+      candidateId: "agent-skill-short-local-tts-zm_010-v002",
+      candidateVersion: 2,
+      manifestFileName: "short-local-tts-zm_010-v002-manifest.json",
+      manifestSha256:
+        "683a56a0c555740447f1ab56a32d1bc082200ad5ca419e26185bb0a584aa4bfe",
+      wavFileName: "short-local-tts-zm_010-v002.wav",
+      wavSha256:
+        "ee8374cd36dfe0503ebf8f6332595c024264ab79c52abd4302d24e232d89d612",
+      confirmation: "register-approved-local-offline-tts-v002"
+    }
+  );
+});
+
+test("生产 wrapper 固定到正式 outputs 根且不会回退读取测试候选", async () => {
+  const inspectedPaths = [];
+  const options = {
+    episode: isolatedEpisode(),
+    validateAssetExecutionApproval: () => true,
+    lstat: async (path) => {
+      inspectedPaths.push(resolve(path));
+      throw new Error("production path probe");
+    }
+  };
+  await assert.rejects(
+    inspectProductionLocalOfflineTtsCandidate(episodeId, options),
+    (error) => error.code === "local_tts_candidate_file_invalid"
+  );
+  assert.equal(inspectedPaths.length, 2);
+  assert.equal(inspectedPaths.every((path) => path.includes(
+    `/outputs/studio/${episodeId}/`
+  )), true);
+  assert.equal(inspectedPaths.some((path) => path.includes(
+    LOCAL_OFFLINE_VOICE_FIXTURE_ROOT
+  )), false);
+});
+
+test("生产 wrapper 在任何 I/O 前拒绝候选、批准和根目录策略覆盖", async () => {
+  const productionExports = await import(
+    "../src/server/production/local-offline-voice.mjs"
+  );
+  assert.equal("createLocalOfflineVoiceService" in productionExports, false);
+  const [appSource, assetValidatorSource] = await Promise.all([
+    readFile(resolve(studioRoot, "src/server/app.mjs"), "utf8"),
+    readFile(
+      resolve(studioRoot, "src/server/reviews/validators/assets.mjs"),
+      "utf8"
+    )
+  ]);
+  for (const source of [appSource, assetValidatorSource]) {
+    assert.match(source, /production\/local-offline-voice\.mjs/u);
+    assert.doesNotMatch(source, /local-offline-voice-core\.mjs/u);
+  }
+  const wrapperPath = resolve(
+    studioRoot,
+    "src/server/production/local-offline-voice.mjs"
+  );
+  const forbiddenCoreImports = [];
+  for (const modulePath of await sourceModuleFiles(resolve(studioRoot, "src"))) {
+    if (modulePath === wrapperPath) continue;
+    const source = await readFile(modulePath, "utf8");
+    if (
+      /(?:\bfrom\s*|\bimport\s*\()\s*["'][^"']*local-offline-voice-core\.mjs["']/u
+        .test(source)
+    ) {
+      forbiddenCoreImports.push(relative(studioRoot, modulePath));
+    }
+  }
+  assert.deepEqual(
+    forbiddenCoreImports,
+    [],
+    "生产源码只能由 local-offline-voice.mjs wrapper 导入 core"
+  );
+  let ioCalls = 0;
+  const ioProbe = async () => {
+    ioCalls += 1;
+    throw new Error("production wrapper must reject before I/O");
+  };
+  for (const overrideKey of [
+    "registration",
+    "priorReview",
+    "candidatePaths",
+    "candidateRoot"
+  ]) {
+    const options = {
+      [overrideKey]: {},
+      readEpisode: ioProbe,
+      readFile: ioProbe,
+      lstat: ioProbe,
+      realpath: ioProbe
+    };
+    for (const invoke of [
+      () => inspectProductionLocalOfflineTtsCandidate(episodeId, options),
+      () => inspectProductionRegisteredLocalOfflineTtsRebindCandidate(
+        episodeId,
+        options
+      ),
+      () => verifyProductionRegisteredLocalOfflineVoiceForAssets({}, options),
+      () => registerProductionApprovedLocalOfflineTts(episodeId, {}, options)
+    ]) {
+      await assert.rejects(
+        async () => invoke(),
+        (error) => error.code === "local_tts_policy_override_forbidden"
+      );
+    }
+  }
+  assert.equal(ioCalls, 0);
+});
+
+test("fixture harness 构造后也不允许单次调用替换固定策略", async () => {
+  for (const overrideKey of [
+    "registration",
+    "priorReview",
+    "candidatePaths",
+    "candidateRoot"
+  ]) {
+    await assert.rejects(
+      async () => inspectLocalOfflineTtsCandidate(
+        episodeId,
+        { [overrideKey]: {} }
+      ),
+      (error) => error.code === "local_tts_policy_override_forbidden"
+    );
+  }
+});
+
+test("不可变夹具不读取 live Episode、outputs 或 production 文件", () => {
+  const paths = [
+    ...voiceFixture.files.keys(),
+    voiceFixture.candidateRelativePaths.manifestPath,
+    voiceFixture.candidateRelativePaths.wavPath
+  ];
+  assert.equal(paths.every((path) => path.startsWith(
+    `${LOCAL_OFFLINE_VOICE_FIXTURE_ROOT}/`
+  ) || path === `studio/public/episodes/${episodeId}/voice-v001.wav`), true);
+  assert.equal(paths.some((path) => path.startsWith("outputs/")), false);
+  assert.equal(paths.some((path) => path.startsWith("studio/data/production/")), false);
+  assert.equal(paths.some((path) => path.startsWith("studio/data/episodes/")), false);
+});
+
+test("夹具文件代理只允许不可变 fixture、运行时 mock 和逐测试临时目录", async () => {
+  const fixtureAccessLog = [];
+  const options = verifierOptions({ fixtureAccessLog });
+  await inspectLocalOfflineTtsCandidate(episodeId, options);
+  assert.equal(fixtureAccessLog.some(({ source }) => source === "immutable-fixture"), true);
+  assert.equal(fixtureAccessLog.some(({ source }) => source === "runtime-mock"), true);
+  assert.equal(fixtureAccessLog.every(({ allowed }) => allowed), true);
+  assert.equal(fixtureAccessLog.some(({ path }) =>
+    path.includes("/outputs/")
+    || path.includes("/studio/data/production/")
+    || path.endsWith("/episode.json")), false);
+
+  const forbidden = resolve(
+    workspaceRoot,
+    "studio/data/production/episodes/live-only/episode.json"
+  );
+  for (const operation of ["readFile", "lstat", "realpath"]) {
+    await assert.rejects(
+      options[operation](forbidden),
+      (error) => error.code === "test_fixture_path_not_allowed"
+    );
+  }
+  assert.deepEqual(
+    fixtureAccessLog.filter(({ allowed }) => !allowed).map(({ operation }) => operation),
+    ["readFile", "lstat", "realpath"]
+  );
+
+  const directory = await mkdtemp(resolve(tmpdir(), "local-tts-allowlist-"));
+  try {
+    const temporaryFile = resolve(directory, "explicitly-allowed.txt");
+    await writeFile(temporaryFile, "temporary fixture");
+    const temporaryAccessLog = [];
+    const temporaryOptions = verifierOptions({
+      temporaryRoots: [directory],
+      fixtureAccessLog: temporaryAccessLog
+    });
+    assert.equal((await temporaryOptions.readFile(temporaryFile)).toString("utf8"),
+      "temporary fixture");
+    assert.equal((await temporaryOptions.lstat(temporaryFile)).isFile(), true);
+    assert.equal(await temporaryOptions.realpath(temporaryFile), await realpath(temporaryFile));
+    assert.equal(temporaryAccessLog.every(({ source, allowed }) =>
+      source === "test-temporary" && allowed), true);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("候选大小上限在 readFile 前拒绝超大 manifest 与 WAV", async () => {
+  const targets = [
+    {
+      path: resolve(
+        workspaceRoot,
+        voiceFixture.candidateRelativePaths.manifestPath
+      ),
+      bytes: 1_048_577
+    },
+    {
+      path: resolve(workspaceRoot, voiceFixture.candidateRelativePaths.wavPath),
+      bytes: 2_945_537
+    }
+  ];
+  for (const target of targets) {
+    const base = verifierOptions();
+    let readCalls = 0;
+    const options = verifierOptions({
+      lstat: async (path) => {
+        const file = await base.lstat(path);
+        return resolve(path) === target.path
+          ? { ...file, size: target.bytes }
+          : file;
+      },
+      realpath: base.realpath,
+      readFile: async (path) => {
+        readCalls += 1;
+        return base.readFile(path);
+      }
+    });
+    await assert.rejects(
+      inspectLocalOfflineTtsCandidate(episodeId, options),
+      (error) => error.code === "local_tts_candidate_file_too_large"
+    );
+    assert.equal(readCalls, 0);
+  }
+});
+
+test("旁白关联 JSON、审阅媒体和已登记 WAV 均在 readFile 前执行大小门禁", async () => {
+  const candidateWavBytes = voiceFixture.files.get(
+    voiceFixture.candidateRelativePaths.wavPath
+  ).length;
+  const registeredVoicePath = resolve(
+    workspaceRoot,
+    `studio/public/episodes/${episodeId}/voice-v001.wav`
+  );
+  const assetsGateEpisode = currentRebindEpisode();
+  const originalSourceEpisode = isolatedEpisode();
+  assetsGateEpisode.scenes = structuredClone(originalSourceEpisode.scenes);
+  assetsGateEpisode.subtitles = structuredClone(originalSourceEpisode.subtitles);
+  assetsGateEpisode.production.storyboardDraft = structuredClone(
+    originalSourceEpisode.production.storyboardDraft
+  );
+  assetsGateEpisode.reviews.storyboard = structuredClone(
+    originalSourceEpisode.reviews.storyboard
+  );
+  assetsGateEpisode.approvals.storyboard = structuredClone(
+    originalSourceEpisode.approvals.storyboard
+  );
+  const cases = [
+    {
+      label: "初始 voice plan 硬上限",
+      targetPath: resolve(
+        workspaceRoot,
+        voiceFixture.episode.production.voicePlan.artifactPath
+      ),
+      bytes: 1_048_577,
+      expectedCode: "local_tts_artifact_file_too_large",
+      base: () => verifierOptions(),
+      invoke: (options) => inspectLocalOfflineTtsCandidate(episodeId, options)
+    },
+    {
+      label: "已绑定 voice plan 精确字节数",
+      targetPath: resolve(
+        workspaceRoot,
+        voiceFixture.episode.production.voicePlan.artifactPath
+      ),
+      bytes: voiceFixture.files.get(
+        voiceFixture.episode.production.voicePlan.artifactPath
+      ).length + 1,
+      expectedCode: "local_tts_artifact_size_mismatch",
+      base: () => rebindVerifierOptions(),
+      invoke: (options) => inspectRegisteredLocalOfflineTtsRebindCandidate(
+        episodeId,
+        options
+      )
+    },
+    {
+      label: "通用 Storyboard JSON 硬上限",
+      targetPath: resolve(workspaceRoot, historicStoryboardBinding.artifactPath),
+      bytes: 8 * 1_048_576 + 1,
+      expectedCode: "local_tts_artifact_file_too_large",
+      base: () => rebindVerifierOptions(),
+      invoke: (options) => inspectRegisteredLocalOfflineTtsRebindCandidate(
+        episodeId,
+        options
+      )
+    },
+    {
+      label: "prior-review manifest 硬上限",
+      targetPath: resolve(workspaceRoot, voiceFixture.priorReview.manifestPath),
+      bytes: 8 * 1_048_576 + 1,
+      expectedCode: "local_tts_artifact_file_too_large",
+      base: () => rebindVerifierOptions(),
+      invoke: (options) => inspectRegisteredLocalOfflineTtsRebindCandidate(
+        episodeId,
+        options
+      )
+    },
+    {
+      label: "prior-review media 精确字节数",
+      targetPath: resolve(workspaceRoot, voiceFixture.priorReview.mediaPath),
+      bytes: voiceFixture.priorReview.mediaBytes + 1,
+      expectedCode: "local_tts_artifact_size_mismatch",
+      base: () => rebindVerifierOptions(),
+      invoke: (options) => inspectRegisteredLocalOfflineTtsRebindCandidate(
+        episodeId,
+        options
+      )
+    },
+    {
+      label: "重绑定来源 registered WAV 精确字节数",
+      targetPath: registeredVoicePath,
+      bytes: candidateWavBytes + 1,
+      expectedCode: "local_tts_artifact_size_mismatch",
+      base: () => rebindVerifierOptions(),
+      invoke: (options) => inspectRegisteredLocalOfflineTtsRebindCandidate(
+        episodeId,
+        options
+      )
+    },
+    {
+      label: "Assets Gate registered WAV 精确字节数",
+      targetPath: registeredVoicePath,
+      bytes: candidateWavBytes + 1,
+      expectedCode: "local_tts_artifact_size_mismatch",
+      base: () => rebindVerifierOptions({ episode: assetsGateEpisode }),
+      invoke: (options) => verifyRegisteredLocalOfflineVoiceForAssets(
+        assetsGateEpisode,
+        options
+      )
+    }
+  ];
+
+  for (const testCase of cases) {
+    const targetReadCounter = { count: 0 };
+    const options = withReportedFileSize(
+      testCase.base(),
+      testCase.targetPath,
+      testCase.bytes,
+      targetReadCounter
+    );
+    await assert.rejects(
+      testCase.invoke(options),
+      (error) => error.code === testCase.expectedCode,
+      testCase.label
+    );
+    assert.equal(
+      targetReadCounter.count,
+      0,
+      `${testCase.label} 必须在读取目标文件前拒绝`
+    );
+  }
+});
+
+test("PCM 时间覆盖门禁拒绝全静音、稀疏脉冲和超长静音段", () => {
+  const syntheticTone = createDeterministicPcmTestWav();
+  assert.equal(inspectPcmWav(syntheticTone).durationSeconds, 60);
+  for (const invalidWav of [
+    createDeterministicPcmTestWav({ amplitude: 0 }),
+    createDeterministicPcmTestWav({
+      amplitude: 32_767,
+      activeRangesSeconds: [[0, 0.06]]
+    }),
+    createDeterministicPcmTestWav({
+      activeRangesSeconds: [
+        [0, 2],
+        [6, 8],
+        [12, 13],
+        [18, 19],
+        [24, 25],
+        [30, 31],
+        [36, 37],
+        [42, 43],
+        [48, 49],
+        [54, 55]
+      ]
+    }),
+    createDeterministicPcmTestWav({
+      activeRangesSeconds: [[0, 20], [40, 60]]
+    })
+  ]) {
+    assert.throws(
+      () => inspectPcmWav(invalidWav),
+      (error) => error.code === "local_tts_wav_energy_invalid"
+    );
+  }
+});
+
 test("登记前夹具固定到历史 Storyboard v3 与本地零调用素材 v9", () => {
   const episode = isolatedEpisode();
   assert.equal(episode.production.storyboardDraft.version, 3);
@@ -700,6 +958,7 @@ test("只读机器验证返回可复算 candidateHash、完整 machineVerificati
   assert.equal(first.audio.sampleRate, 24000);
   assert.equal(first.audio.channels, 1);
   assert.equal(first.audio.bitsPerSample, 16);
+  assert.equal(first.checks.includes("pcm-wav-energy-floor"), true);
 });
 
 test("已登记 voice-v001 可只读形成 v3/v9 来源到 v4/v13 使用范围的零调用重绑定候选", async () => {
@@ -792,7 +1051,7 @@ test("已登记 voice-v001 可只读形成 v3/v9 来源到 v4/v13 使用范围�
   );
   assert.equal(
     first.dossier.priorReviewEvidence.media.sourceVoiceSha256,
-    LOCAL_OFFLINE_TTS_V002_REGISTRATION.wavSha256
+    voiceFixture.registration.wavSha256
   );
   assert.equal(first.dossier.priorReviewEvidence.media.storyboardVersion, 4);
   assert.equal(first.dossier.humanApproval, null);
@@ -897,7 +1156,7 @@ test("重绑定候选对 WAV、授权、上游批准、字幕语义和零调用�
       episodeId,
       rebindVerifierOptions({
         readFile: async (path) => {
-          const data = await readFile(path);
+          const data = await fixtureReadFile(path);
           if (!path.endsWith("voice-v001.wav")) return data;
           const tampered = Buffer.from(data);
           tampered[100] ^= 1;
@@ -910,7 +1169,7 @@ test("重绑定候选对 WAV、授权、上游批准、字幕语义和零调用�
 });
 
 test("候选、运行时和正式公共文件必须是单链接普通文件", async () => {
-  const directory = await mkdtemp(resolve(studioRoot, ".test-local-tts-symlink-"));
+  const directory = await mkdtemp(resolve(tmpdir(), "local-tts-symlink-"));
   try {
     const target = resolve(directory, "target.wav");
     const hardlink = resolve(directory, "hardlink.wav");
@@ -918,16 +1177,12 @@ test("候选、运行时和正式公共文件必须是单链接普通文件", as
     await writeFile(target, "test");
     await link(target, hardlink);
     await assert.rejects(
-      assertNoSymlinkRegularFile(target, workspaceRoot),
+      assertNoSymlinkRegularFile(target, directory),
       (error) => error.code === "local_tts_candidate_symlink_rejected"
     );
-    await symlink(
-      resolve(workspaceRoot, "outputs", "studio", episodeId,
-        LOCAL_OFFLINE_TTS_V002_REGISTRATION.wavFileName),
-      alias
-    );
+    await symlink(target, alias);
     await assert.rejects(
-      assertNoSymlinkRegularFile(alias, workspaceRoot),
+      assertNoSymlinkRegularFile(alias, directory),
       (error) => error.code === "local_tts_candidate_symlink_rejected"
     );
     await assert.rejects(
@@ -995,7 +1250,7 @@ test("候选单字节变化、脚本审批失效或素材批准漂移都会在�
     const options = verifierOptions({
       ...store,
       readFile: async (path) => {
-        const data = await readFile(path);
+        const data = await fixtureReadFile(path);
         if (!path.endsWith(fileName)) return data;
         const tampered = Buffer.from(data);
         tampered[Math.min(100, tampered.length - 1)] ^= 1;
@@ -1039,6 +1294,7 @@ test("目标版本竞态已存在时不覆盖原文件，并清理临时文件�
   const store = fakeStore(source);
   const options = verifierOptions({
     ...store,
+    temporaryRoots: [directory],
     episodePublicDirectory: () => directory,
     readdir: async () => []
   });
@@ -1066,6 +1322,7 @@ test("复制后复验或最终 Episode 写入失败都会删除新 WAV 并释放
     const directory = await mkdtemp(resolve(studioRoot, `.test-local-tts-${failure}-`));
     let state = structuredClone(source);
     const options = verifierOptions({
+      temporaryRoots: [directory],
       episodePublicDirectory: () => directory,
       readEpisode: async () => structuredClone(state),
       writeEpisode: async (next) => {
@@ -1076,7 +1333,9 @@ test("复制后复验或最终 Episode 写入失败都会删除新 WAV 并释放
       },
       appendEvent: async () => undefined,
       readFile: async (path) => {
-        const data = await readFile(path);
+        const data = await fixtureReadFile(path, createFixtureAccessContext({
+          temporaryRoots: [directory]
+        }));
         if (failure !== "copy-verification" || !path.startsWith(`${directory}/`)) return data;
         const tampered = Buffer.from(data);
         tampered[100] ^= 1;
@@ -1098,10 +1357,6 @@ test("复制后复验或最终 Episode 写入失败都会删除新 WAV 并释放
 });
 
 test("v002 版本化登记、复制后复验、授权绑定与 Assets Gate happy path 全部通过", async () => {
-  const liveEpisodeData = await readFile(
-    resolve(studioRoot, "data", "episodes", episodeId, "episode.json")
-  );
-  const liveEpisodeHash = sha256(liveEpisodeData);
   const source = isolatedEpisode();
   const beforeLedger = ledgerSnapshot(source);
   const inspected = await inspectLocalOfflineTtsCandidate(episodeId, verifierOptions());
@@ -1112,6 +1367,7 @@ test("v002 版本化登记、复制后复验、授权绑定与 Assets Gate happy
   });
   const options = verifierOptions({
     ...store,
+    temporaryRoots: [directory],
     episodePublicDirectory: () => directory,
     now: new Date("2026-08-14T12:00:00.000Z")
   });
@@ -1315,10 +1571,6 @@ test("v002 版本化登记、复制后复验、授权绑定与 Assets Gate happy
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
-  assert.equal(
-    sha256(await readFile(resolve(studioRoot, "data", "episodes", episodeId, "episode.json"))),
-    liveEpisodeHash
-  );
 });
 
 test("状态已提交但审计事件暂时失败时，重试会幂等补写事件", async () => {
@@ -1334,6 +1586,7 @@ test("状态已提交但审计事件暂时失败时，重试会幂等补写事�
   });
   const options = verifierOptions({
     ...store,
+    temporaryRoots: [directory],
     episodePublicDirectory: () => directory,
     now: new Date("2026-08-14T12:01:00.000Z")
   });

@@ -278,6 +278,7 @@ test("AI 客户端严格按预留、请求、结算、审计顺序执行", async
     providerHealth: { primary: { state: "healthy" }, fallback: { state: "healthy" } },
     budgetLedger: {
       reserve: async () => lifecycle.push("reserve"),
+      markDispatched: async () => lifecycle.push("dispatch"),
       settle: async () => lifecycle.push("settle"),
       recordDecision: async () => lifecycle.push("record")
     },
@@ -315,7 +316,7 @@ test("AI 客户端严格按预留、请求、结算、审计顺序执行", async
         }
       }
     });
-    assert.deepEqual(lifecycle, ["reserve", "request", "settle", "record"]);
+    assert.deepEqual(lifecycle, ["reserve", "dispatch", "request", "settle", "record"]);
     assert.equal(result.routingDecision.outcome.budgetAccounted, true);
   } finally {
     delete process.env.ROUTER_PRIMARY_TEST_KEY;

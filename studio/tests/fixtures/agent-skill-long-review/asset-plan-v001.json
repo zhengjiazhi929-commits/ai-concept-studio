@@ -1,0 +1,68 @@
+{
+  "items": [
+    {
+      "id": "tracked-evidence-S02",
+      "required": true,
+      "assetType": "image",
+      "sceneIds": ["S02"],
+      "purpose": "Restore deterministic tracked asset binding for S02",
+      "productionMethod": { "kind": "registered-fixture" }
+    },
+    {
+      "id": "tracked-evidence-S04",
+      "required": true,
+      "assetType": "image",
+      "sceneIds": ["S04"],
+      "purpose": "Restore deterministic tracked asset binding for S04",
+      "productionMethod": { "kind": "registered-fixture" }
+    },
+    {
+      "id": "tracked-evidence-S06",
+      "required": true,
+      "assetType": "image",
+      "sceneIds": ["S06"],
+      "purpose": "Restore deterministic tracked asset binding for S06",
+      "productionMethod": { "kind": "registered-fixture" }
+    },
+    {
+      "id": "tracked-evidence-S08",
+      "required": true,
+      "assetType": "image",
+      "sceneIds": ["S08"],
+      "purpose": "Restore deterministic tracked asset binding for S08",
+      "productionMethod": { "kind": "registered-fixture" }
+    },
+    {
+      "id": "tracked-evidence-S10",
+      "required": true,
+      "assetType": "image",
+      "sceneIds": ["S10"],
+      "purpose": "Restore deterministic tracked asset binding for S10",
+      "productionMethod": { "kind": "registered-fixture" }
+    },
+    {
+      "id": "tracked-evidence-S12",
+      "required": true,
+      "assetType": "image",
+      "sceneIds": ["S12"],
+      "purpose": "Restore deterministic tracked asset binding for S12",
+      "productionMethod": { "kind": "registered-fixture" }
+    },
+    {
+      "id": "tracked-evidence-S14",
+      "required": true,
+      "assetType": "image",
+      "sceneIds": ["S14"],
+      "purpose": "Restore deterministic tracked asset binding for S14",
+      "productionMethod": { "kind": "registered-fixture" }
+    },
+    {
+      "id": "tracked-evidence-S16",
+      "required": true,
+      "assetType": "image",
+      "sceneIds": ["S16"],
+      "purpose": "Restore deterministic tracked asset binding for S16",
+      "productionMethod": { "kind": "registered-fixture" }
+    }
+  ]
+}

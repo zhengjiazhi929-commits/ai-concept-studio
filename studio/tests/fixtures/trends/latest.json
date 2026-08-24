@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "id": "trend-engine-test-run-v1",
+  "generatedAt": "2026-08-03T15:00:00.000Z",
+  "selectedCandidateId": null,
+  "selectedAt": null,
+  "summary": {
+    "signalCount": 8,
+    "creatorCount": 5,
+    "mappedSignalCount": 8,
+    "unmappedSignalCount": 0,
+    "formalCandidateCount": 1,
+    "continueWatchingCount": 0,
+    "alreadyCoveredCount": 1
+  },
+  "candidates": [
+    {
+      "id": "agent-skill",
+      "concept": "Agent Skill",
+      "recommendedTitle": "Synthetic Agent Skill fixture",
+      "recommendedPool": "formal_candidate",
+      "selectionStatus": "not_selected",
+      "productDecisions": [
+        "Synthetic fixture decision"
+      ],
+      "primarySources": [
+        {
+          "label": "Synthetic fixture specification",
+          "url": "https://example.test/specification"
+        }
+      ],
+      "creatorEvidence": [],
+      "evidenceSignals": []
+    },
+    {
+      "id": "rag-engineering",
+      "concept": "RAG Engineering",
+      "recommendedTitle": "Synthetic RAG fixture",
+      "recommendedPool": "observation_pool",
+      "selectionStatus": "not_selected",
+      "productDecisions": [],
+      "primarySources": [],
+      "creatorEvidence": [],
+      "evidenceSignals": []
+    }
+  ],
+  "unmappedSignals": []
+}

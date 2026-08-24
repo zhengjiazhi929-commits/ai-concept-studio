@@ -1,7 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
 import {
   generateAssetPlan,
   readApprovedScriptInput,
@@ -26,75 +24,31 @@ import {
   progressiveTechnicalFlowPlanReview
 } from
   "../src/shared/technical-diagram-contract.mjs";
-import { readEpisode } from "../src/shared/store.mjs";
-import { studioRoot } from "../src/shared/paths.mjs";
-import { currentGateArtifactHash } from "../src/shared/workflow.mjs";
+import { integrityHash } from "../src/shared/integrity.mjs";
+import { readFixtureEpisode } from "./episode-fixture.mjs";
+import {
+  HISTORICAL_ASSET_V13_FIXTURE_HASH,
+  HISTORICAL_ASSET_V13_FIXTURE_ID,
+  HISTORICAL_ASSET_V13_SOURCE_PLAN_HASH,
+  historicalAssetV13Fixture
+} from "./historical-asset-v13.fixture.mjs";
+import { historicalApprovedStoryboardV3Episode } from
+  "./historical-approved-storyboard-v3.fixture.mjs";
 
-const SHORT_EPISODE_ID = "agent-skill-tool-mcp-60s-20260813";
-const HISTORICAL_STORYBOARD_V3_HASH =
-  "29f0914a188c5d17d7bf9e4f0adafb0fdbb1ce7b0665498e5d390c9e9e4bf182";
-
-async function withApprovedHistoricalStoryboardV3(source) {
-  const episode = structuredClone(source);
-  const artifact = JSON.parse(await readFile(resolve(
-    studioRoot,
-    "data",
-    "production",
-    "episodes",
-    SHORT_EPISODE_ID,
-    "storyboard-draft-v003.json"
-  ), "utf8"));
-  const versions = episode.production.storyboardDraft.versions
-    .filter(({ version }) => version <= 3)
-    .map((entry) => structuredClone(entry));
-  const version = versions.find((entry) => entry.version === 3);
-  assert.ok(version, "测试夹具必须保留历史 Storyboard v3 元数据");
-  episode.production.storyboardDraft = {
-    ...version,
-    needsRevision: false,
-    versions
-  };
-  episode.scenes = structuredClone(artifact.timeline.scenes);
-  episode.subtitles = structuredClone(artifact.timeline.subtitles);
-  episode.render.durationSeconds = artifact.timeline.durationSeconds;
-  const artifactHash = currentGateArtifactHash(episode, "storyboard");
-  assert.equal(artifactHash, HISTORICAL_STORYBOARD_V3_HASH);
-  const reportId = "test-storyboard-v3-machine-pass";
-  episode.control.reviewEnabled = true;
-  episode.reviews.storyboard = {
-    status: "passed",
-    artifactVersion: 3,
-    artifactHash,
-    rubricVersion: "storyboard-v3",
-    revisionRounds: 0,
-    latestReportId: reportId,
-    reports: [{
-      id: reportId,
-      stage: "storyboard",
-      decision: "pass",
-      artifactVersion: 3,
-      artifactHash
-    }]
-  };
-  episode.approvals.storyboard = {
-    ...episode.approvals.storyboard,
-    status: "approved",
-    currentVersion: 3,
-    provenance: "reviewed-v2",
-    reviewReportId: reportId,
-    artifactHash
-  };
-  const storyboardStep = episode.pipeline.find((step) => step.gate === "storyboard");
-  storyboardStep.status = "complete";
-  storyboardStep.requiresHuman = false;
-  return episode;
+function approvedHistoricalEpisode() {
+  return historicalApprovedStoryboardV3Episode();
 }
 
 test("导入的 Markdown 脚本可作为分镜驳回后的再生成输入", async () => {
-  const episode = await readEpisode("golden-001");
+  const episode = await readFixtureEpisode();
+  episode.production.scriptDraft.source =
+    "studio/tests/fixtures/episodes/golden-001-approved-script.md";
   const input = await readApprovedScriptInput(episode);
   assert.equal(input.format, "markdown");
-  assert.equal(input.source, "episodes/golden-001/07-script.md");
+  assert.equal(
+    input.source,
+    "studio/tests/fixtures/episodes/golden-001-approved-script.md"
+  );
   assert.match(input.content, /Agentic Coding/u);
 });
 
@@ -115,9 +69,7 @@ test("字幕拆分保留中文词语、英文词组和闭合标点边界", () =>
 });
 
 test("60 秒派生素材方案只承接批准分镜且不调用 Provider", async () => {
-  const episode = await withApprovedHistoricalStoryboardV3(
-    await readEpisode(SHORT_EPISODE_ID)
-  );
+  const episode = approvedHistoricalEpisode();
   episode.production.assetPlanDirection = {
     strategy: "local-only",
     selectedBy: "human"
@@ -287,16 +239,28 @@ test("60 秒派生素材方案只承接批准分镜且不调用 Provider", async
   assert.equal(written.document.plan, generated.value);
 });
 
-test("历史 Asset v13 的 v2 motion contract 保持只读兼容", async () => {
-  const artifact = JSON.parse(await readFile(resolve(
-    studioRoot,
-    "data",
-    "production",
-    "episodes",
-    SHORT_EPISODE_ID,
-    "asset-plan-v013.json"
-  ), "utf8"));
-  const plan = artifact.plan;
+test("历史 Asset v13 的 v2 motion contract 保持只读兼容", () => {
+  const fixture = historicalAssetV13Fixture();
+  assert.equal(
+    fixture.fixtureId,
+    "agent-skill-tool-mcp-60s-20260813/asset-plan-v013:legacy-motion-v2-minimal-v1"
+  );
+  assert.equal(fixture.fixtureId, HISTORICAL_ASSET_V13_FIXTURE_ID);
+  assert.equal(fixture.source.artifactVersion, 13);
+  assert.equal(
+    fixture.source.sourcePlanIntegrityHash,
+    "a776121354841411ab0d6f05570d0e3be9980c29a1a4b667a6c7595a3dc320d8"
+  );
+  assert.equal(
+    fixture.source.sourcePlanIntegrityHash,
+    HISTORICAL_ASSET_V13_SOURCE_PLAN_HASH
+  );
+  assert.equal(
+    integrityHash(fixture),
+    "a15da4728d04e65377042bc63af0318af6851b1710d721d54031708101e0a283"
+  );
+  assert.equal(integrityHash(fixture), HISTORICAL_ASSET_V13_FIXTURE_HASH);
+  const plan = fixture.plan;
   const localReview = localTechnicalDiagramPlanReview(plan);
   const motionReview = progressiveTechnicalFlowPlanReview(plan);
   assert.equal(plan.sourceStoryboard.version, 4);
@@ -305,14 +269,13 @@ test("历史 Asset v13 的 v2 motion contract 保持只读兼容", async () => {
   ]);
   assert.equal(localReview.legacySchemaSet, true);
   assert.equal(localReview.currentSchemaSet, false);
+  assert.deepEqual(localReview.itemIds, ["skill-tool-mcp-layers"]);
   assert.equal(localReview.passed, true);
   assert.equal(motionReview.passed, true);
 });
 
 test("人工选择混合方案后 Asset Agent 只生成待批计划，不调用生图或生视频 API", async () => {
-  const episode = await withApprovedHistoricalStoryboardV3(
-    await readEpisode(SHORT_EPISODE_ID)
-  );
+  const episode = approvedHistoricalEpisode();
   episode.production.assetPlanDirection = {
     strategy: "hybrid-api-selective",
     selectedBy: "human",
@@ -356,9 +319,7 @@ test("人工选择混合方案后 Asset Agent 只生成待批计划，不调用�
 });
 
 test("人工锁定 AIHubMix 与 Seedance 2.5 后 Asset Agent 生成双币种 v4 而不调用 Provider", async () => {
-  const episode = await withApprovedHistoricalStoryboardV3(
-    await readEpisode(SHORT_EPISODE_ID)
-  );
+  const episode = approvedHistoricalEpisode();
   episode.production.assetPlanDirection = {
     strategy: "hybrid-api-selective",
     generationProfile:
@@ -497,9 +458,7 @@ test("人工锁定 AIHubMix 与 Seedance 2.5 后 Asset Agent 生成双币种 v4 
 });
 
 test("人工选择 AIHubMix 质量优先稳定模型后 Asset Agent 生成 Gemini 3 Pro Image 技术图合同且零调用", async () => {
-  const episode = await withApprovedHistoricalStoryboardV3(
-    await readEpisode(SHORT_EPISODE_ID)
-  );
+  const episode = approvedHistoricalEpisode();
   episode.production.assetPlanDirection = {
     strategy: "hybrid-api-selective",
     generationProfile:

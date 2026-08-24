@@ -9,6 +9,8 @@ import { historicalApprovedStoryboardV3Episode } from
   "./historical-approved-storyboard-v3.fixture.mjs";
 import { validateWorkerMutation } from "../src/shared/agent-contracts.mjs";
 import { agents } from "../src/server/agents/registry.mjs";
+import { createCapabilityAuthority } from
+  "../src/server/security/side-effect-capability.mjs";
 import {
   HYBRID_GENERATION_PROFILES,
   adaptApprovedStoryboardToShortAssetPlan
@@ -276,6 +278,98 @@ test("外部素材执行必须同时绑定批准、预检、Worker 工具和精�
     }),
     (error) => error.code === "asset_execution_preflight_required"
   );
+});
+
+test("外部付费素材每次 POST 前原子消费 Capability 的 calls 与 cost", async () => {
+  const episode = await approvedEpisode();
+  const call = episode.production.assetPlan.content.executionPolicy.externalApiCalls[0];
+  const operation = "worker:asset-agent";
+  const scopes = ["network.request", "paid.invoke"];
+  const perAttemptCost = Number(call.maximumCostUsd.toFixed(6));
+  const maximumCost = Number((perAttemptCost * 2).toFixed(6));
+  const authority = createCapabilityAuthority({
+    secret: "external-asset-capability-test-secret-at-least-thirty-two-bytes",
+    maximumCalls: 2,
+    maximumCostUsd: maximumCost
+  });
+  const request = {
+    itemId: "generated-architecture-depth-plate",
+    callId: call.id
+  };
+  const baseOptions = {
+    allowedToolIds: [EXTERNAL_ASSET_TOOL_IDS.aihubmix],
+    credentials: { AIHUBMIX_API_KEY: "test-only-key" },
+    capabilityOperation: operation,
+    requireSideEffectCapability: true
+  };
+
+  const directSpecs = [];
+  let directAuthorityFetches = 0;
+  await executeApprovedExternalAssetCall(episode, request, {
+    ...baseOptions,
+    authorizeSideEffect(spec) {
+      directSpecs.push(structuredClone(spec));
+      return authority.authorize(spec);
+    },
+    fetch: async () => {
+      directAuthorityFetches += 1;
+      return jsonResponse({ data: [{ b64_json: PNG.toString("base64") }] });
+    }
+  });
+  assert.equal(directAuthorityFetches, 1);
+  assert.deepEqual(directSpecs, [{
+    episodeId: episode.id,
+    operation,
+    scopes,
+    maxCalls: 1,
+    maxCostUsd: perAttemptCost
+  }]);
+
+  let callLimitedFetches = 0;
+  const callLimitedGrant = authority.authorize({
+    episodeId: episode.id,
+    operation,
+    scopes,
+    maxCalls: 1,
+    maxCostUsd: maximumCost
+  });
+  const callLimitedOptions = {
+    ...baseOptions,
+    sideEffectGrant: callLimitedGrant,
+    fetch: async () => {
+      callLimitedFetches += 1;
+      return jsonResponse({ data: [{ b64_json: PNG.toString("base64") }] });
+    }
+  };
+  await executeApprovedExternalAssetCall(episode, request, callLimitedOptions);
+  await assert.rejects(
+    executeApprovedExternalAssetCall(episode, request, callLimitedOptions),
+    (error) => error.code === "side_effect_capability_calls_exceeded"
+  );
+  assert.equal(callLimitedFetches, 1);
+
+  let costLimitedFetches = 0;
+  const costLimitedGrant = authority.authorize({
+    episodeId: episode.id,
+    operation,
+    scopes,
+    maxCalls: 2,
+    maxCostUsd: perAttemptCost
+  });
+  const costLimitedOptions = {
+    ...baseOptions,
+    sideEffectGrant: costLimitedGrant,
+    fetch: async () => {
+      costLimitedFetches += 1;
+      return jsonResponse({ data: [{ b64_json: PNG.toString("base64") }] });
+    }
+  };
+  await executeApprovedExternalAssetCall(episode, request, costLimitedOptions);
+  await assert.rejects(
+    executeApprovedExternalAssetCall(episode, request, costLimitedOptions),
+    (error) => error.code === "side_effect_capability_cost_exceeded"
+  );
+  assert.equal(costLimitedFetches, 1);
 });
 
 test("Gemini 3 Pro Image 执行器原样发送已批准 JSON 并解析原生图像响应", async () => {

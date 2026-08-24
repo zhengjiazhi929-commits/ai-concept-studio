@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { importGoldenSample } from "../src/server/importer.mjs";
 import {
   approveGate,
   exactApprovalBinding,
@@ -8,6 +7,10 @@ import {
 } from "../src/server/orchestrator.mjs";
 import { isSuccessfulQaWorkerStatus } from "../src/server/qa.mjs";
 import { resetApprovalForVersion } from "../src/shared/workflow.mjs";
+import {
+  fixtureAssetFileDependencies,
+  readFixtureEpisode
+} from "./episode-fixture.mjs";
 
 const RENDER_V1_SHA256 = "a".repeat(64);
 const RENDER_V2_SHA256 = "b".repeat(64);
@@ -79,17 +82,26 @@ function approvalRequest(episode, gate, note) {
   return { ...exactApprovalBinding(episode, gate), note };
 }
 
-test("Golden 离线导入可经过素材与最终闸门完成整期流程", async () => {
-  const imported = await importGoldenSample({ persist: false });
-  assert.equal(imported.destination, null);
-  assert.equal(imported.episode.production.materialsVersion, 1);
-  assert.equal(imported.episode.approvals.assets.currentVersion, 1);
+test("Golden 不可变夹具可经过素材与最终闸门完成整期流程", async () => {
+  const source = await readFixtureEpisode();
+  assert.equal(source.production.materialsVersion, 1);
+  assert.equal(source.approvals.assets.currentVersion, 1);
 
-  const store = memoryStore(imported.episode);
-  const firstVoice = await runAgent("golden-001", "voice-agent", store);
+  const store = memoryStore(source);
+  const fixtureFiles = fixtureAssetFileDependencies(source);
+  let reviewAccessCalls = 0;
+  const review = {
+    ...fixtureFiles,
+    access: async (path) => {
+      reviewAccessCalls += 1;
+      return fixtureFiles.access(path);
+    }
+  };
+  const firstVoice = await runAgent("golden-001", "voice-agent", { ...store, review });
   assert.equal(firstVoice.output.status, "waiting_approval");
   assert.equal(firstVoice.review.report.decision, "pass");
   assert.equal(firstVoice.review.report.artifactVersion, 1);
+  assert.equal(reviewAccessCalls, source.assets.length);
 
   await approveGate(
     "golden-001",
@@ -100,7 +112,7 @@ test("Golden 离线导入可经过素材与最终闸门完成整期流程", asyn
   assert.equal(store.episode.approvals.assets.status, "approved");
   assert.equal(store.episode.pipeline.find((step) => step.id === "voice").status, "ready");
 
-  const approvedVoice = await runAgent("golden-001", "voice-agent", store);
+  const approvedVoice = await runAgent("golden-001", "voice-agent", { ...store, review });
   assert.equal(approvedVoice.output.status, "complete");
   assert.equal(store.episode.pipeline.find((step) => step.id === "render").status, "ready");
 
@@ -256,16 +268,17 @@ test("QA 命令将等待最终审批视为成功，但不会把失败误报为�
 });
 
 test("编排器串行落账未等待的进度回调，避免与 Worker 最终状态发生版本竞争", async () => {
-  const imported = await importGoldenSample({ persist: false });
-  const store = versionedMemoryStore(imported.episode);
-  await runAgent("golden-001", "voice-agent", store);
+  const source = await readFixtureEpisode();
+  const store = versionedMemoryStore(source);
+  const review = fixtureAssetFileDependencies(source);
+  await runAgent("golden-001", "voice-agent", { ...store, review });
   await approveGate(
     "golden-001",
     "assets",
     approvalRequest(store.episode, "assets", "离线回归批准素材"),
     store
   );
-  await runAgent("golden-001", "voice-agent", store);
+  await runAgent("golden-001", "voice-agent", { ...store, review });
 
   const result = await runAgent("golden-001", "render-agent", {
     ...store,

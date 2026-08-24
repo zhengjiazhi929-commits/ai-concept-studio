@@ -13,9 +13,9 @@ import {
   adaptApprovedStoryboardToShortAssetPlan
 } from "../src/server/production/short-asset-plan-adapter.mjs";
 import { buildAssetExecutionCheckpoint } from "../src/server/reviews/asset-execution-checkpoint.mjs";
-import { readEpisode } from "../src/shared/store.mjs";
 import { studioRoot } from "../src/shared/paths.mjs";
-import { currentGateArtifactHash } from "../src/shared/workflow.mjs";
+import { historicalApprovedStoryboardV3Episode } from
+  "./historical-approved-storyboard-v3.fixture.mjs";
 import {
   AGENT_SKILL_SHORT_CHAPTERS,
   AGENT_SKILL_SHORT_CHAPTER_WEIGHTS,
@@ -45,69 +45,9 @@ import {
 const EPISODE_ID = "agent-skill-tool-mcp-60s-20260813";
 const LOCAL_PLAN_PATH =
   `studio/data/production/episodes/${EPISODE_ID}/asset-plan-v001.json`;
-const HISTORICAL_STORYBOARD_V3_HASH =
-  "29f0914a188c5d17d7bf9e4f0adafb0fdbb1ce7b0665498e5d390c9e9e4bf182";
-
-async function withApprovedHistoricalStoryboardV3(source) {
-  const episode = structuredClone(source);
-  const artifact = JSON.parse(await readFile(resolve(
-    studioRoot,
-    "data",
-    "production",
-    "episodes",
-    EPISODE_ID,
-    "storyboard-draft-v003.json"
-  ), "utf8"));
-  const versions = episode.production.storyboardDraft.versions
-    .filter(({ version }) => version <= 3)
-    .map((entry) => structuredClone(entry));
-  const version = versions.find((entry) => entry.version === 3);
-  assert.ok(version, "测试夹具必须保留历史 Storyboard v3 元数据");
-  episode.production.storyboardDraft = {
-    ...version,
-    needsRevision: false,
-    versions
-  };
-  episode.scenes = structuredClone(artifact.timeline.scenes);
-  episode.subtitles = structuredClone(artifact.timeline.subtitles);
-  episode.render.durationSeconds = artifact.timeline.durationSeconds;
-  const artifactHash = currentGateArtifactHash(episode, "storyboard");
-  assert.equal(artifactHash, HISTORICAL_STORYBOARD_V3_HASH);
-  const reportId = "test-storyboard-v3-machine-pass";
-  episode.control.reviewEnabled = true;
-  episode.reviews.storyboard = {
-    status: "passed",
-    artifactVersion: 3,
-    artifactHash,
-    rubricVersion: "storyboard-v3",
-    revisionRounds: 0,
-    latestReportId: reportId,
-    reports: [{
-      id: reportId,
-      stage: "storyboard",
-      decision: "pass",
-      artifactVersion: 3,
-      artifactHash
-    }]
-  };
-  episode.approvals.storyboard = {
-    ...episode.approvals.storyboard,
-    status: "approved",
-    currentVersion: 3,
-    provenance: "reviewed-v2",
-    reviewReportId: reportId,
-    artifactHash
-  };
-  const storyboardStep = episode.pipeline.find((step) => step.gate === "storyboard");
-  storyboardStep.status = "complete";
-  storyboardStep.requiresHuman = false;
-  return episode;
-}
 
 async function localOnlyApprovedEpisode() {
-  const episode = await withApprovedHistoricalStoryboardV3(
-    await readEpisode(EPISODE_ID)
-  );
+  const episode = historicalApprovedStoryboardV3Episode();
   episode.production.assetPlanDirection = {
     strategy: "local-only",
     selectedBy: "human"
@@ -229,13 +169,11 @@ test("v4 实现摘要拒绝旧 v3 审批并覆盖入口、Root 与文字布局�
 
 test("Asset Agent 制作并登记代码动画后完成素材步骤，不把清单冒充上传图片", async () => {
   const episode = await localOnlyApprovedEpisode();
-  const existingAssets = structuredClone(episode.assets);
-  assert.equal(existingAssets.length, 5);
+  assert.equal(episode.assets.length, 0);
   episode.scenes = episode.scenes.map((scene) => {
     const { asset: _asset, audio: _audio, ...rest } = scene;
     return rest;
   });
-  episode.assets = existingAssets;
   const testDirectory = await mkdtemp(resolve(studioRoot, "public", "local-code-agent-test-"));
   const publicPrefix = testDirectory.slice(resolve(studioRoot, "public").length + 1);
   try {
@@ -264,11 +202,16 @@ test("Asset Agent 制作并登记代码动画后完成素材步骤，不把清�
 
 test("Asset Agent 发现动画清单漂移后生成新版本自愈", async () => {
   const episode = await localOnlyApprovedEpisode();
-  const previousPath = episode.assets[0].path;
-  episode.assets[0] = { ...episode.assets[0], sha256: "0".repeat(64) };
   const testDirectory = await mkdtemp(resolve(studioRoot, "public", "local-code-repair-test-"));
   const publicPrefix = testDirectory.slice(resolve(studioRoot, "public").length + 1);
   try {
+    episode.assets = await buildLocalCodeAssets(episode, {
+      now: new Date("2026-08-13T10:00:00.000Z"),
+      outputDirectory: testDirectory,
+      publicPrefix
+    });
+    const previousPath = episode.assets[0].path;
+    episode.assets[0] = { ...episode.assets[0], sha256: "0".repeat(64) };
     const result = await agents["asset-agent"].run(episode, {
       localCodeAssetOptions: { outputDirectory: testDirectory, publicPrefix },
       now: new Date("2026-08-13T10:00:00.000Z")

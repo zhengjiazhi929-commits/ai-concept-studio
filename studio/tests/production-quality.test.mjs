@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readEpisode } from "../src/shared/store.mjs";
+import { readFixtureEpisode } from "./episode-fixture.mjs";
 import { evaluateProductionQuality } from "../src/server/production/quality.mjs";
 
 test("黄金样例通过内容质量门槛，并明确标记无旁白预览", async () => {
-  const episode = await readEpisode("golden-001");
+  const episode = await readFixtureEpisode();
   const quality = evaluateProductionQuality(episode, { stage: "qa" });
   assert.equal(quality.passed, true);
   assert.ok(quality.score >= 90);
@@ -12,7 +12,7 @@ test("黄金样例通过内容质量门槛，并明确标记无旁白预览", as
 });
 
 test("字幕断层和未绑定证据素材会阻止最终 QA", async () => {
-  const episode = structuredClone(await readEpisode("golden-001"));
+  const episode = structuredClone(await readFixtureEpisode());
   episode.subtitles[1].start += 2;
   episode.scenes.find((scene) => scene.type === "evidence").asset = null;
   const quality = evaluateProductionQuality(episode, { stage: "qa" });
@@ -22,7 +22,7 @@ test("字幕断层和未绑定证据素材会阻止最终 QA", async () => {
 });
 
 test("固定字符数把字幕切在词语中间时必须退回 Storyboard Agent", async () => {
-  const episode = structuredClone(await readEpisode("golden-001"));
+  const episode = structuredClone(await readFixtureEpisode());
   episode.subtitles[0].text = "Agent Skil";
   episode.subtitles[1].text = "l 可以反复调用";
   const quality = evaluateProductionQuality(episode, { stage: "qa" });
@@ -34,7 +34,7 @@ test("固定字符数把字幕切在词语中间时必须退回 Storyboard Agent
 });
 
 test("过短尾句和字幕开头空格必须退回 Storyboard Agent", async () => {
-  const episode = structuredClone(await readEpisode("golden-001"));
+  const episode = structuredClone(await readFixtureEpisode());
   const first = episode.subtitles[0];
   const second = episode.subtitles[1];
   const originalBoundary = first.end;
@@ -53,7 +53,7 @@ test("过短尾句和字幕开头空格必须退回 Storyboard Agent", async () 
 });
 
 test("结构完整但旁白量不足的十分钟脚本不能通过机器审核", async () => {
-  const episode = structuredClone(await readEpisode("golden-001"));
+  const episode = structuredClone(await readFixtureEpisode());
   const sections = Array.from({ length: 6 }, (_, index) => ({
     id: `S${String(index + 1).padStart(2, "0")}`,
     heading: `章节 ${index + 1}`,
@@ -93,7 +93,7 @@ test("结构完整但旁白量不足的十分钟脚本不能通过机器审核",
 });
 
 test("结构化脚本每一节都必须绑定研究证据", async () => {
-  const episode = structuredClone(await readEpisode("golden-001"));
+  const episode = structuredClone(await readFixtureEpisode());
   episode.production.scriptDraft = {
     ...(episode.production.scriptDraft ?? {}),
     version: 1,
@@ -116,7 +116,7 @@ test("结构化脚本每一节都必须绑定研究证据", async () => {
 });
 
 test("生成分镜必须达到场景规模并覆盖已批准脚本内容", async () => {
-  const episode = structuredClone(await readEpisode("golden-001"));
+  const episode = structuredClone(await readFixtureEpisode());
   episode.production.scriptDraft = {
     version: 2,
     artifactPath: "studio/data/production/episodes/golden-001/script-draft-v002.json",
@@ -142,7 +142,7 @@ test("生成分镜必须达到场景规模并覆盖已批准脚本内容", async
 });
 
 test("正式旁白缺少可验证时长时不能通过素材总审", async () => {
-  const episode = structuredClone(await readEpisode("golden-001"));
+  const episode = structuredClone(await readFixtureEpisode());
   episode.previewMode = "production";
   episode.voice = {
     ...episode.voice,
