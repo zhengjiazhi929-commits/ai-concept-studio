@@ -1,6 +1,6 @@
 # AI Concept Studio 当前状态
 
-更新时间：2026-08-25 16:46（Asia/Shanghai）
+更新时间：2026-08-25 16:49（Asia/Shanghai）
 
 状态真源版本：7
 
@@ -10,13 +10,13 @@
 
 ## 当前准确结论
 
-当前分支正在把已经完成的安全、恢复、素材权利、CI 和文档整改重新落到最新远端
-`main` 上。它保留了主线已经合并的 v004 与动效库，不包含 Research、Script 或
-Storyboard 的真实业务 Gate 状态变更。
+当前分支已经把安全、恢复、素材权利、CI 和文档整改重新落到最新远端 `main` 上。
+它保留了主线已经合并的 v004 与动效库，不包含 Research、Script 或 Storyboard 的
+真实业务 Gate 状态变更。
 
-旧集成候选在原基线上通过过 `571/571` 测试，独立攻击复核结论为 P0=0、P1=0；
-但重新基于最新 `main` 组装后必须再次完成全量本地验证和 GitHub hosted CI，才能
-获得新的技术完成结论。旧验证不能替代本分支的集成验证。
+重新组装后的代码树 `7da032447098e6d8877ab01eb3e6fb1d6d4ef3ba` 已完成本地离线
+`pnpm verify`：`597/597` 测试通过，P0=0、P1=0 的攻击回归仍通过。当前只剩 push、
+PR merge-ref hosted CI 和合并后的 `main` CI；在这些结果出现前不宣称已经合并或发布。
 
 ## 本分支整改范围
 
@@ -44,17 +44,19 @@ Storyboard 的真实业务 Gate 状态变更。
 | 层级 | 当前状态 |
 |---|---|
 | 旧集成快照机器检查 | `571/571` 及离线 `pnpm verify` 通过，仅作历史证据 |
-| 最新 main 重组后的机器检查 | 待运行 |
-| 技术完成 | 待本地全量验证与 hosted CI |
+| 最新 main 重组后的聚焦检查 | v004 冲突点与安全/恢复回归 `102/102` 通过 |
+| 最新 main 重组后的全量检查 | `597/597`；256 个源码文件；35/35 动效；0 失败 |
+| 回滚与固定渲染 | 7/7；19,776 bytes；external/paid/live read/write 均为 0 |
+| 技术完成 | 本地完成；待 hosted push CI 与 PR merge-ref CI |
 | 业务验收 | 不在本分支范围；没有新增人工批准 |
-| Git 状态 | 本地组装中，未 push、未建 PR、未合并 |
+| Git 状态 | 本地候选已验证，未 push、未建 PR、未合并 |
 | 发布 | 未发布 |
 
 GitHub 当前没有分支保护，也没有既有 hosted CI 运行记录。因此本次流程自行执行以下
 硬门禁：基于最新 `main` → 本地全量验证 → push → PR merge-ref CI 全绿 → 再合并；
 任一环节失败都停在 `main` 合并之前。
 
-- `machine_status`: rebased_candidate_verification_pending
-- `technical_status`: core_remediation_assembly_in_progress
+- `machine_status`: rebased_candidate_local_verification_passed
+- `technical_status`: core_remediation_local_complete_hosted_ci_pending
 - `business_acceptance_status`: unchanged_out_of_scope
 - `release_status`: local_only_not_pushed_not_merged_not_released
