@@ -1,26 +1,21 @@
 # AI Concept Studio 当前状态
 
-更新时间：2026-08-25 16:53（Asia/Shanghai）
+更新时间：2026-08-25 16:58（Asia/Shanghai）
 
-状态真源版本：7
+状态真源版本：8
 
-整改分支：`codex/agent-v2-core-remediation-20260825`
-
-基线：`origin/main@468e8732d0b26316ef260b538ad17ce95cc6afd0`。
+当前主线：`main@4408ea52ce8987a6c7a7646c43d2a13179ce07cc`。
 
 ## 当前准确结论
 
-当前分支已经把安全、恢复、素材权利、CI 和文档整改重新落到最新远端 `main` 上。
-它保留了主线已经合并的 v004 与动效库，不包含 Research、Script 或 Storyboard 的
-真实业务 Gate 状态变更。
+安全、恢复、素材权利、CI 和文档整改已经通过 PR #2 合并到远端 `main`。合并保留了
+原有 v004 与动效库，且没有包含 Research、Script 或 Storyboard 的真实业务 Gate 状态变更。
 
-重新组装后的代码树 `7da032447098e6d8877ab01eb3e6fb1d6d4ef3ba` 已完成本地离线
-`pnpm verify`：`597/597` 测试通过，P0=0、P1=0 的攻击回归仍通过。当前只剩 push、
-最新 push hosted CI 已通过，包括 frozen install、`pnpm audit --prod --audit-level high`
-和完整 `pnpm verify`。当前只剩 PR merge-ref CI 和合并后的 `main` CI；在这些结果出现前
-不宣称已经合并或发布。
+本地离线 `pnpm verify`、分支 push CI、PR merge-ref CI 和合并后的 `main` CI 均已通过；
+全量测试为 `597/597`，P0=0、P1=0 的攻击回归仍通过。核心仓库整改已经技术完成并合并，
+但这不等于真实业务 Gate 已批准、产品已发布或开源发布材料已经齐备。
 
-## 本分支整改范围
+## 已合并整改范围
 
 1. 外部素材下载的公网 HTTPS、DNS、重定向、超时和流式大小边界。
 2. Provider 调用的 ambiguous 结算冻结、人工对账和禁止静默重试。
@@ -35,7 +30,7 @@
 
 ## 明确排除
 
-- 不修改 `studio/data/episodes/golden-001/episode.json`。
+- PR #2 未修改 `studio/data/episodes/golden-001/episode.json`。
 - 不批准或推进任何真实 Research、Script、Storyboard、Assets/Voice 或 Final Gate。
 - 不调用模型、语音、图片、视频、发布或其他付费 Provider。
 - 不把业务 Gate 状态提交混入核心整改 PR。
@@ -49,17 +44,19 @@
 | 最新 main 重组后的聚焦检查 | v004 冲突点与安全/恢复回归 `102/102` 通过 |
 | 最新 main 重组后的全量检查 | `597/597`；256 个源码文件；35/35 动效；0 失败 |
 | 回滚与固定渲染 | 7/7；19,776 bytes；external/paid/live read/write 均为 0 |
-| Hosted push CI | `Verify` run `32828897874` 通过；固定 Actions 已使用 Node 24 runtime |
-| 技术完成 | 本地与 hosted push CI 完成；待 PR merge-ref CI |
+| Hosted push CI | `Verify` run `32829050878` 通过；固定 Actions 已使用 Node 24 runtime |
+| PR merge-ref CI | `Verify` run `32829179335` 通过 |
+| main 合并后 CI | `Verify` run `32829318265` 通过；合并提交 `4408ea5` |
+| 技术完成 | 核心仓库整改已完成并合并 |
 | 业务验收 | 不在本分支范围；没有新增人工批准 |
-| Git 状态 | 分支已 push；尚未建 PR、未合并 |
-| 发布 | 未发布 |
+| Git 状态 | PR #2 已合并到 `main` |
+| 发布 | 代码已合并；产品与开源版本未发布 |
 
-GitHub 当前没有分支保护，也没有既有 hosted CI 运行记录。因此本次流程自行执行以下
-硬门禁：基于最新 `main` → 本地全量验证 → push → PR merge-ref CI 全绿 → 再合并；
-任一环节失败都停在 `main` 合并之前。
+GitHub 当前仍没有分支保护。本次已人工执行“基于最新 `main` → 本地全量验证 → push CI →
+PR merge-ref CI → 合并 → main CI”的完整门禁；后续应把已出现的 `Verify` check 配置为
+`main` 必需状态检查。
 
-- `machine_status`: local_and_hosted_push_verification_passed
-- `technical_status`: core_remediation_hosted_push_ci_passed_pr_pending
+- `machine_status`: local_pr_and_main_hosted_verification_passed
+- `technical_status`: core_remediation_merged_to_main
 - `business_acceptance_status`: unchanged_out_of_scope
-- `release_status`: branch_pushed_not_merged_not_released
+- `release_status`: code_merged_product_and_open_source_not_released
