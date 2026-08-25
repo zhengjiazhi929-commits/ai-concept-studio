@@ -1,4 +1,5 @@
 import { appendEvent } from "../../shared/store.mjs";
+import { requireSideEffectGrant } from "../security/side-effect-capability.mjs";
 import { runTrendRadarAgent } from "../trends/agent.mjs";
 import {
   readConceptTaxonomy,
@@ -20,6 +21,64 @@ import {
 } from "./store.mjs";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+const collectorSideEffectDependencyNames = Object.freeze([
+  "appendEvent",
+  "collectPublicSource",
+  "readCollectorConfig",
+  "readCollectorSourceHealth",
+  "readConceptTaxonomy",
+  "readTrendSignals",
+  "readTrendSources",
+  "runTrendRadarAgent",
+  "updateCollectorSourceHealth",
+  "upsertTrendSignals",
+  "writeCollectorAssistTask",
+  "writeCollectorRun"
+]);
+
+function collectorDependencies(options = {}) {
+  const injected = options.dependencies ?? {};
+  const defaults = {
+    appendEvent,
+    collectPublicSource,
+    readCollectorConfig,
+    readCollectorSourceHealth,
+    readConceptTaxonomy,
+    readTrendSignals,
+    readTrendSources,
+    runTrendRadarAgent,
+    updateCollectorSourceHealth,
+    upsertTrendSignals,
+    writeCollectorAssistTask,
+    writeCollectorRun
+  };
+  return {
+    values: Object.fromEntries(
+      collectorSideEffectDependencyNames.map((name) => [
+        name,
+        injected[name] ?? defaults[name]
+      ])
+    ),
+    fullyInjected: collectorSideEffectDependencyNames.every(
+      (name) => typeof injected[name] === "function"
+    )
+  };
+}
+
+function requireCollectorSideEffects(options, fullyInjected, operation, scopes) {
+  // Test-only seam: every side-effect dependency must be injected, and an
+  // explicit capability requirement always wins. Default/HTTP paths cannot
+  // enter this branch because at least one production dependency remains.
+  if (fullyInjected && options.requireSideEffectCapability !== true) return null;
+  return requireSideEffectGrant(options, {
+    episodeId: options.episodeId ?? "studio",
+    operation: options.capabilityOperation ?? operation,
+    scopes,
+    maxCalls: 0,
+    maxCostUsd: 0
+  });
+}
 
 async function mapWithConcurrency(items, limit, worker) {
   const results = new Array(items.length);
@@ -47,10 +106,22 @@ function summarizeNormalization(normalized) {
   };
 }
 
-async function refreshRadarIfNeeded(enabled, acceptedCount) {
+async function refreshRadarIfNeeded(
+  enabled,
+  acceptedCount,
+  sideEffectGrant,
+  options,
+  dependencies,
+  defaultOperation
+) {
   if (!enabled || acceptedCount === 0) return { status: "skipped" };
   try {
-    const result = await runTrendRadarAgent();
+    const result = await dependencies.runTrendRadarAgent({
+      sideEffectGrant: sideEffectGrant ?? undefined,
+      requireSideEffectCapability: Boolean(sideEffectGrant),
+      capabilityOperation: options.capabilityOperation ?? defaultOperation,
+      episodeId: options.episodeId ?? "studio"
+    });
     return { status: "complete", runId: result.run.id };
   } catch (error) {
     return {
@@ -61,30 +132,38 @@ async function refreshRadarIfNeeded(enabled, acceptedCount) {
 }
 
 export async function runCollectorAgent(options = {}) {
+  const { values: dependencies, fullyInjected } = collectorDependencies(options);
+  const sideEffectGrant = requireCollectorSideEffects(
+    options,
+    fullyInjected,
+    "collector:run",
+    ["state.write", "filesystem.write", "network.request"]
+  );
   const now = options.now instanceof Date ? options.now : new Date(options.now ?? Date.now());
   const startedAt = now.toISOString();
-  await appendEvent({
+  await dependencies.appendEvent({
     type: "agent.started",
     agentId: "creator-signal-collector",
     message: "创作者公开信号采集开始运行"
   });
   try {
     const [config, sources, taxonomy, existingSignals, previousHealth] = await Promise.all([
-      readCollectorConfig(),
-      readTrendSources(),
-      readConceptTaxonomy(),
-      readTrendSignals(),
-      readCollectorSourceHealth()
+      dependencies.readCollectorConfig(),
+      dependencies.readTrendSources(),
+      dependencies.readConceptTaxonomy(),
+      dependencies.readTrendSignals(),
+      dependencies.readCollectorSourceHealth()
     ]);
     const enabledSources = sources.creators.filter((source) => source.enabled !== false);
     const sourceResults = await mapWithConcurrency(
       enabledSources,
       config.maxConcurrency,
       (source) =>
-        collectPublicSource(source, {
+        dependencies.collectPublicSource(source, {
           config,
           now,
-          fetchImpl: options.fetchImpl ?? fetch
+          fetchImpl: options.fetchImpl,
+          lookupImpl: options.lookupImpl
         })
     );
     const batchId = buildRunId("collector-direct", now);
@@ -96,7 +175,7 @@ export async function runCollectorAgent(options = {}) {
       .filter((item) => item.status === "accepted")
       .map((item) => item.signal);
     const upsert = acceptedSignals.length
-      ? await upsertTrendSignals(acceptedSignals, { importTag: batchId })
+      ? await dependencies.upsertTrendSignals(acceptedSignals, { importTag: batchId })
       : { added: 0, updated: 0, unchanged: 0 };
     const previousHealthMap = new Map(
       previousHealth.sources.map((source) => [source.creatorId, source])
@@ -124,7 +203,7 @@ export async function runCollectorAgent(options = {}) {
         ...(result.status === "success" ? { lastSuccessAt: startedAt } : {})
       };
     });
-    await updateCollectorSourceHealth(healthEntries, startedAt);
+    await dependencies.updateCollectorSourceHealth(healthEntries, startedAt);
     const latestSignalMap = new Map();
     for (const signal of existingSignals.signals) {
       const timestamp = signal.publishedAt || signal.observedAt;
@@ -168,11 +247,15 @@ export async function runCollectorAgent(options = {}) {
         observations: []
       }
     };
-    await writeCollectorAssistTask(assistTask);
+    await dependencies.writeCollectorAssistTask(assistTask);
     const normalizationSummary = summarizeNormalization(normalized);
     const radarRefresh = await refreshRadarIfNeeded(
       options.refreshRadar ?? config.refreshRadarAfterCollection,
-      acceptedSignals.length
+      acceptedSignals.length,
+      sideEffectGrant,
+      options,
+      dependencies,
+      "collector:run"
     );
     const run = {
       schemaVersion: 1,
@@ -221,8 +304,8 @@ export async function runCollectorAgent(options = {}) {
         })),
       radarRefresh
     };
-    const runPath = await writeCollectorRun(run);
-    await appendEvent({
+    const runPath = await dependencies.writeCollectorRun(run);
+    await dependencies.appendEvent({
       type: "agent.finished",
       agentId: "creator-signal-collector",
       status: "complete",
@@ -230,7 +313,7 @@ export async function runCollectorAgent(options = {}) {
     });
     return { run, runPath };
   } catch (error) {
-    await appendEvent({
+    await dependencies.appendEvent({
       type: "agent.failed",
       agentId: "creator-signal-collector",
       message: error instanceof Error ? error.message : "创作者信号采集失败"
@@ -240,11 +323,18 @@ export async function runCollectorAgent(options = {}) {
 }
 
 export async function importAssistedCollectorBatch(batch, options = {}) {
+  const { values: dependencies, fullyInjected } = collectorDependencies(options);
+  const sideEffectGrant = requireCollectorSideEffects(
+    options,
+    fullyInjected,
+    "collector:import-assisted-batch",
+    ["state.write", "filesystem.write"]
+  );
   const now = options.now instanceof Date ? options.now : new Date(options.now ?? Date.now());
   const [config, sources, taxonomy] = await Promise.all([
-    readCollectorConfig(),
-    readTrendSources(),
-    readConceptTaxonomy()
+    dependencies.readCollectorConfig(),
+    dependencies.readTrendSources(),
+    dependencies.readConceptTaxonomy()
   ]);
   const validation = validateAssistedBatch(
     batch,
@@ -268,10 +358,10 @@ export async function importAssistedCollectorBatch(batch, options = {}) {
     .filter((item) => item.status === "accepted")
     .map((item) => item.signal);
   const upsert = acceptedSignals.length
-    ? await upsertTrendSignals(acceptedSignals, { importTag: batch.batchId })
+    ? await dependencies.upsertTrendSignals(acceptedSignals, { importTag: batch.batchId })
     : { added: 0, updated: 0, unchanged: 0 };
   const creatorIds = Array.from(new Set(batch.observations.map((item) => item.creatorId)));
-  await updateCollectorSourceHealth(
+  await dependencies.updateCollectorSourceHealth(
     creatorIds.map((creatorId) => ({
       creatorId,
       lastAttemptAt: batch.observedAt,
@@ -287,7 +377,11 @@ export async function importAssistedCollectorBatch(batch, options = {}) {
   const normalizationSummary = summarizeNormalization(normalized);
   const radarRefresh = await refreshRadarIfNeeded(
     options.refreshRadar ?? config.refreshRadarAfterCollection,
-    acceptedSignals.length
+    acceptedSignals.length,
+    sideEffectGrant,
+    options,
+    dependencies,
+    "collector:import-assisted-batch"
   );
   const run = {
     schemaVersion: 1,
@@ -335,8 +429,8 @@ export async function importAssistedCollectorBatch(batch, options = {}) {
       })),
     radarRefresh
   };
-  const runPath = await writeCollectorRun(run);
-  await appendEvent({
+  const runPath = await dependencies.writeCollectorRun(run);
+  await dependencies.appendEvent({
     type: "collector.assisted-batch-imported",
     agentId: "creator-signal-collector",
     message: `Codex 辅助采集已导入：${batch.observations.length} 条观察`

@@ -33,9 +33,7 @@ export function currentGateVersion(episode, gate) {
   if (gate === "research") {
     return episode.research?.version
       ?? episode.research?.versions?.at(-1)?.version
-      ?? (episode.system?.trustedFixture === true
-        ? episode.approvals?.research?.currentVersion ?? null
-        : null);
+      ?? null;
   }
   if (gate === "script") return episode.production?.scriptDraft?.version ?? null;
   if (gate === "storyboard") return episode.production?.storyboardDraft?.version ?? null;
@@ -76,21 +74,28 @@ function stableAssets(assets = []) {
     source: asset.source ?? null,
     bytes: asset.bytes ?? null,
     sha256: asset.sha256 ?? null,
-    privacy: asset.privacy ?? null
+    privacy: asset.privacy ?? null,
+    rights: asset.rights ?? null
   }));
 }
 
-function stableStoryboardScenes(scenes = []) {
+// Gate 3 approves the storyboard's user-visible structure and logical evidence
+// intent. Physical asset/audio files are produced later and are bound by Gate 4;
+// keeping them out here avoids invalidating an approved storyboard merely because
+// the asset worker materialized the already-approved intent.
+export function storyboardGateScenes(scenes = []) {
   return scenes.map((scene) => ({
     id: scene.id ?? null,
     start: scene.start ?? null,
     end: scene.end ?? null,
     type: scene.type ?? null,
+    index: scene.index ?? null,
     kicker: scene.kicker ?? null,
     title: scene.title ?? null,
     statement: scene.statement ?? null,
     subtitle: scene.subtitle ?? null,
     label: scene.label ?? null,
+    evidenceRef: scene.evidenceRef ?? null,
     assetHint: scene.assetHint ?? null
   }));
 }
@@ -103,7 +108,7 @@ export function gateArtifactPayload(episode, gate) {
   if (gate === "storyboard") {
     return {
       storyboardDraft: episode.production?.storyboardDraft ?? null,
-      scenes: stableStoryboardScenes(episode.scenes ?? []),
+      scenes: storyboardGateScenes(episode.scenes ?? []),
       subtitles: episode.subtitles ?? [],
       render: {
         width: episode.render?.width ?? null,
@@ -135,7 +140,8 @@ export function gateArtifactPayload(episode, gate) {
         bitsPerSample: episode.voice?.bitsPerSample ?? null,
         provenance: episode.voice?.provenance ?? null,
         verification: episode.voice?.verification ?? null,
-        authorization: episode.voice?.authorization ?? null
+        authorization: episode.voice?.authorization ?? null,
+        rights: episode.voice?.rights ?? null
       },
       sceneBindings: (episode.scenes ?? []).map((scene) => ({
         id: scene.id,
@@ -262,13 +268,23 @@ export function applyApprovalDecision(sourceEpisode, options) {
     throw new Error(`Unknown approval decision: ${decision}`);
   }
   const note = String(options.note ?? "").trim();
+  const actor = typeof options.actor === "string" && options.actor.startsWith("human:")
+    ? options.actor.slice(0, 128)
+    : null;
   if (decision === "rejected" && !note) throw new Error("驳回时必须填写修改意见");
 
   const episode = structuredClone(sourceEpisode);
   const at = timestamp(options.now);
   const version = currentGateVersion(episode, gate);
   const previous = createApprovalState(episode.approvals?.[gate]);
-  const record = { at, gate, decision, note, version };
+  const record = {
+    at,
+    gate,
+    decision,
+    note,
+    version,
+    ...(actor ? { actor } : {})
+  };
   episode.approvals = episode.approvals ?? {};
   episode.approvals[gate] = {
     ...previous,
@@ -347,4 +363,78 @@ export function resetApprovalForVersion(sourceApproval, version) {
     reviewReportId: null,
     artifactHash: null
   };
+}
+
+export function prepareGateForHumanReview(sourceEpisode, options = {}) {
+  const gate = options.gate;
+  if (!APPROVAL_GATE_IDS.has(gate)) throw new Error(`Unknown approval gate: ${gate}`);
+  const reason = String(options.reason ?? "").trim();
+  if (!reason) throw new Error("准备重新审批时必须记录原因");
+
+  const episode = structuredClone(sourceEpisode);
+  const definition = gateDefinitions.get(gate);
+  const stepIndex = episode.pipeline.findIndex((step) => step.id === definition.stepId);
+  const version = currentGateVersion(episode, gate);
+  const artifactHash = currentGateArtifactHash(episode, gate);
+  if (stepIndex < 0 || !Number.isInteger(version) || !/^[a-f0-9]{64}$/u.test(artifactHash ?? "")) {
+    throw new Error(`当前 ${gate} 产物没有可供人工复核的完整版本与哈希`);
+  }
+
+  const previous = createApprovalState(episode.approvals?.[gate]);
+  const currentStep = episode.pipeline[stepIndex];
+  const alreadyPrepared = Boolean(
+    previous.status === "pending"
+    && previous.currentVersion === version
+    && previous.artifactHash === null
+    && currentStep.status === "waiting_approval"
+    && currentStep.requiresApproval === gate
+  );
+  if (alreadyPrepared) return { episode, changed: false, version, artifactHash };
+
+  const at = timestamp(options.now);
+  episode.approvals[gate] = resetApprovalForVersion(previous, version);
+  invalidateReviewForGate(episode, gate);
+  resetDownstreamApprovals(episode, stepIndex, gate);
+
+  for (let index = stepIndex; index < episode.pipeline.length; index += 1) {
+    const step = episode.pipeline[index];
+    episode.pipeline[index] = index === stepIndex
+      ? {
+          ...step,
+          status: "waiting_approval",
+          progress: step.progress ?? 0,
+          requiresApproval: gate,
+          requiresHuman: false,
+          message: reason,
+          lastError: null
+        }
+      : {
+          ...step,
+          status: "pending",
+          progress: 0,
+          requiresApproval: null,
+          requiresHuman: false,
+          message: `等待当前 ${gate} Gate 完成`,
+          lastError: null
+        };
+  }
+
+  episode.render = { ...(episode.render ?? {}), status: "stale", progress: 0 };
+  episode.qa = { ...(episode.qa ?? {}), status: "stale", checkedAt: at };
+  episode.status = "in_production";
+  episode.updatedAt = at;
+  episode.history = [
+    ...(episode.history ?? []),
+    {
+      at,
+      type: "approval-binding-invalidated",
+      gate,
+      version,
+      previousVersion: previous.currentVersion ?? null,
+      previousArtifactHash: previous.artifactHash ?? null,
+      artifactHash,
+      message: reason
+    }
+  ];
+  return { episode, changed: true, version, artifactHash };
 }

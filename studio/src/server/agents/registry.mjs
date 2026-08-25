@@ -44,6 +44,14 @@ function outcome(status, message, extras = {}) {
   return { status, message, artifacts: [], findings: [], ...extras };
 }
 
+function externalAssetOptionsWithoutCapabilityAuthority(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const sanitized = { ...value };
+  delete sanitized.authorizeSideEffect;
+  delete sanitized.sideEffectGrant;
+  return sanitized;
+}
+
 function aiState(episode, generated) {
   if (generated.generationKind?.startsWith("deterministic-")) {
     return {
@@ -58,6 +66,9 @@ function aiState(episode, generated) {
     lastProvider: generated.provider,
     lastModel: generated.model,
     lastUsage: generated.usage,
+    ...(generated.promptBinding
+      ? { lastPromptBinding: structuredClone(generated.promptBinding) }
+      : {}),
     lastRequestAt: new Date().toISOString(),
     attempts: [...(episode.production?.ai?.attempts ?? []), ...(generated.attempts ?? [])]
   };
@@ -96,6 +107,9 @@ function versionEntry(generated, extras = {}) {
     usage: generated.usage,
     generatedAt: new Date().toISOString(),
     ...(generated.generationKind ? { generationKind: generated.generationKind } : {}),
+    ...(generated.promptBinding
+      ? { promptBinding: structuredClone(generated.promptBinding) }
+      : {}),
     ...(generated.sourceSnapshotHash
       ? { sourceSnapshotHash: generated.sourceSnapshotHash }
       : {}),
@@ -161,7 +175,14 @@ export const agents = {
     label: "热点发现 Agent",
     async run(episode, context = {}) {
       if (!episode.trendSelection && episode.id !== "golden-001") {
-        const { run, runPath } = await runTrendRadarAgent();
+        const { run, runPath } = await runTrendRadarAgent({
+          sideEffectGrant: context.sideEffectGrant ?? undefined,
+          requireSideEffectCapability: Boolean(context.sideEffectGrant),
+          capabilityOperation: "worker:trend-agent",
+          episodeId: episode.id,
+          dependencies: context.sideEffectDependencies ?? undefined,
+          now: context.now ?? undefined
+        });
         return outcome(
           "blocked",
           `发现 ${run.summary.formalCandidateCount} 个正式候选，请先在概念雷达中人工选择`,
@@ -183,7 +204,13 @@ export const agents = {
         return outcome("complete", `研究证据已批准，共登记 ${episode.sourceDocs.length} 份产物`);
       }
       const result = await runEpisodeResearchAgent(episode, {
-        reviewFeedback: context.reviewFeedback
+        reviewFeedback: context.reviewFeedback,
+        sideEffectGrant: context.sideEffectGrant ?? undefined,
+        requireSideEffectCapability: Boolean(context.sideEffectGrant),
+        capabilityOperation: "worker:research-agent",
+        episodeId: episode.id,
+        dependencies: context.sideEffectDependencies ?? undefined,
+        now: context.now ?? undefined
       });
       const ready = result.pack.readiness.readyForFactApproval;
       return outcome(
@@ -235,7 +262,11 @@ export const agents = {
       const generated = await generateScriptDraft(episode, {
         client: context.aiClient ?? undefined,
         taskProfile: context.taskProfile ?? undefined,
-        reviewFeedback: context.reviewFeedback
+        reviewFeedback: context.reviewFeedback,
+        writeArtifact: context.writeArtifact ?? undefined,
+        sideEffectGrant: context.sideEffectGrant ?? undefined,
+        requireSideEffectCapability: Boolean(context.sideEffectGrant),
+        capabilityOperation: "worker:script-agent"
       });
       const entry = versionEntry(generated);
       const generationLabel = generated.generationKind === "deterministic-approved-source-adapter"
@@ -301,7 +332,10 @@ export const agents = {
         client: context.aiClient ?? undefined,
         taskProfile: context.taskProfile ?? undefined,
         reviewFeedback: context.reviewFeedback,
-        writeArtifact: context.writeArtifact ?? undefined
+        writeArtifact: context.writeArtifact ?? undefined,
+        sideEffectGrant: context.sideEffectGrant ?? undefined,
+        requireSideEffectCapability: Boolean(context.sideEffectGrant),
+        capabilityOperation: "worker:storyboard-agent"
       });
       const entry = versionEntry(generated, {
         assetChecklist: generated.value.assetChecklist,
@@ -377,7 +411,10 @@ export const agents = {
           client: context.aiClient ?? undefined,
           taskProfile: context.taskProfile ?? undefined,
           reviewFeedback: context.reviewFeedback,
-          writeArtifact: context.writeArtifact ?? undefined
+          writeArtifact: context.writeArtifact ?? undefined,
+          sideEffectGrant: context.sideEffectGrant ?? undefined,
+          requireSideEffectCapability: Boolean(context.sideEffectGrant),
+          capabilityOperation: "worker:asset-agent"
         });
         const entry = versionEntry(generated);
         const assetBundleRevision = nextAssetBundleRevision(episode);
@@ -529,8 +566,13 @@ export const agents = {
         }
         try {
           externalExecution = await buildApprovedExternalAssets(episode, {
-            ...(context.externalAssetOptions ?? {}),
+            ...externalAssetOptionsWithoutCapabilityAuthority(
+              context.externalAssetOptions
+            ),
             allowedToolIds: context.toolIds,
+            sideEffectGrant: context.sideEffectGrant ?? undefined,
+            capabilityOperation: "worker:asset-agent",
+            requireSideEffectCapability: Boolean(context.sideEffectGrant),
             now: context.now
           });
         } catch (error) {
@@ -630,7 +672,7 @@ export const agents = {
   "voice-agent": {
     id: "voice-agent",
     label: "旁白与素材确认 Agent",
-    async run(episode) {
+    async run(episode, context = {}) {
       const allowsMutedProof = episode.previewMode === "visual-proof";
       const mutedProofApproved =
         allowsMutedProof && episode.approvals.assets.status === "approved";
@@ -642,7 +684,12 @@ export const agents = {
         const plan =
           existingPlan?.artifactPath && !episode.voice?.needsRevision
             ? existingPlan
-            : await createVoicePlan(episode);
+            : await createVoicePlan(episode, {
+                writeArtifact: context.writeArtifact ?? undefined,
+                sideEffectGrant: context.sideEffectGrant ?? undefined,
+                requireSideEffectCapability: Boolean(context.sideEffectGrant),
+                capabilityOperation: "worker:voice-agent"
+              });
         const planState = existingPlan?.artifactPath && !episode.voice?.needsRevision
           ? existingPlan
           : {

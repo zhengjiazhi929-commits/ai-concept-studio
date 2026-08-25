@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   appendAuditEvent,
+  readAuditEvents,
   validateAuditLedger
 } from "../src/shared/audit-log.mjs";
 import {
@@ -68,15 +69,51 @@ test("审计事件使用哈希链和幂等键，篡改与重复写入都可识�
     await appendAuditEvent(path, {
       type: "agent.completed",
       episodeId: "episode-1",
-      idempotencyKey: "episode-1:plan-1:complete"
+      idempotencyKey: "episode-1:plan-1:complete",
+      provider: { apiKey: "opaque-synthetic-credential" }
     });
     const ledger = JSON.parse(await readFile(path, "utf8"));
     assert.equal(ledger.records.length, 2);
+    assert.equal(ledger.records[1].provider.apiKey, "[REDACTED]");
+    assert.equal(JSON.stringify(ledger).includes("opaque-synthetic-credential"), false);
     assert.equal(validateAuditLedger(ledger).valid, true);
     ledger.records[0].type = "approval.granted";
     assert.equal(validateAuditLedger(ledger).valid, false);
+    await writeFile(path, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
+    await assert.rejects(
+      readAuditEvents(path),
+      (error) => error.code === "audit_integrity_invalid"
+    );
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("截断或 malformed 的主审计账本 fail closed，不能降级为空或 legacy 事件", async (t) => {
+  for (const [label, content] of [
+    ["truncated", '{"stateVersion":1,"records":['],
+    ["malformed", '{"stateVersion":1,"records":"not-an-array"}']
+  ]) {
+    await t.test(label, async () => {
+      const directory = await mkdtemp(join(tmpdir(), `studio-audit-${label}-`));
+      const auditPath = join(directory, "audit.json");
+      const legacyPath = join(directory, "legacy", "events.ndjson");
+      try {
+        await mkdir(join(directory, "legacy"), { recursive: true });
+        await writeFile(auditPath, content, "utf8");
+        await writeFile(
+          legacyPath,
+          `${JSON.stringify({ type: "legacy.event", episodeId: "must-not-surface" })}\n`,
+          "utf8"
+        );
+        await assert.rejects(
+          readAuditEvents(auditPath, 80),
+          (error) => error.code === "audit_integrity_invalid"
+        );
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    });
   }
 });
 

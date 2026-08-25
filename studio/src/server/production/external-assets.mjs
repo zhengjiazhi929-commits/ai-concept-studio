@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from "node:crypto";
-import { isIP } from "node:net";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
@@ -9,6 +8,12 @@ import {
 } from "../../shared/paths.mjs";
 import { loadLocalEnvironment } from "../../shared/env.mjs";
 import { integrityHash } from "../../shared/integrity.mjs";
+import {
+  buildExternalGenerationRights,
+  validateAssetRights,
+  validateExternalRightsDeclaration
+} from "../../shared/asset-rights.mjs";
+import { fetchPublicHttps } from "../../shared/network.mjs";
 import { appendEvent, readEpisode, writeEpisode } from "../../shared/store.mjs";
 import { writeVersionedJson } from "../../shared/versioned-json-store.mjs";
 import {
@@ -21,6 +26,10 @@ import {
   assetExecutionPreflightValid,
   assertAssetExecutionAuthorized
 } from "../reviews/asset-execution-checkpoint.mjs";
+import {
+  consumeSideEffectGrantUsage,
+  requireSideEffectGrant
+} from "../security/side-effect-capability.mjs";
 
 export const EXTERNAL_ASSET_EXECUTOR_VERSION = "approved-external-assets-v1";
 
@@ -31,6 +40,12 @@ export const EXTERNAL_ASSET_TOOL_IDS = Object.freeze({
 
 const MAX_IMAGE_BYTES = 30 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 250 * 1024 * 1024;
+const MAX_IMAGE_PROVIDER_JSON_BYTES = 42 * 1024 * 1024;
+const MAX_VIDEO_PROVIDER_JSON_BYTES = 1024 * 1024;
+const PROVIDER_REQUEST_TIMEOUT_MS = 30_000;
+const VIDEO_POLL_REQUEST_TIMEOUT_MS = 30_000;
+const MEDIA_REQUEST_TIMEOUT_MS = 5 * 60_000;
+const READER_CANCEL_TIMEOUT_MS = 50;
 
 function timestamp(now) {
   return (now instanceof Date ? now : new Date(now ?? Date.now())).toISOString();
@@ -68,6 +83,94 @@ function executionError(message, code, extras = {}) {
   error.code = code;
   Object.assign(error, extras);
   return error;
+}
+
+function requestTimeoutMs(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0
+    ? Math.max(1, Math.trunc(parsed))
+    : fallback;
+}
+
+function createRequestDeadline(value, fallback) {
+  const controller = new AbortController();
+  const timeoutMs = requestTimeoutMs(value, fallback);
+  let expired = false;
+  const timer = setTimeout(() => {
+    expired = true;
+    const error = new Error(`request exceeded ${timeoutMs}ms deadline`);
+    error.name = "TimeoutError";
+    error.code = "external_asset_request_timeout";
+    controller.abort(error);
+  }, timeoutMs);
+  return {
+    signal: controller.signal,
+    get expired() {
+      return expired;
+    },
+    clear() {
+      clearTimeout(timer);
+    }
+  };
+}
+
+function waitForAbortable(promise, signal) {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise((resolvePromise, rejectPromise) => {
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    const onAbort = () => {
+      cleanup();
+      rejectPromise(signal.reason);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    Promise.resolve(promise).then(
+      (value) => {
+        cleanup();
+        resolvePromise(value);
+      },
+      (error) => {
+        cleanup();
+        rejectPromise(error);
+      }
+    );
+  });
+}
+
+async function waitForCleanup(promise, timeoutMs = READER_CANCEL_TIMEOUT_MS) {
+  let timer;
+  try {
+    await Promise.race([
+      Promise.resolve(promise).catch(() => undefined),
+      new Promise((resolveTimeout) => {
+        timer = setTimeout(resolveTimeout, timeoutMs);
+      })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function cancelResponseBody(response, reason) {
+  try {
+    await waitForCleanup(response?.body?.cancel?.(reason));
+  } catch {
+    // The response is already being abandoned; cancellation errors are non-actionable.
+  }
+}
+
+function ambiguousProviderRequest(code, timedOut = false, extras = {}) {
+  return executionError(
+    timedOut
+      ? "Provider 请求超时且是否执行无法确认，禁止自动重试"
+      : "Provider 请求没有得到可确认响应，禁止自动重试",
+    code,
+    {
+      requiresHuman: true,
+      ambiguous: true,
+      timedOut,
+      ...extras
+    }
+  );
 }
 
 function providerToolId(providerId) {
@@ -127,8 +230,21 @@ function authorizationRequest(item, call) {
     prompt: call.prompt,
     outputSpec: call.outputSpec,
     requestParameters: call.requestParameters,
+    rightsDeclarationHash: integrityHash(call.rightsDeclaration ?? null),
     external: true
   };
+}
+
+function assertExternalRightsDeclared(call) {
+  const validation = validateExternalRightsDeclaration(call?.rightsDeclaration);
+  if (!validation.valid) {
+    throw executionError(
+      "外部素材调用缺少当前候选绑定、经人工核验的结构化权利声明",
+      "external_asset_rights_declaration_required",
+      { requiresHuman: true, statusCode: 409, details: validation.errors }
+    );
+  }
+  return call.rightsDeclaration;
 }
 
 function credentialFor(call, credentials = {}) {
@@ -155,114 +271,266 @@ async function executionCredentials(options) {
   return process.env;
 }
 
-async function fetchJson(fetchImpl, url, init, code) {
-  let response;
-  try {
-    response = await fetchImpl(url, init);
-  } catch {
-    throw executionError("Provider 请求没有得到可确认响应，禁止自动重试", code, {
-      requiresHuman: true,
-      ambiguous: true
+async function readProviderJsonResponse(response, maximumBytes, deadline, code) {
+  const declaredLength = Number(response.headers?.get?.("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > maximumBytes) {
+    await cancelResponseBody(response, "external-asset-provider-json-declared-too-large");
+    throw ambiguousProviderRequest(code, false, {
+      reasonCode: "external_asset_provider_json_too_large"
     });
   }
-  if (!response?.ok) {
-    const status = Number(response?.status ?? 0);
-    const authenticationRejected = new Set([401, 403]).has(status);
-    throw executionError(
-      `Provider 返回 HTTP ${status}`,
-      "external_asset_provider_http_error",
-      {
-        status,
-        requiresHuman: authenticationRejected,
-        explicitProviderRejection: authenticationRejected
-      }
-    );
-  }
+  let data;
   try {
-    return await response.json();
-  } catch {
-    throw executionError("Provider 返回了无法解析的 JSON", "external_asset_provider_invalid_json");
-  }
-}
-
-function isPrivateIpv4(hostname) {
-  const parts = hostname.split(".").map(Number);
-  return parts[0] === 0 ||
-    parts[0] === 10 ||
-    parts[0] === 127 ||
-    (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) ||
-    (parts[0] === 169 && parts[1] === 254) ||
-    (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
-    (parts[0] === 192 && parts[1] === 168) ||
-    parts[0] >= 224;
-}
-
-function normalizedHostname(hostname) {
-  return hostname.startsWith("[") && hostname.endsWith("]")
-    ? hostname.slice(1, -1)
-    : hostname;
-}
-
-function isPrivateIpv6(hostname) {
-  const value = hostname.toLowerCase();
-  const firstHextet = Number.parseInt(value.split(":")[0] || "0", 16);
-  return value === "::" ||
-    value === "::1" ||
-    value.startsWith("::ffff:") ||
-    (firstHextet & 0xfe00) === 0xfc00 ||
-    (firstHextet & 0xffc0) === 0xfe80 ||
-    (firstHextet & 0xff00) === 0xff00;
-}
-
-function assertSafeMediaUrl(value) {
-  let url;
-  try {
-    url = new URL(value);
-  } catch {
-    throw executionError("Provider 没有返回有效素材地址", "external_asset_media_url_invalid");
-  }
-  const hostname = normalizedHostname(url.hostname.toLowerCase());
-  const ipVersion = isIP(hostname);
-  if (
-    url.protocol !== "https:" ||
-    url.username ||
-    url.password ||
-    hostname === "localhost" ||
-    hostname.endsWith(".localhost") ||
-    (ipVersion === 4 && isPrivateIpv4(hostname)) ||
-    (ipVersion === 6 && isPrivateIpv6(hostname))
-  ) {
-    throw executionError("Provider 素材地址不满足安全下载规则", "external_asset_media_url_unsafe");
-  }
-  return url.href;
-}
-
-async function downloadMedia(fetchImpl, url, maximumBytes) {
-  let response;
-  try {
-    response = await fetchImpl(assertSafeMediaUrl(url), {
-      method: "GET",
-      redirect: "error"
+    data = await readLimitedResponseBody(response, maximumBytes, deadline, {
+      invalidCode: "external_asset_provider_json_body_invalid",
+      invalidMessage: "Provider JSON 响应包含无效数据块",
+      tooLargeCode: "external_asset_provider_json_too_large",
+      tooLargeMessage: "Provider JSON 响应超过允许大小",
+      readFailedCode: "external_asset_provider_json_read_failed",
+      readFailedMessage: "Provider JSON 响应读取失败",
+      emptyCode: "external_asset_provider_json_empty",
+      emptyMessage: "Provider JSON 响应为空",
+      cancelReason: "external-asset-provider-json"
     });
   } catch (error) {
-    if (error?.code) throw error;
-    throw executionError("Provider 素材下载失败", "external_asset_download_failed");
+    if (error?.code === code) throw error;
+    throw ambiguousProviderRequest(code, deadline.expired, {
+      reasonCode: error?.code ?? "external_asset_provider_json_read_failed"
+    });
   }
-  if (!response?.ok) {
+  try {
+    return JSON.parse(data.toString("utf8"));
+  } catch {
     throw executionError(
-      `Provider 素材下载返回 HTTP ${Number(response?.status ?? 0)}`,
-      "external_asset_download_http_error"
+      "Provider 返回了无法解析的 JSON",
+      "external_asset_provider_invalid_json"
     );
   }
-  const declaredLength = Number(response.headers?.get?.("content-length") ?? 0);
-  if (declaredLength > maximumBytes) {
-    throw executionError("Provider 素材超过允许大小", "external_asset_media_too_large");
+}
+
+async function fetchJson(fetchImpl, url, init, code, timeoutMs, maximumBytes) {
+  const deadline = createRequestDeadline(timeoutMs, PROVIDER_REQUEST_TIMEOUT_MS);
+  try {
+    let response;
+    try {
+      response = await waitForAbortable(
+        Promise.resolve().then(() => fetchImpl(url, {
+          ...init,
+          redirect: "manual",
+          signal: deadline.signal
+        })),
+        deadline.signal
+      );
+    } catch {
+      throw ambiguousProviderRequest(code, deadline.expired);
+    }
+    const status = Number(response?.status ?? 0);
+    if (status >= 300 && status < 400) {
+      await cancelResponseBody(response, "provider-redirect-forbidden");
+      throw ambiguousProviderRequest(code, false, {
+        reasonCode: "external_asset_provider_redirect",
+        status
+      });
+    }
+    if (!response?.ok) {
+      const authenticationRejected = new Set([401, 403]).has(status);
+      await cancelResponseBody(response, "provider-non-success-status");
+      throw executionError(
+        `Provider 返回 HTTP ${status}`,
+        "external_asset_provider_http_error",
+        {
+          status,
+          requiresHuman: authenticationRejected,
+          explicitProviderRejection: authenticationRejected
+        }
+      );
+    }
+    return await readProviderJsonResponse(response, maximumBytes, deadline, code);
+  } finally {
+    deadline.clear();
   }
-  const data = Buffer.from(await response.arrayBuffer());
-  if (data.length === 0 || data.length > maximumBytes) {
-    throw executionError("Provider 素材为空或超过允许大小", "external_asset_media_invalid_size");
+}
+
+async function cancelReader(reader, reason) {
+  try {
+    await waitForCleanup(reader?.cancel?.(reason));
+  } catch {
+    // The stream is already being abandoned; cancellation errors are non-actionable.
   }
-  return data;
+}
+
+function releaseReader(reader) {
+  try {
+    reader.releaseLock();
+  } catch {
+    // Releasing a failed stream must not replace the primary security error.
+  }
+}
+
+async function readLimitedResponseBody(response, maximumBytes, deadline, profile) {
+  const reader = response?.body?.getReader?.();
+  if (!reader) {
+    throw executionError(
+      profile.invalidMessage,
+      profile.invalidCode
+    );
+  }
+  const chunks = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await waitForAbortable(reader.read(), deadline.signal);
+      if (done) break;
+      if (!(value instanceof Uint8Array)) {
+        await cancelReader(reader, `${profile.cancelReason}-chunk-invalid`);
+        throw executionError(
+          profile.invalidMessage,
+          profile.invalidCode
+        );
+      }
+      if (value.byteLength === 0) continue;
+      if (totalBytes + value.byteLength > maximumBytes) {
+        await cancelReader(reader, `${profile.cancelReason}-too-large`);
+        throw executionError(
+          profile.tooLargeMessage,
+          profile.tooLargeCode
+        );
+      }
+      const chunk = Buffer.from(value);
+      chunks.push(chunk);
+      totalBytes += chunk.length;
+    }
+  } catch (error) {
+    if (deadline.expired) {
+      await cancelReader(reader, `${profile.cancelReason}-read-timeout`);
+      if (profile.timeoutError) throw profile.timeoutError();
+      throw deadline.signal.reason ?? error;
+    }
+    if (error?.code?.startsWith?.("external_asset_")) throw error;
+    await cancelReader(reader, `${profile.cancelReason}-read-failed`);
+    throw executionError(profile.readFailedMessage, profile.readFailedCode);
+  } finally {
+    releaseReader(reader);
+  }
+  if (totalBytes === 0) {
+    throw executionError(profile.emptyMessage, profile.emptyCode);
+  }
+  return Buffer.concat(chunks, totalBytes);
+}
+
+function publicHttpsCause(error, maximumDepth = 6) {
+  const seen = new Set();
+  let current = error;
+  for (let depth = 0; current && depth < maximumDepth; depth += 1) {
+    if (seen.has(current)) break;
+    seen.add(current);
+    if (
+      current.unsafeNetworkTarget === true ||
+      current.code?.startsWith?.("public_https_")
+    ) {
+      return current;
+    }
+    try {
+      current = current.cause;
+    } catch {
+      break;
+    }
+  }
+  return null;
+}
+
+function mediaNetworkError(error, deadline) {
+  if (deadline.expired) {
+    return executionError(
+      "Provider 素材下载超时，未登记不完整文件",
+      "external_asset_download_timeout",
+      { requiresHuman: true, timedOut: true }
+    );
+  }
+  const networkCause = publicHttpsCause(error) ?? error;
+  if (networkCause?.code === "public_https_url_invalid") {
+    return executionError(
+      "Provider 没有返回有效素材地址",
+      "external_asset_media_url_invalid",
+      { networkCode: networkCause.code, requiresHuman: true }
+    );
+  }
+  if (networkCause?.unsafeNetworkTarget) {
+    return executionError(
+      "Provider 素材地址不满足安全下载规则",
+      "external_asset_media_url_unsafe",
+      { networkCode: networkCause.code ?? null, requiresHuman: true }
+    );
+  }
+  return executionError(
+    "Provider 素材下载失败",
+    "external_asset_download_failed",
+    {
+      networkCode: networkCause?.code?.startsWith?.("public_https_")
+        ? networkCause.code
+        : null
+    }
+  );
+}
+
+async function downloadMedia(fetchImpl, url, maximumBytes, options = {}) {
+  const deadline = createRequestDeadline(
+    options.mediaRequestTimeoutMs,
+    MEDIA_REQUEST_TIMEOUT_MS
+  );
+  try {
+    let response;
+    try {
+      const fetched = await waitForAbortable(fetchPublicHttps(url, {
+        fetchImpl,
+        lookupImpl: options.lookupImpl,
+        maximumRedirects: options.maximumMediaRedirects ?? 5,
+        init: {
+          method: "GET",
+          signal: deadline.signal
+        }
+      }), deadline.signal);
+      response = fetched.response;
+    } catch (error) {
+      throw mediaNetworkError(error, deadline);
+    }
+    if (!response?.ok) {
+      await cancelResponseBody(response, "external-asset-media-http-error");
+      throw executionError(
+        `Provider 素材下载返回 HTTP ${Number(response?.status ?? 0)}`,
+        "external_asset_download_http_error"
+      );
+    }
+    const declaredLength = Number(response.headers?.get?.("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > maximumBytes) {
+      await cancelResponseBody(response, "external-asset-declared-media-too-large");
+      throw executionError("Provider 素材超过允许大小", "external_asset_media_too_large");
+    }
+    return await readLimitedResponseBody(response, maximumBytes, deadline, {
+      invalidCode: "external_asset_download_body_invalid",
+      invalidMessage: "Provider 素材流包含无效数据块",
+      tooLargeCode: "external_asset_media_too_large",
+      tooLargeMessage: "Provider 素材超过允许大小",
+      readFailedCode: "external_asset_download_failed",
+      readFailedMessage: "Provider 素材流读取失败",
+      emptyCode: "external_asset_media_invalid_size",
+      emptyMessage: "Provider 素材为空",
+      cancelReason: "external-asset-media",
+      timeoutError: () => executionError(
+        "Provider 素材下载超时，未登记不完整文件",
+        "external_asset_download_timeout",
+        { requiresHuman: true, timedOut: true }
+      )
+    });
+  } catch (error) {
+    if (deadline.expired && error?.code === "external_asset_request_timeout") {
+      throw mediaNetworkError(error, deadline);
+    }
+    if (error?.code?.startsWith?.("external_asset_")) throw error;
+    throw mediaNetworkError(error, deadline);
+  } finally {
+    deadline.clear();
+  }
 }
 
 function decodeImage(value) {
@@ -277,8 +545,18 @@ function decodeImage(value) {
     inlinePart?.inlineData?.data ??
     inlinePart?.inline_data?.data ??
     null;
-  if (typeof encoded !== "string" || !encoded.trim()) return null;
-  const data = Buffer.from(encoded, "base64");
+  if (typeof encoded !== "string") return null;
+  const normalized = encoded.trim();
+  if (!normalized) return null;
+  const maximumEncodedLength = Math.ceil(MAX_IMAGE_BYTES / 3) * 4;
+  if (normalized.length > maximumEncodedLength) {
+    throw executionError(
+      "AIHubMix 内联 Base64 图片超过允许大小",
+      "external_asset_image_base64_too_large",
+      { requiresHuman: true, ambiguous: true }
+    );
+  }
+  const data = Buffer.from(normalized, "base64");
   if (data.length === 0 || data.length > MAX_IMAGE_BYTES) {
     throw executionError("AIHubMix 生图结果为空或超过允许大小", "external_asset_image_invalid_size");
   }
@@ -311,13 +589,17 @@ function taskVideoUrl(value) {
 }
 
 function completionTokens(value) {
-  const raw = value?.usage?.completion_tokens ?? value?.Usage?.CompletionTokens ?? null;
-  return Number.isFinite(Number(raw)) ? Number(raw) : null;
+  const raw = value?.usage?.completion_tokens ?? value?.Usage?.CompletionTokens;
+  if (!new Set(["number", "string"]).has(typeof raw)) return null;
+  if (typeof raw === "string" && !/^(?:0|[1-9]\d*)$/u.test(raw.trim())) return null;
+  const tokens = Number(raw);
+  return Number.isSafeInteger(tokens) && tokens >= 0 ? tokens : null;
 }
 
 async function executeImage(call, credential, options) {
   const fetchImpl = options.fetch ?? globalThis.fetch;
   const usesGeminiNative = call.endpoint.startsWith("https://aihubmix.com/gemini/");
+  options.consumePaidAttempt?.();
   const value = await fetchJson(fetchImpl, call.endpoint, {
     method: "POST",
     headers: usesGeminiNative
@@ -332,9 +614,18 @@ async function executeImage(call, credential, options) {
     body: JSON.stringify(usesGeminiNative
       ? call.requestParameters
       : { ...call.requestParameters, prompt: call.prompt })
-  }, "external_asset_image_response_ambiguous");
+  },
+  "external_asset_image_response_ambiguous",
+  options.providerRequestTimeoutMs,
+  MAX_IMAGE_PROVIDER_JSON_BYTES
+  );
   const embedded = decodeImage(value);
-  const data = embedded ?? await downloadMedia(fetchImpl, imageUrl(value), MAX_IMAGE_BYTES);
+  const data = embedded ?? await downloadMedia(
+    fetchImpl,
+    imageUrl(value),
+    MAX_IMAGE_BYTES,
+    options
+  );
   const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   if (!data.subarray(0, 8).equals(pngSignature)) {
     throw executionError("AIHubMix 返回的素材不是 PNG", "external_asset_image_format_invalid");
@@ -354,6 +645,7 @@ async function executeVideo(call, credential, options) {
   let id = options.existingTaskId ?? null;
   let executedCalls = 0;
   if (!id) {
+    options.consumePaidAttempt?.();
     const submitted = await fetchJson(fetchImpl, call.endpoint, {
       method: "POST",
       headers: {
@@ -361,7 +653,11 @@ async function executeVideo(call, credential, options) {
         "content-type": "application/json"
       },
       body: JSON.stringify(call.requestParameters)
-    }, "external_asset_video_submission_ambiguous");
+    },
+    "external_asset_video_submission_ambiguous",
+    options.providerRequestTimeoutMs,
+    MAX_VIDEO_PROVIDER_JSON_BYTES
+    );
     id = taskId(submitted);
     if (typeof id !== "string" || !id.trim()) {
       throw executionError("火山方舟没有返回任务 ID", "external_asset_video_task_missing");
@@ -379,7 +675,11 @@ async function executeVideo(call, credential, options) {
     const value = await fetchJson(fetchImpl, `${call.endpoint}/${encodeURIComponent(id)}`, {
       method: "GET",
       headers: { authorization: `Bearer ${credential}` }
-    }, "external_asset_video_poll_ambiguous");
+    },
+    "external_asset_video_poll_ambiguous",
+    options.videoPollRequestTimeoutMs,
+    MAX_VIDEO_PROVIDER_JSON_BYTES
+    );
     const status = taskStatus(value);
     if (new Set(["succeeded", "success", "completed", "done"]).has(status)) {
       completed = value;
@@ -398,7 +698,10 @@ async function executeVideo(call, credential, options) {
   }
   const tokens = completionTokens(completed);
   if (tokens === null) {
-    throw executionError("火山方舟成功响应缺少 completion_tokens", "external_asset_video_usage_missing");
+    throw executionError(
+      "火山方舟成功响应缺少有效的非负整数 completion_tokens",
+      "external_asset_video_usage_missing"
+    );
   }
   const actualCny = tokens * call.billing.unitPrice / call.billing.unitPriceBasis;
   if (actualCny > call.billing.maximumAmount) {
@@ -406,7 +709,12 @@ async function executeVideo(call, credential, options) {
       requiresHuman: true
     });
   }
-  const data = await downloadMedia(fetchImpl, taskVideoUrl(completed), MAX_VIDEO_BYTES);
+  const data = await downloadMedia(
+    fetchImpl,
+    taskVideoUrl(completed),
+    MAX_VIDEO_BYTES,
+    options
+  );
   if (data.length < 12 || data.subarray(4, 8).toString("ascii") !== "ftyp") {
     throw executionError("火山方舟返回的素材不是 MP4", "external_asset_video_format_invalid");
   }
@@ -426,28 +734,60 @@ export async function executeApprovedExternalAssetCall(
   input,
   options = {}
 ) {
+  const item = externalAssetItems(episode).find((candidate) => candidate.id === input.itemId);
+  const call = item ? matchingCall(episode, item) : null;
+  if (!item || !call || call.id !== input.callId) {
+    throw executionError("外部素材调用不在当前批准方案中", "external_asset_call_not_approved");
+  }
+  assertExternalRightsDeclared(call);
   if (!assetExecutionPreflightValid(episode)) {
     throw executionError(
       "当前候选尚未通过零生成预检",
       "asset_execution_preflight_required"
     );
   }
-  const item = externalAssetItems(episode).find((candidate) => candidate.id === input.itemId);
-  const call = item ? matchingCall(episode, item) : null;
-  if (!item || !call || call.id !== input.callId) {
-    throw executionError("外部素材调用不在当前批准方案中", "external_asset_call_not_approved");
-  }
   assertAssetExecutionAuthorized(episode, authorizationRequest(item, call));
   const toolId = assertExecutionToolAllowed(episode, call, options.allowedToolIds ?? []);
-  const credential = credentialFor(call, await executionCredentials(options));
-  const result = call.providerId === "aihubmix"
-    ? await executeImage(call, credential, options)
-    : call.providerId === "volcengine-ark"
-      ? await executeVideo(call, credential, options)
-      : null;
-  if (!result) {
+  const providerSupported = new Set(["aihubmix", "volcengine-ark"]).has(call.providerId);
+  if (!providerSupported) {
     throw executionError("外部素材 Provider 不受支持", "external_asset_provider_unsupported");
   }
+  const injectedExternalBoundary = typeof options.fetch === "function";
+  const capabilityRequired = options.requireSideEffectCapability === true ||
+    !injectedExternalBoundary ||
+    Boolean(options.sideEffectGrant) ||
+    typeof options.authorizeSideEffect === "function";
+  let sideEffectGrant = null;
+  let consumePaidAttempt = null;
+  if (capabilityRequired) {
+    const attemptCostUsd = Number(call.maximumCostUsd);
+    if (!Number.isFinite(attemptCostUsd) || attemptCostUsd < 0) {
+      throw executionError(
+        "外部素材批准没有有限费用上限",
+        "side_effect_capability_budget_unbounded",
+        { statusCode: 403 }
+      );
+    }
+    const capabilitySpec = {
+      episodeId: episode.id,
+      operation: options.capabilityOperation ?? "external-asset:execute",
+      scopes: ["network.request", "paid.invoke"],
+      maxCalls: 1,
+      maxCostUsd: attemptCostUsd
+    };
+    sideEffectGrant = requireSideEffectGrant(options, capabilitySpec);
+    consumePaidAttempt = () => consumeSideEffectGrantUsage(
+      sideEffectGrant,
+      capabilitySpec,
+      { calls: 1, costUsd: attemptCostUsd }
+    );
+  }
+  const credential = credentialFor(call, await executionCredentials(options));
+  const result = call.providerId === "aihubmix"
+    ? await executeImage(call, credential, { ...options, consumePaidAttempt })
+    : call.providerId === "volcengine-ark"
+      ? await executeVideo(call, credential, { ...options, consumePaidAttempt })
+      : null;
   return {
     ...result,
     toolId,
@@ -456,12 +796,27 @@ export async function executeApprovedExternalAssetCall(
   };
 }
 
-function completedAssetValid(journal, media) {
+function completedAssetValid(journal, media, call) {
+  const declarationHash = integrityHash(call?.rightsDeclaration ?? null);
+  let expectedRights;
+  try {
+    expectedRights = {
+      ...buildExternalGenerationRights(call?.rightsDeclaration, {
+        acquiredAt: journal?.asset?.createdAt
+      }),
+      declarationHash
+    };
+  } catch {
+    return false;
+  }
   return Boolean(
     journal?.status === "completed" &&
     journal.asset &&
     media.length === journal.asset.bytes &&
-    sha256(media) === journal.asset.sha256
+    sha256(media) === journal.asset.sha256 &&
+    journal.asset.rightsDeclarationHash === declarationHash &&
+    integrityHash(journal.asset.rights) === integrityHash(expectedRights) &&
+    validateAssetRights(journal.asset).valid
   );
 }
 
@@ -476,6 +831,7 @@ async function readJournal(path) {
 
 function journalIdentity(episode, item, call, at) {
   const candidateHash = episode.reviewCheckpoints.assetExecution.currentCandidate.candidateHash;
+  const rightsDeclarationHash = integrityHash(call.rightsDeclaration);
   return {
     schemaVersion: EXTERNAL_ASSET_EXECUTOR_VERSION,
     stateVersion: 0,
@@ -492,6 +848,8 @@ function journalIdentity(episode, item, call, at) {
     endpoint: call.endpoint,
     promptHash: sha256(call.prompt),
     requestParametersHash: integrityHash(call.requestParameters),
+    rightsDeclarationHash,
+    rightsDeclaration: structuredClone(call.rightsDeclaration),
     startedAt: at,
     submittedAt: null,
     completedAt: null,
@@ -516,6 +874,7 @@ function externalAssetLocations(episode, options = {}) {
 }
 
 function journalBoundToCall(journal, episode, item, call) {
+  const rightsDeclarationHash = integrityHash(call?.rightsDeclaration ?? null);
   return Boolean(
     journal?.episodeId === episode.id &&
     journal?.candidateHash ===
@@ -527,7 +886,9 @@ function journalBoundToCall(journal, episode, item, call) {
     journal?.model === call.model &&
     journal?.endpoint === call.endpoint &&
     journal?.promptHash === sha256(call.prompt) &&
-    journal?.requestParametersHash === integrityHash(call.requestParameters)
+    journal?.requestParametersHash === integrityHash(call.requestParameters) &&
+    journal?.rightsDeclarationHash === rightsDeclarationHash &&
+    integrityHash(journal?.rightsDeclaration ?? null) === rightsDeclarationHash
   );
 }
 
@@ -683,6 +1044,30 @@ export async function adjudicateAmbiguousExternalAssetReceipt(
   input = {},
   options = {}
 ) {
+  const actor = String(options.actor ?? "").trim();
+  if (!actor.startsWith("human:") || actor.length > 128) {
+    throw executionError(
+      "人工重试裁决缺少可信服务端操作者身份",
+      "external_asset_retry_operator_required",
+      { statusCode: 403 }
+    );
+  }
+  const injectedSideEffectDependencies = Boolean(
+    options.outputDirectory &&
+    typeof options.readEpisode === "function" &&
+    typeof options.writeEpisode === "function" &&
+    typeof options.appendEvent === "function"
+  );
+  if (options.requireSideEffectCapability === true || !injectedSideEffectDependencies) {
+    requireSideEffectGrant(options, {
+      episodeId,
+      operation: options.capabilityOperation ??
+        "external-asset:retry-adjudication",
+      scopes: ["state.write", "filesystem.write"],
+      maxCalls: 0,
+      maxCostUsd: 0
+    });
+  }
   const readState = options.readEpisode ?? readEpisode;
   const writeState = options.writeEpisode ?? writeEpisode;
   const recordEvent = options.appendEvent ?? appendEvent;
@@ -792,12 +1177,11 @@ export async function adjudicateAmbiguousExternalAssetReceipt(
         journal.startedAt
       );
       const at = timestamp(options.now);
-      const actor = String(options.actor ?? "human:local-operator").slice(0, 80);
       const review = {
         schemaVersion: 1,
         id: `external-asset-retry:${episodeId}:${randomUUID()}`,
         decision: "provider_no_record_no_charge",
-        actor,
+        actor: actor.slice(0, 80),
         decidedAt: at,
         note,
         sourceAttempt: journal.attempt,
@@ -901,13 +1285,55 @@ export async function adjudicateAmbiguousExternalAssetReceipt(
 }
 
 export async function buildApprovedExternalAssets(episode, options = {}) {
+  const items = externalAssetItems(episode);
+  for (const item of items) {
+    const call = matchingCall(episode, item);
+    if (!call) {
+      throw executionError("外部素材条目没有唯一调用合同", "external_asset_call_missing");
+    }
+    assertExternalRightsDeclared(call);
+  }
   if (!assetExecutionPreflightValid(episode)) {
     throw executionError(
       "当前候选尚未通过零生成预检",
       "asset_execution_preflight_required"
     );
   }
-  const items = externalAssetItems(episode);
+  const candidateSummary = episode.reviewCheckpoints?.assetExecution
+    ?.currentCandidate?.summary;
+  const maximumCalls = Number.isInteger(candidateSummary?.externalApiCallCount)
+    ? candidateSummary.externalApiCallCount
+    : items.length;
+  const maximumCostUsd = Number.isFinite(candidateSummary?.maximumPaidCostUsd)
+    ? Number(candidateSummary.maximumPaidCostUsd.toFixed(6))
+    : Number.POSITIVE_INFINITY;
+  const injectedExternalBoundary = Boolean(
+    options.outputDirectory && typeof options.fetch === "function"
+  );
+  const capabilityRequired = options.requireSideEffectCapability === true ||
+    !injectedExternalBoundary ||
+    Boolean(options.sideEffectGrant) ||
+    typeof options.authorizeSideEffect === "function";
+  let sideEffectGrant = null;
+  if (capabilityRequired) {
+    if (!Number.isFinite(maximumCostUsd)) {
+      throw executionError(
+        "外部素材批准没有有限费用上限",
+        "side_effect_capability_budget_unbounded",
+        { statusCode: 403 }
+      );
+    }
+    sideEffectGrant = requireSideEffectGrant(options, {
+      episodeId: episode.id,
+      operation: options.capabilityOperation ?? "external-asset:execute",
+      scopes: ["filesystem.write", "network.request", "paid.invoke"],
+      maxCalls: maximumCalls,
+      maxCostUsd: maximumCostUsd
+    });
+  }
+  const executionOptions = { ...options };
+  delete executionOptions.authorizeSideEffect;
+  delete executionOptions.sideEffectGrant;
   const existingByItem = new Map((episode.assets ?? [])
     .filter((asset) => asset.planItemId)
     .map((asset) => [asset.planItemId, asset]));
@@ -939,7 +1365,7 @@ export async function buildApprovedExternalAssets(episode, options = {}) {
         );
       }
       const media = await readFile(mediaPath);
-      if (!completedAssetValid(journal, media)) {
+      if (!completedAssetValid(journal, media, call)) {
         throw executionError(
           "外部素材收据与文件完整性不一致",
           "external_asset_receipt_integrity_failed",
@@ -1040,7 +1466,9 @@ export async function buildApprovedExternalAssets(episode, options = {}) {
         itemId: item.id,
         callId: call.id
       }, {
-        ...options,
+        ...executionOptions,
+        sideEffectGrant: sideEffectGrant ?? undefined,
+        requireSideEffectCapability: Boolean(sideEffectGrant),
         existingTaskId: activeJournal.status === "submitted"
           ? activeJournal.providerExecutionId
           : null,
@@ -1086,10 +1514,15 @@ export async function buildApprovedExternalAssets(episode, options = {}) {
       candidateHash,
       promptHash: sha256(call.prompt),
       requestParametersHash: integrityHash(call.requestParameters),
+      rightsDeclarationHash: integrityHash(call.rightsDeclaration),
       providerExecutionId: result.providerExecutionId,
       bytes: result.data.length,
       sha256: sha256(result.data),
       createdAt: at,
+      rights: {
+        ...buildExternalGenerationRights(call.rightsDeclaration, { acquiredAt: at }),
+        declarationHash: integrityHash(call.rightsDeclaration)
+      },
       privacy: "requires-human-review",
       verified: false,
       externalApiCalls: 1,

@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readEpisode } from "../src/shared/store.mjs";
 import { validateEpisode } from "../src/shared/schema.mjs";
 import {
   currentGateArtifactHash
@@ -21,15 +20,72 @@ import {
   SHORT_STORYBOARD_VISUAL_RULES
 } from "../src/server/production/short-storyboard-adapter.mjs";
 import { agents } from "../src/server/agents/registry.mjs";
+import { approvedDerivedEpisodeParentFixture } from "./derived-episode.fixture.mjs";
 
-async function buildDerived() {
-  const parent = await readEpisode("agent-skill-20260806");
+function buildDerived() {
+  const parent = approvedDerivedEpisodeParentFixture();
   const episode = buildDerivedShortEpisode(parent, {
     id: "test-agent-skill-tool-mcp-60s",
     sourceSectionIds: ["S05"],
     now: new Date("2026-08-13T08:00:00.000Z")
   });
   return { parent, episode };
+}
+
+async function buildApprovedScriptEpisode() {
+  const { episode } = buildDerived();
+  const generated = await generateScriptDraft(episode, {
+    writeArtifact: async () => ({
+      version: 1,
+      path: "/tmp/test-derived-approved-script-v001.json",
+      relativePath: "studio/data/production/test/derived-approved-script-v001.json"
+    })
+  });
+  episode.production.scriptDraft = {
+    version: 1,
+    artifactPath: generated.artifact.relativePath,
+    provider: generated.provider,
+    model: generated.model,
+    usage: generated.usage,
+    generatedAt: "2026-08-13T08:01:00.000Z",
+    generationKind: generated.generationKind,
+    sourceSnapshotHash: generated.sourceSnapshotHash,
+    needsRevision: false,
+    content: generated.value,
+    versions: []
+  };
+  const artifactHash = currentGateArtifactHash(episode, "script");
+  const reviewReportId = "fixture-review-derived-script-v1";
+  episode.reviews.script = {
+    status: "passed",
+    artifactVersion: 1,
+    artifactHash,
+    rubricVersion: "script-fixture-v1",
+    revisionRounds: 0,
+    latestReportId: reviewReportId,
+    reports: [{
+      id: reviewReportId,
+      stage: "script",
+      agentId: "script-agent",
+      decision: "pass",
+      artifactVersion: 1,
+      artifactHash,
+      rubricVersion: "script-fixture-v1",
+      confidence: 1,
+      blockingIssues: [],
+      warnings: [],
+      passedChecks: ["artifact-binding"]
+    }]
+  };
+  episode.approvals.script = {
+    ...episode.approvals.script,
+    status: "approved",
+    currentVersion: 1,
+    provenance: "reviewed-v2",
+    reviewReportId,
+    artifactHash
+  };
+  return episode;
 }
 
 function shortScript() {
@@ -91,7 +147,7 @@ test("派生短样片只继承内容未变的研究批准，脚本及下游 Gate
 });
 
 test("父 Episode 的研究或脚本批准无效时拒绝创建派生 Episode", async () => {
-  const parent = await readEpisode("agent-skill-20260806");
+  const parent = approvedDerivedEpisodeParentFixture();
   parent.approvals.script.artifactHash = "0".repeat(64);
   assert.throws(
     () => buildDerivedShortEpisode(parent, {
@@ -169,7 +225,7 @@ test("短样片质量规则接受 2–4 节，但长片规则仍要求 6–12 �
   assert.equal(shortQuality.checks.find((check) => check.id === "script-derived-narration-duplication").passed, true);
   assert.equal(shortQuality.checks.find((check) => check.id === "script-derived-visual-fidelity").passed, true);
 
-  const parent = await readEpisode("agent-skill-20260806");
+  const parent = approvedDerivedEpisodeParentFixture();
   parent.production.scriptDraft.content = shortScript();
   const longQuality = evaluateProductionQuality(parent, { stage: "script" });
   assert.equal(longQuality.checks.find((check) => check.id === "script-section-count").passed, false);
@@ -265,7 +321,7 @@ test("60 秒 Storyboard Agent 只拆分已批准脚本并绑定审核哈希，�
 });
 
 test("派生分镜质量规则会拦截脚本哈希漂移和未经批准的镜头文案", async () => {
-  const episode = structuredClone(await readEpisode("agent-skill-tool-mcp-60s-20260813"));
+  const episode = await buildApprovedScriptEpisode();
   const generated = await generateStoryboardDraft(episode, {
     writeArtifact: async () => ({
       version: 1,
@@ -302,7 +358,7 @@ test("派生分镜质量规则会拦截脚本哈希漂移和未经批准的镜�
 });
 
 test("Storyboard Agent 的本地结构检查失败时把候选标成待修改", async () => {
-  const episode = structuredClone(await readEpisode("agent-skill-tool-mcp-60s-20260813"));
+  const episode = await buildApprovedScriptEpisode();
   episode.approvals.storyboard = {
     ...episode.approvals.storyboard,
     status: "pending"

@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { assetFileType } from "../src/server/production/assets.mjs";
 import { agents } from "../src/server/agents/registry.mjs";
-import { readEpisode } from "../src/shared/store.mjs";
+import { readFixtureEpisode } from "./episode-fixture.mjs";
+import { agentSkillLongAssetBindingEpisodeFixture } from
+  "./agent-skill-long-review.fixture.mjs";
 
 test("素材上传接受图片与视频，并可在浏览器缺少 MIME 时按扩展名识别", () => {
   assert.deepEqual(assetFileType("image/png", "screen.png"), {
@@ -21,7 +23,7 @@ test("素材上传接受图片与视频，并可在浏览器缺少 MIME 时按�
 });
 
 test("素材 Agent 不会把 public 目录外的现有文件当作已登记素材", async () => {
-  const episode = await readEpisode("golden-001");
+  const episode = await readFixtureEpisode();
   episode.approvals.storyboard.status = "approved";
   episode.production.assetPlan = {
     artifactPath: "outputs/test-asset-plan.json",
@@ -35,9 +37,7 @@ test("素材 Agent 不会把 public 目录外的现有文件当作已登记素�
 });
 
 test("分镜重生成后素材 Agent 会按已批准清单恢复场景绑定", async () => {
-  const episode = structuredClone(await readEpisode("agent-skill-20260806"));
-  episode.approvals.storyboard.status = "approved";
-  episode.production.assetPlan.needsRevision = false;
+  const episode = await agentSkillLongAssetBindingEpisodeFixture();
   episode.scenes = episode.scenes.map((scene) => {
     const { asset: _asset, audio: _audio, ...rest } = scene;
     return rest;

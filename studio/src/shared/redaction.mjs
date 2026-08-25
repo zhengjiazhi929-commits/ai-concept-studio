@@ -3,6 +3,21 @@ const sensitivePatterns = [
   /\bBearer\s+[A-Za-z0-9._~+/-]{8,}\b/giu,
   /\b(?:api[\s_-]?key|token|access[_-]?token|refresh[_-]?token|secret|password)\s*[:=]\s*\S+/giu
 ];
+const sensitiveFieldNamePattern = /^(?:api.?key|private.?key|secret.?key|client.?secret|access.?token|refresh.?token|id.?token|token|secret|password|passwd|authorization|proxy.?authorization|cookie|set.?cookie|credential|credentials|signature|signed.?url|session.?token)$/iu;
+
+function isSensitiveFieldName(value) {
+  const normalized = String(value).replaceAll(/[\s_-]+/gu, "");
+  return sensitiveFieldNamePattern.test(normalized) || [
+    "apikey",
+    "authorization",
+    "cookie",
+    "credential",
+    "password",
+    "secret",
+    "signature",
+    "token"
+  ].some((suffix) => normalized.toLowerCase().endsWith(suffix));
+}
 
 export function redactSensitiveText(value, maximumLength = 500) {
   let text = String(value ?? "");
@@ -25,7 +40,9 @@ export function redactSensitiveValue(value, options = {}, depth = 0) {
     return Object.fromEntries(
       Object.entries(value).map(([key, item]) => [
         key,
-        redactSensitiveValue(item, options, depth + 1)
+        isSensitiveFieldName(key)
+          ? "[REDACTED]"
+          : redactSensitiveValue(item, options, depth + 1)
       ])
     );
   }

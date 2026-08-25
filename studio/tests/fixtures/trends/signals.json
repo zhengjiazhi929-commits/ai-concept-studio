@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-08-03T15:00:00.000Z",
+  "importedSnapshots": [
+    "trend-engine-test-fixture-v1"
+  ],
+  "signals": [
+    {
+      "id": "fixture-skill-qiu-1",
+      "creatorId": "douyin-qiu-shui",
+      "title": "Agent Skill fixture definition",
+      "sourceUrl": "https://example.test/trends/fixture-skill-qiu-1",
+      "publishedAt": "2026-08-03T00:00:00+08:00",
+      "observedAt": "2026-08-03T16:20:00+08:00",
+      "datePrecision": "relative-day-estimate",
+      "angle": "definition",
+      "conceptIds": [
+        "agent-skill"
+      ],
+      "sourceKind": "test-fixture"
+    },
+    {
+      "id": "fixture-skill-qiu-2",
+      "creatorId": "douyin-qiu-shui",
+      "title": "Agent Skill fixture comparison",
+      "sourceUrl": "https://example.test/trends/fixture-skill-qiu-2",
+      "publishedAt": "2026-07-31T00:00:00+08:00",
+      "observedAt": "2026-08-03T16:20:00+08:00",
+      "datePrecision": "relative-day-estimate",
+      "angle": "comparison",
+      "conceptIds": [
+        "agent-skill"
+      ],
+      "sourceKind": "test-fixture"
+    },
+    {
+      "id": "fixture-skill-yahui",
+      "creatorId": "douyin-ya-hui-pm",
+      "title": "Agent Skill fixture tutorial",
+      "sourceUrl": "https://example.test/trends/fixture-skill-yahui",
+      "publishedAt": "2026-08-02T00:00:00+08:00",
+      "observedAt": "2026-08-03T16:20:00+08:00",
+      "datePrecision": "relative-day-estimate",
+      "angle": "tutorial",
+      "conceptIds": [
+        "agent-skill"
+      ],
+      "sourceKind": "test-fixture"
+    },
+    {
+      "id": "fixture-skill-lmp",
+      "creatorId": "douyin-llm-project-practice",
+      "title": "Agent Skill fixture mechanism",
+      "sourceUrl": "https://example.test/trends/fixture-skill-lmp",
+      "publishedAt": "2026-07-28T00:00:00+08:00",
+      "observedAt": "2026-08-03T16:20:00+08:00",
+      "datePrecision": "relative-day-estimate",
+      "angle": "mechanism",
+      "conceptIds": [
+        "agent-skill"
+      ],
+      "sourceKind": "test-fixture"
+    },
+    {
+      "id": "fixture-covered-agentic",
+      "creatorId": "douyin-qiu-shui",
+      "title": "Agentic Coding fixture",
+      "sourceUrl": "https://example.test/trends/fixture-covered-agentic",
+      "publishedAt": "2026-07-30T00:00:00+08:00",
+      "observedAt": "2026-08-03T16:20:00+08:00",
+      "datePrecision": "relative-day-estimate",
+      "angle": "product-decision",
+      "conceptIds": [
+        "agentic-coding"
+      ],
+      "sourceKind": "test-fixture"
+    },
+    {
+      "id": "fixture-physical-news",
+      "creatorId": "douyin-ai-wind-vane",
+      "title": "Physical AI fixture news event",
+      "sourceUrl": "https://example.test/trends/fixture-physical-news",
+      "publishedAt": "2026-08-02T00:00:00+08:00",
+      "observedAt": "2026-08-03T16:20:00+08:00",
+      "datePrecision": "relative-day-estimate",
+      "angle": "news",
+      "conceptIds": [
+        "physical-ai"
+      ],
+      "event": "Synthetic fixture event",
+      "sourceKind": "test-fixture"
+    },
+    {
+      "id": "fixture-rag-1",
+      "creatorId": "douyin-llm-project-practice",
+      "title": "RAG Engineering fixture mechanism",
+      "sourceUrl": "https://example.test/trends/fixture-rag-1",
+      "publishedAt": "2026-07-29T00:00:00+08:00",
+      "observedAt": "2026-08-03T16:20:00+08:00",
+      "datePrecision": "relative-day-estimate",
+      "angle": "mechanism",
+      "conceptIds": [
+        "rag-engineering"
+      ],
+      "sourceKind": "test-fixture"
+    },
+    {
+      "id": "fixture-rag-2",
+      "creatorId": "douyin-ai-model-learning",
+      "title": "RAG Engineering fixture tutorial",
+      "sourceUrl": "https://example.test/trends/fixture-rag-2",
+      "publishedAt": "2026-07-28T00:00:00+08:00",
+      "observedAt": "2026-08-03T16:20:00+08:00",
+      "datePrecision": "relative-day-estimate",
+      "angle": "tutorial",
+      "conceptIds": [
+        "rag-engineering"
+      ],
+      "sourceKind": "test-fixture"
+    }
+  ]
+}

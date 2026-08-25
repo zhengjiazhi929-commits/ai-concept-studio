@@ -17,6 +17,17 @@ import {
   BudgetReservationError,
   createEpisodeBudgetLedger
 } from "../control/budget-ledger.mjs";
+import {
+  assertSideEffectGrant,
+  consumeSideEffectGrantUsage,
+  SideEffectAuthorizationError
+} from "../security/side-effect-capability.mjs";
+
+const PROVIDER_SIDE_EFFECT_SCOPES = Object.freeze([
+  "model.invoke",
+  "network.request",
+  "paid.invoke"
+]);
 
 export function getProviderHealthSnapshot() {
   return structuredClone(getCachedProviderHealthSnapshot());
@@ -40,6 +51,7 @@ function requestError(provider, status, body) {
   error.status = status;
   error.code = body?.error?.code ?? body?.error?.type ?? null;
   error.usage = body?.usage && typeof body.usage === "object" ? body.usage : null;
+  error.requestDispatchState = "completed";
   return error;
 }
 
@@ -51,6 +63,57 @@ export class AiGenerationPausedError extends Error {
     this.requiresHuman = true;
     this.attempts = attempts;
   }
+}
+
+export class ProviderCallAmbiguousError extends AiGenerationPausedError {
+  constructor(message, attempts = [], details = {}) {
+    super(message, attempts);
+    this.name = "ProviderCallAmbiguousError";
+    this.code = "provider_call_ambiguous";
+    this.requiresHuman = true;
+    this.reconciliationRequired = true;
+    this.details = details;
+  }
+}
+
+const PRE_DISPATCH_NETWORK_CODES = new Set([
+  "EAI_AGAIN",
+  "ECONNREFUSED",
+  "ENETUNREACH",
+  "ENOTFOUND",
+  "EHOSTUNREACH",
+  "UND_ERR_CONNECT_TIMEOUT"
+]);
+
+function transportCode(error) {
+  return String(error?.cause?.code ?? error?.code ?? "").trim().toUpperCase();
+}
+
+function dispatchedError(error, state) {
+  const source = error instanceof Error ? error : new Error(String(error ?? "Provider request failed"));
+  try {
+    source.requestDispatchState = state;
+    return source;
+  } catch {
+    const wrapped = new Error(source.message, { cause: source });
+    wrapped.name = source.name;
+    wrapped.requestDispatchState = state;
+    return wrapped;
+  }
+}
+
+function ambiguousProviderError(provider, error, message) {
+  const code = transportCode(error);
+  const ambiguous = new Error(
+    `${provider.label} ${message}${code ? `（${redactSensitiveText(code, 80)}）` : ""}`,
+    { cause: error instanceof Error ? error : undefined }
+  );
+  ambiguous.name = "ProviderTransportAmbiguousError";
+  ambiguous.code = "provider_call_ambiguous";
+  ambiguous.requiresHuman = true;
+  ambiguous.requestDispatchState = "ambiguous";
+  ambiguous.transportCode = code || null;
+  return ambiguous;
 }
 
 function isRetryable(error) {
@@ -73,57 +136,97 @@ function resolvedModel(provider, task) {
 
 async function postResponse({ providerId, provider, model, task, request, config, fetchImpl, proxyUrl }) {
   const key = process.env[provider.apiKeyEnv];
-  if (!key) throw new Error(`${provider.label} 尚未配置 ${provider.apiKeyEnv}`);
+  if (!key) {
+    throw dispatchedError(
+      new Error(`${provider.label} 尚未配置 ${provider.apiKeyEnv}`),
+      "not_dispatched"
+    );
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), config.request.timeoutMs);
   const selectedModel = model ?? resolvedModel(provider, task);
-  const dispatcher = proxyUrl ? new ProxyAgent(proxyUrl) : null;
+  let dispatcher = null;
+  let requestInvoked = false;
+  let responseReceived = false;
 
   try {
-    const response = await fetchImpl(`${provider.baseUrl.replace(/\/$/u, "")}/responses`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${key}`,
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        model: selectedModel,
-        store: false,
-        instructions: request.instructions,
-        input: request.input,
-        reasoning: { effort: task.reasoningEffort },
-        text: {
-          verbosity: task.verbosity,
-          format: {
-            type: "json_schema",
-            name: request.schemaName,
-            strict: true,
-            schema: request.schema
-          }
+    dispatcher = proxyUrl ? new ProxyAgent(proxyUrl) : null;
+    let responsePromise;
+    try {
+      responsePromise = fetchImpl(`${provider.baseUrl.replace(/\/$/u, "")}/responses`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${key}`,
+          "content-type": "application/json"
         },
-        max_output_tokens: Math.min(
-          request.maxOutputTokens ?? config.request.maxOutputTokens,
-          config.request.maxOutputTokens
-        )
-      }),
-      signal: controller.signal,
-      ...(dispatcher ? { dispatcher } : {})
-    });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw requestError(provider, response.status, body);
-    return {
-      provider: providerId,
-      model: selectedModel,
-      responseId: body.id ?? null,
-      usage: body.usage ?? null,
-      value: JSON.parse(extractOutputText(body))
-    };
-  } catch (error) {
-    if (error?.name === "AbortError") throw new Error(`${provider.label} 请求超时`);
-    if (error?.cause?.code) {
-      throw new Error(`${provider.label} 网络连接失败（${error.cause.code}）`);
+        body: JSON.stringify({
+          model: selectedModel,
+          store: false,
+          instructions: request.instructions,
+          input: request.input,
+          reasoning: { effort: task.reasoningEffort },
+          text: {
+            verbosity: task.verbosity,
+            format: {
+              type: "json_schema",
+              name: request.schemaName,
+              strict: true,
+              schema: request.schema
+            }
+          },
+          max_output_tokens: Math.min(
+            request.maxOutputTokens ?? config.request.maxOutputTokens,
+            config.request.maxOutputTokens
+          )
+        }),
+        signal: controller.signal,
+        ...(dispatcher ? { dispatcher } : {})
+      });
+    } catch (error) {
+      if (error?.requestDispatchState) throw error;
+      throw ambiguousProviderError(
+        provider,
+        error,
+        "请求交给传输层时异常，Provider 是否收到无法确认"
+      );
     }
-    throw error;
+    requestInvoked = true;
+    const response = await responsePromise;
+    responseReceived = true;
+    let body;
+    try {
+      body = await response.json();
+    } catch (error) {
+      if (response.ok) {
+        throw ambiguousProviderError(provider, error, "已返回成功状态，但响应体在完整读取前丢失");
+      }
+      body = {};
+    }
+    if (!response.ok) throw requestError(provider, response.status, body);
+    try {
+      return {
+        provider: providerId,
+        model: selectedModel,
+        responseId: body.id ?? null,
+        usage: body.usage ?? null,
+        value: JSON.parse(extractOutputText(body))
+      };
+    } catch (error) {
+      error.usage = body.usage && typeof body.usage === "object" ? body.usage : null;
+      error.code ??= "provider_response_invalid";
+      throw dispatchedError(error, "completed");
+    }
+  } catch (error) {
+    if (error?.requestDispatchState) throw error;
+    if (!requestInvoked) throw dispatchedError(error, "not_dispatched");
+    if (responseReceived) throw dispatchedError(error, "completed");
+    if (PRE_DISPATCH_NETWORK_CODES.has(transportCode(error))) {
+      throw dispatchedError(error, "not_dispatched");
+    }
+    if (error?.name === "AbortError") {
+      throw ambiguousProviderError(provider, error, "请求超时且 Provider 是否执行无法确认");
+    }
+    throw ambiguousProviderError(provider, error, "连接中断且 Provider 是否执行无法确认");
   } finally {
     clearTimeout(timer);
     await dispatcher?.close().catch(() => undefined);
@@ -134,6 +237,8 @@ export async function createAiClient(options = {}) {
   await loadLocalEnvironment();
   const config = options.config ?? (await readAiConfig());
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const usesExplicitInjectedFetch = Object.hasOwn(options, "fetchImpl") &&
+    fetchImpl !== globalThis.fetch;
   const sleep = options.sleep ?? ((milliseconds) => new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds)));
   const proxyUrl =
     options.proxyUrl !== undefined
@@ -209,6 +314,28 @@ export async function createAiClient(options = {}) {
       const durableBudget = Boolean(
         request.routingContext?.persistBudget === true && episodeId
       );
+      const providerCapabilityRequired = options.requireSideEffectCapability === true ||
+        Boolean(options.sideEffectGrant) ||
+        !usesExplicitInjectedFetch;
+      const providerCapabilitySpec = {
+        episodeId,
+        operation: request.routingContext?.capabilityOperation ?? options.capabilityOperation,
+        scopes: PROVIDER_SIDE_EFFECT_SCOPES,
+        maxCalls: 0,
+        maxCostUsd: 0
+      };
+      if (providerCapabilityRequired) {
+        assertSideEffectGrant(options.sideEffectGrant, providerCapabilitySpec);
+      }
+      // Retry configuration is an upper bound, never an authority expansion.
+      // The signed production Capability is the final ceiling for both the
+      // initial request and every configured retry/fallback request.
+      const authorizedProviderCalls = providerCapabilityRequired
+        ? options.sideEffectGrant.maxCalls
+        : Number.POSITIVE_INFINITY;
+      const authorizedProviderCostUsd = providerCapabilityRequired
+        ? options.sideEffectGrant.maxCostUsd
+        : Number.POSITIVE_INFINITY;
       const requestBudget = request.routingContext?.control?.budget;
       const remainingCallBudget = requestBudget?.maxCalls === null || requestBudget?.maxCalls === undefined
         ? Number.POSITIVE_INFINITY
@@ -232,6 +359,10 @@ export async function createAiClient(options = {}) {
       let actualCostKnown = true;
       let budgetBlocked = false;
       let budgetBlockedMessage = null;
+      let capabilityRetryLimitReached = false;
+      let capabilityCostLimitReached = false;
+      let consumedProviderCalls = 0;
+      let consumedProviderCostUsd = 0;
       let reservationSequence = 0;
       const configuredRoutes = routingDecision.orderedRoutes.filter((route, index, routes) => {
         const provider = config.providers[route.providerId];
@@ -243,17 +374,29 @@ export async function createAiClient(options = {}) {
         );
       });
 
-      async function settleAttempt(reservationId, attemptCost, reservedCostPerAttempt) {
+      async function settleAttempt(
+        reservationId,
+        attemptCost,
+        reservedCostPerAttempt,
+        usedCalls = 1,
+        settlement = {}
+      ) {
         if (!durableBudget || !reservationId) return;
-        const accountedCost = attemptCost ?? (
-          Number.isFinite(reservedCostPerAttempt) ? reservedCostPerAttempt : 0
-        );
+        const accountedCost = usedCalls === 0
+          ? 0
+          : attemptCost ?? (
+              Number.isFinite(reservedCostPerAttempt) ? reservedCostPerAttempt : 0
+            );
         await budgetLedger.settle({
           episodeId,
           reservationId,
-          usedCalls: 1,
+          usedCalls,
           usedCostUsd: accountedCost,
-          overrun: Number.isFinite(reservedCostPerAttempt) && accountedCost > reservedCostPerAttempt
+          overrun: Number.isFinite(reservedCostPerAttempt) && accountedCost > reservedCostPerAttempt,
+          settlementStatus: settlement.status ?? "completed_unknown",
+          providerId: settlement.providerId,
+          model: settlement.model,
+          attempt: settlement.attempt
         });
       }
 
@@ -293,6 +436,10 @@ export async function createAiClient(options = {}) {
           ? route.reservationCostUsd
           : selectedReservedCostPerAttempt;
         for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+          if (consumedProviderCalls >= authorizedProviderCalls) {
+            capabilityRetryLimitReached = true;
+            break providerLoop;
+          }
           if (!durableBudget && attempts.length >= remainingCallBudget) break providerLoop;
           if (
             !durableBudget &&
@@ -300,6 +447,24 @@ export async function createAiClient(options = {}) {
             actualCostUsd + reservedCostPerAttempt > remainingCostBudget
           ) {
             budgetBlocked = true;
+            break providerLoop;
+          }
+          if (
+            providerCapabilityRequired &&
+            (!Number.isFinite(reservedCostPerAttempt) || reservedCostPerAttempt < 0)
+          ) {
+            throw new SideEffectAuthorizationError(
+              "Provider 调用缺少可验证的本次预留费用，已在派发前拒绝",
+              "side_effect_capability_cost_unknown",
+              { providerId, model: route.model, attempt },
+              403
+            );
+          }
+          if (
+            providerCapabilityRequired &&
+            consumedProviderCostUsd + reservedCostPerAttempt > authorizedProviderCostUsd
+          ) {
+            capabilityCostLimitReached = true;
             break providerLoop;
           }
           let reservationId = null;
@@ -321,6 +486,63 @@ export async function createAiClient(options = {}) {
               break providerLoop;
             }
           }
+          if (providerCapabilityRequired) {
+            try {
+              consumeSideEffectGrantUsage(
+                options.sideEffectGrant,
+                providerCapabilitySpec,
+                { calls: 1, costUsd: reservedCostPerAttempt }
+              );
+            } catch (error) {
+              if (durableBudget && reservationId) {
+                try {
+                  await settleAttempt(reservationId, 0, reservedCostPerAttempt, 0, {
+                    status: "not_dispatched",
+                    providerId,
+                    model: route.model,
+                    attempt
+                  });
+                } catch {
+                  throw accountingPaused(
+                    "Capability 在 Provider 派发前拒绝请求，但预算预留释放失败；预留保持并已安全暂停"
+                  );
+                }
+              }
+              throw error;
+            }
+            consumedProviderCalls += 1;
+            consumedProviderCostUsd = Number((
+              consumedProviderCostUsd + reservedCostPerAttempt
+            ).toFixed(6));
+          }
+          if (durableBudget && reservationId) {
+            try {
+              await budgetLedger.markDispatched({
+                episodeId,
+                reservationId,
+                decisionId: routingDecision.id,
+                providerId,
+                model: route.model,
+                attempt
+              });
+            } catch {
+              try {
+                await settleAttempt(reservationId, 0, reservedCostPerAttempt, 0, {
+                  status: "not_dispatched",
+                  providerId,
+                  model: route.model,
+                  attempt
+                });
+              } catch {
+                throw accountingPaused(
+                  "Provider 请求尚未发出，但派发状态和预算释放都未能持久化；预留保持并已安全暂停"
+                );
+              }
+              throw accountingPaused(
+                "Provider 请求尚未发出，但派发状态无法持久化；已按零用量释放预留并安全暂停"
+              );
+            }
+          }
           const startedAt = Date.now();
           let result;
           try {
@@ -335,18 +557,102 @@ export async function createAiClient(options = {}) {
               proxyUrl
             });
           } catch (error) {
-            const attemptCost = router?.costForUsage?.(route.model, error.usage) ?? null;
+            const dispatchState = error.requestDispatchState ?? "completed";
+            if (dispatchState === "ambiguous") {
+              actualCostKnown = false;
+              attempts.push({
+                provider: providerId,
+                model: route.model,
+                attempt,
+                status: "ambiguous",
+                dispatchState,
+                code: "provider_call_ambiguous",
+                httpStatus: null,
+                message: redactSensitiveText(error.message),
+                actualCostUsd: null,
+                durationMs: Date.now() - startedAt
+              });
+              let ambiguityRecorded = !durableBudget;
+              let ambiguityRecordingError = null;
+              if (durableBudget && reservationId) {
+                try {
+                  await budgetLedger.markAmbiguous({
+                    episodeId,
+                    reservationId,
+                    decisionId: routingDecision.id,
+                    providerId,
+                    model: route.model,
+                    attempt
+                  });
+                  ambiguityRecorded = true;
+                } catch (recordError) {
+                  ambiguityRecordingError = redactSensitiveText(recordError?.message, 300);
+                }
+              }
+              try {
+                providerHealth[providerId] = await healthManager.recordFailure(providerId, error, {
+                  latencyMs: Date.now() - startedAt,
+                  errorCode: "provider_call_ambiguous"
+                });
+              } catch {
+                // Provider health is advisory; ambiguity and the frozen reservation remain authoritative.
+              }
+              const ambiguousDecision = completeRoutingDecision(routingDecision, {
+                status: "ambiguous",
+                providerId,
+                model: route.model,
+                durationMs: attempts.reduce((sum, item) => sum + item.durationMs, 0),
+                actualCostUsd: null,
+                accountedCostUsd,
+                pricingVersion: routingDecision.pricingVersion,
+                budgetAccounted: durableBudget,
+                budgetOverrun: true,
+                failureCode: "provider_call_ambiguous"
+              });
+              let decisionRecorded = false;
+              if (durableBudget) {
+                try {
+                  await budgetLedger.recordDecision({ episodeId, decision: ambiguousDecision });
+                  decisionRecorded = true;
+                } catch {
+                  decisionRecorded = false;
+                }
+              }
+              const paused = new ProviderCallAmbiguousError(
+                "模型请求已经发出，但 Provider 结果与费用无法确认；预算预留保持冻结，已禁止自动重试和备用通道切换，必须人工对账",
+                attempts,
+                {
+                  episodeId: episodeId ?? null,
+                  reservationId,
+                  providerId,
+                  model: route.model,
+                  attempt,
+                  ambiguityRecorded,
+                  ambiguityRecordingError,
+                  decisionRecorded
+                }
+              );
+              paused.routingDecision = ambiguousDecision;
+              throw paused;
+            }
+            const notDispatched = dispatchState === "not_dispatched";
+            const attemptCost = notDispatched
+              ? 0
+              : router?.costForUsage?.(route.model, error.usage) ?? null;
             if (error.usage && attemptCost === null) actualCostKnown = false;
             if (attemptCost !== null) actualCostUsd = Number((actualCostUsd + attemptCost).toFixed(6));
-            const accountedAttemptCost = attemptCost ?? (
-              Number.isFinite(reservedCostPerAttempt) ? reservedCostPerAttempt : 0
-            );
+            const accountedAttemptCost = notDispatched
+              ? 0
+              : attemptCost ?? (
+                  Number.isFinite(reservedCostPerAttempt) ? reservedCostPerAttempt : 0
+                );
             accountedCostUsd = Number((accountedCostUsd + accountedAttemptCost).toFixed(6));
             attempts.push({
               provider: providerId,
               model: route.model,
               attempt,
               status: "failed",
+              dispatchState,
               code: error.code === null || error.code === undefined
                 ? null
                 : redactSensitiveText(error.code, 120),
@@ -356,16 +662,31 @@ export async function createAiClient(options = {}) {
               durationMs: Date.now() - startedAt
             });
             try {
-              await settleAttempt(reservationId, attemptCost, reservedCostPerAttempt);
+              await settleAttempt(
+                reservationId,
+                attemptCost,
+                reservedCostPerAttempt,
+                notDispatched ? 0 : 1,
+                {
+                  status: notDispatched ? "not_dispatched" : "completed_failure",
+                  providerId,
+                  model: route.model,
+                  attempt
+                }
+              );
             } catch {
               throw accountingPaused("模型请求已结束，但预算结算失败；预留仍保持并已安全暂停");
             }
-            providerHealth[providerId] = await healthManager.recordFailure(providerId, error, {
-              latencyMs: Date.now() - startedAt,
-              errorCode: error.code === null || error.code === undefined
-                ? String(error.status ?? "request_failed")
-                : redactSensitiveText(error.code, 120)
-            });
+            try {
+              providerHealth[providerId] = await healthManager.recordFailure(providerId, error, {
+                latencyMs: Date.now() - startedAt,
+                errorCode: error.code === null || error.code === undefined
+                  ? String(error.status ?? "request_failed")
+                  : redactSensitiveText(error.code, 120)
+              });
+            } catch {
+              // Provider health is advisory; accounting and retry state are authoritative.
+            }
             if (!isRetryable(error) || attempt === maximumAttempts) break;
             const backoff = config.request.retryBackoffMs?.[attempt] ?? 0;
             if (backoff > 0) await sleep(backoff);
@@ -384,17 +705,27 @@ export async function createAiClient(options = {}) {
             model: result.model,
             attempt,
             status: "succeeded",
+            dispatchState: "completed",
             actualCostUsd: attemptCost,
             durationMs: Date.now() - startedAt
           });
           try {
-            await settleAttempt(reservationId, attemptCost, reservedCostPerAttempt);
+            await settleAttempt(reservationId, attemptCost, reservedCostPerAttempt, 1, {
+              status: "completed_success",
+              providerId,
+              model: result.model,
+              attempt
+            });
           } catch {
             throw accountingPaused("模型请求已完成，但预算结算失败；预留仍保持并已安全暂停");
           }
-          providerHealth[providerId] = await healthManager.recordSuccess(providerId, {
-            latencyMs: Date.now() - startedAt
-          });
+          try {
+            providerHealth[providerId] = await healthManager.recordSuccess(providerId, {
+              latencyMs: Date.now() - startedAt
+            });
+          } catch {
+            // Provider health is advisory; a settled successful result must not be retried.
+          }
           const completedDecision = completeRoutingDecision(routingDecision, {
             status: "succeeded",
             providerId,
@@ -428,10 +759,29 @@ export async function createAiClient(options = {}) {
         budgetOverrun: accountedCostUsd > remainingCostBudget,
         failureCode: budgetBlocked
           ? "budget_reservation_denied"
-          : attempts.at(-1)?.code ?? attempts.at(-1)?.httpStatus ?? "request_failed"
+          : capabilityRetryLimitReached
+            ? "side_effect_capability_retry_limit_reached"
+            : capabilityCostLimitReached
+              ? "side_effect_capability_cost_limit_reached"
+              : attempts.at(-1)?.code ?? attempts.at(-1)?.httpStatus ?? "request_failed"
       });
       await persistDecision(completedDecision);
       if (attempts.length === 0) {
+        if (capabilityRetryLimitReached || capabilityCostLimitReached) {
+          const paused = new AiGenerationPausedError(
+            capabilityRetryLimitReached
+              ? "本次 production Capability 未授权任何 Provider 调用，配置中的重试不会扩大权限"
+              : "本次 production Capability 费用上限不足，配置中的重试不会扩大权限"
+          );
+          paused.routingDecision = completedDecision;
+          paused.retryPolicy = {
+            authorizedCalls: authorizedProviderCalls,
+            consumedCalls: consumedProviderCalls,
+            authorizedCostUsd: authorizedProviderCostUsd,
+            consumedCostUsd: consumedProviderCostUsd
+          };
+          throw paused;
+        }
         if (budgetBlocked) {
           const paused = new AiGenerationPausedError(
             budgetBlockedMessage ?? "剩余预算不足以安全预留下一次模型调用"
@@ -446,6 +796,22 @@ export async function createAiClient(options = {}) {
         throw paused;
       }
       const lastFailure = attempts.at(-1)?.message;
+      if (capabilityRetryLimitReached || capabilityCostLimitReached) {
+        const paused = new AiGenerationPausedError(
+          capabilityRetryLimitReached
+            ? `已执行 production Capability 明确授权的 ${consumedProviderCalls} 次调用；配置中的其余重试和 fallback 未获授权，因此没有执行`
+            : `已消费 production Capability 明确授权的费用 ${consumedProviderCostUsd} USD；配置中的其余重试和 fallback 未获授权，因此没有执行`,
+          attempts
+        );
+        paused.routingDecision = completedDecision;
+        paused.retryPolicy = {
+          authorizedCalls: authorizedProviderCalls,
+          consumedCalls: consumedProviderCalls,
+          authorizedCostUsd: authorizedProviderCostUsd,
+          consumedCostUsd: consumedProviderCostUsd
+        };
+        throw paused;
+      }
       const paused = new AiGenerationPausedError(
         `AI 已按策略尝试 ${attempts.length} 次仍未成功，流水线已暂停，请人工检查通道、额度或模型权限${lastFailure ? `。最后错误：${lastFailure}` : ""}`,
         attempts

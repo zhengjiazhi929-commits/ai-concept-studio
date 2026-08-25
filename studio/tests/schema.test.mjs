@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { PIPELINE_DEFINITIONS, summarizePipeline, validateEpisode } from "../src/shared/schema.mjs";
-import { readEpisode } from "../src/shared/store.mjs";
+import { readFixtureEpisode } from "./episode-fixture.mjs";
 
 test("黄金样例符合系统数据契约", async () => {
-  const episode = await readEpisode("golden-001");
+  const episode = await readFixtureEpisode();
   const validation = validateEpisode(episode);
 
   assert.equal(validation.valid, true, validation.errors.join("; "));
@@ -17,7 +17,7 @@ test("黄金样例符合系统数据契约", async () => {
 });
 
 test("流水线摘要反映真实完成比例", async () => {
-  const episode = await readEpisode("golden-001");
+  const episode = await readFixtureEpisode();
   const summary = summarizePipeline(episode.pipeline);
 
   assert.equal(summary.total, 8);
@@ -26,7 +26,7 @@ test("流水线摘要反映真实完成比例", async () => {
 });
 
 test("数据契约拒绝五道闸门之外的旧审批字段", async () => {
-  const episode = structuredClone(await readEpisode("golden-001"));
+  const episode = structuredClone(await readFixtureEpisode());
   episode.approvals.facts = { status: "approved", history: [] };
   const validation = validateEpisode(episode);
   assert.equal(validation.valid, false);
@@ -34,7 +34,7 @@ test("数据契约拒绝五道闸门之外的旧审批字段", async () => {
 });
 
 test("视觉样片审核检查点独立于五道生产闸门并绑定机器与人工证据", async () => {
-  const episode = structuredClone(await readEpisode("golden-001"));
+  const episode = structuredClone(await readFixtureEpisode());
   const candidateHash = "a".repeat(64);
   const evidence = (path) => ({ path, bytes: 60_001, sha256: "b".repeat(64) });
   episode.reviewCheckpoints = {
@@ -85,7 +85,7 @@ test("视觉样片审核检查点独立于五道生产闸门并绑定机器与�
 });
 
 test("素材执行检查点独立于五道 Gate，并严格绑定候选、机器审核和人工决定", async () => {
-  const episode = structuredClone(await readEpisode("golden-001"));
+  const episode = structuredClone(await readFixtureEpisode());
   const candidateHash = "c".repeat(64);
   episode.reviewCheckpoints.assetExecution = {
     schemaVersion: 1,

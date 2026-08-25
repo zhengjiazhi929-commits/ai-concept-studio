@@ -1,15 +1,17 @@
 import http from "node:http";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  ensureInside,
   publicRoot,
+  resolveExistingPathInside,
   studioOutputRoot,
   webRoot
 } from "../shared/paths.mjs";
 import {
+  appendEvent,
   listEpisodes,
   readConfig,
   readEpisode,
@@ -37,6 +39,12 @@ import {
   setStopRequest
 } from "./control/controlled-dispatch.mjs";
 import {
+  BudgetReconciliationError,
+  reconcileAmbiguousProviderBudget
+} from "./control/budget-ledger.mjs";
+import { adjudicateProviderResultCommit } from
+  "./control/provider-result-recovery.mjs";
+import {
   getCollectorState,
   importAssistedCollectorBatch,
   runCollectorAgent
@@ -52,15 +60,15 @@ import {
   runTrendRadarAgent
 } from "./trends/agent.mjs";
 import { saveVoiceUpload } from "./production/voice.mjs";
-import {
-  inspectLocalOfflineTtsCandidate,
-  registerApprovedLocalOfflineTts
-} from "./production/local-offline-voice.mjs";
+import { inspectLocalOfflineTtsCandidate } from "./production/local-offline-voice.mjs";
 import { saveAssetUpload } from "./production/assets.mjs";
+import { recoverPendingUploadTransactions } from
+  "./production/upload-transaction.mjs";
 import { adjudicateAmbiguousExternalAssetReceipt } from
   "./production/external-assets.mjs";
 import { summarizeAgentOperations } from "./control/agent-observability.mjs";
 import { safeErrorMessage } from "../shared/redaction.mjs";
+import { loadLocalEnvironment } from "../shared/env.mjs";
 import {
   approveVisualProofCandidate,
   reviewVisualProofCandidate,
@@ -76,8 +84,104 @@ import {
 import { runAssetExecutionPreflight } from
   "./reviews/asset-execution-preflight-runner.mjs";
 import { getHumanApprovalView } from "./reviews/human-approval-view.mjs";
+import {
+  assertClientDidNotSupplyActor,
+  authenticateOperatorRequest,
+  operatorSecurityOptionsFromEnvironment
+} from "./security/operator-auth.mjs";
+import {
+  createCapabilityAuthority,
+  requireSideEffectGrant
+} from
+  "./security/side-effect-capability.mjs";
+import { createOperatorSessionAuthority } from
+  "./security/operator-session.mjs";
 
 const localHosts = new Set(["127.0.0.1", "::1", "localhost"]);
+const budgetReconciliationTokenHeader = "x-budget-reconciliation-token";
+
+function decodedHeader(request, name) {
+  const value = request.headers[name];
+  return value === undefined ? null : decodeURIComponent(String(value));
+}
+
+function uploadRightsFromHeaders(request) {
+  return {
+    authorOrSource: decodedHeader(request, "x-rights-author-source"),
+    sourceUrl: decodedHeader(request, "x-rights-source-url"),
+    license: decodedHeader(request, "x-rights-license"),
+    allowedUse: decodedHeader(request, "x-rights-allowed-use"),
+    attributionRequirements: decodedHeader(request, "x-rights-attribution"),
+    privacyPortraitStatus: decodedHeader(request, "x-rights-privacy")
+  };
+}
+
+export function httpMutationCapabilitySpec(url, method) {
+  const episodeId = /^\/api\/episodes\/([a-z0-9-]+)/u.exec(url.pathname)?.[1]
+    ?? "studio";
+  const scopes = new Set(["http.mutation", "state.write"]);
+  if (
+    /\/(?:upload|register)$/u.test(url.pathname) ||
+    url.pathname === "/api/ai/primary" ||
+    url.pathname === "/api/import/golden" ||
+    url.pathname.includes("evidence-batches") ||
+    url.pathname.includes("assisted-batches") ||
+    url.pathname.includes("retry-adjudications")
+  ) {
+    scopes.add("filesystem.write");
+  }
+  if (
+    /\/(?:collector|research|trends)\/run$/u.test(url.pathname) ||
+    url.pathname.includes("asset-execution-preflight")
+  ) {
+    scopes.add("network.request");
+    scopes.add("filesystem.write");
+  }
+  return {
+    episodeId,
+    operation: `http:${String(method).toLowerCase()}:${url.pathname}`,
+    scopes: [...scopes],
+    maxCalls: 0,
+    maxCostUsd: 0
+  };
+}
+
+function secureTokenMatches(expected, supplied) {
+  if (
+    typeof expected !== "string" ||
+    expected.length < 32 ||
+    expected.length > 512 ||
+    typeof supplied !== "string" ||
+    supplied.length === 0 ||
+    supplied.length > 1024
+  ) return false;
+  const expectedDigest = createHash("sha256").update(expected, "utf8").digest();
+  const suppliedDigest = createHash("sha256").update(supplied, "utf8").digest();
+  return timingSafeEqual(expectedDigest, suppliedDigest);
+}
+
+function assertBudgetReconciliationHttpAuthorized(request, options) {
+  const actor = options.actor;
+  const suppliedToken = request.headers[budgetReconciliationTokenHeader];
+  const actorValid = Boolean(
+    typeof actor === "string" &&
+    actor.trim() &&
+    actor.length <= 128 &&
+    !/[\u0000-\u001f\u007f]/u.test(actor)
+  );
+  if (
+    !actorValid ||
+    Array.isArray(suppliedToken) ||
+    !secureTokenMatches(options.budgetReconciliationToken, suppliedToken)
+  ) {
+    throw new BudgetReconciliationError(
+      "人工预算对账 HTTP 入口未启用或授权无效",
+      "budget_reconciliation_forbidden",
+      {},
+      403
+    );
+  }
+}
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -98,10 +202,11 @@ const mimeTypes = new Map([
   [".ogg", "audio/ogg"]
 ]);
 
-function sendJson(response, statusCode, value) {
+function sendJson(response, statusCode, value, headers = {}) {
   response.writeHead(statusCode, {
     "content-type": "application/json; charset=utf-8",
-    "cache-control": "no-store"
+    "cache-control": "no-store",
+    ...headers
   });
   response.end(JSON.stringify(value));
 }
@@ -130,15 +235,56 @@ async function readJsonBody(request, maximumBytes = 1024 * 1024) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
-async function readBinaryBody(request, maximumBytes = 100 * 1024 * 1024) {
+async function readBinaryBody(request, maximumBytes = 64 * 1024 * 1024) {
+  const declaredBytes = Number(request.headers["content-length"] ?? 0);
+  if (Number.isFinite(declaredBytes) && declaredBytes > maximumBytes) {
+    const error = new Error(`上传文件超过 ${Math.floor(maximumBytes / 1024 / 1024)} MB 上限`);
+    error.code = "request_too_large";
+    error.statusCode = 413;
+    throw error;
+  }
   const chunks = [];
   let size = 0;
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > maximumBytes) throw new Error("上传文件超过 100 MB 上限");
+    if (size > maximumBytes) {
+      const error = new Error(`上传文件超过 ${Math.floor(maximumBytes / 1024 / 1024)} MB 上限`);
+      error.code = "request_too_large";
+      error.statusCode = 413;
+      throw error;
+    }
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
+}
+
+function assertLocalRequestOrigin(request, config, { required = false } = {}) {
+  const origin = request.headers.origin;
+  if (!origin) {
+    if (!required) return;
+    const error = new Error("operator session 解锁必须来自本地控制台页面");
+    error.code = "forbidden_origin";
+    error.statusCode = 403;
+    throw error;
+  }
+  let parsedOrigin;
+  try {
+    parsedOrigin = new URL(origin);
+  } catch {
+    const error = new Error("请求来源格式无效");
+    error.code = "forbidden_origin";
+    error.statusCode = 403;
+    throw error;
+  }
+  if (
+    !localHosts.has(parsedOrigin.hostname) ||
+    Number(parsedOrigin.port || 80) !== config.port
+  ) {
+    const error = new Error("请求来源不属于本地控制台");
+    error.code = "forbidden_origin";
+    error.statusCode = 403;
+    throw error;
+  }
 }
 
 async function serveFile(request, response, filePath) {
@@ -214,7 +360,16 @@ function summarizeEpisode(episode) {
   };
 }
 
-async function routeApi(request, response, url, options = {}) {
+async function routeApi(
+  request,
+  response,
+  url,
+  options = {},
+  reconciliationAuth = {}
+) {
+  const readState = options.readEpisode ?? readEpisode;
+  const listState = options.listEpisodes ?? listEpisodes;
+  const readEvents = options.readRecentEvents ?? readRecentEvents;
   if (request.method === "GET" && url.pathname === "/api/health") {
     sendJson(response, 200, { ok: true, at: new Date().toISOString() });
     return true;
@@ -246,39 +401,43 @@ async function routeApi(request, response, url, options = {}) {
   }
 
   if (request.method === "GET" && url.pathname === "/api/cloud") {
-    sendJson(response, 200, await getCloudBackupStatus());
+    sendJson(
+      response,
+      200,
+      await (options.getCloudBackupStatus ?? getCloudBackupStatus)()
+    );
     return true;
   }
 
   if (request.method === "GET" && url.pathname === "/api/episodes") {
-    const episodes = await listEpisodes();
+    const episodes = await listState();
     sendJson(response, 200, { episodes: episodes.map(summarizeEpisode) });
     return true;
   }
 
   if (request.method === "GET" && url.pathname === "/api/events") {
-    sendJson(response, 200, { events: await readRecentEvents(80) });
+    sendJson(response, 200, { events: await readEvents(80) });
     return true;
   }
 
   if (request.method === "GET" && url.pathname === "/api/collector") {
-    sendJson(response, 200, await getCollectorState());
+    sendJson(response, 200, await (options.getCollectorState ?? getCollectorState)());
     return true;
   }
 
   if (request.method === "POST" && url.pathname === "/api/collector/run") {
-    sendJson(response, 200, await runCollectorAgent());
+    sendJson(response, 200, await runCollectorAgent(options));
     return true;
   }
 
   if (request.method === "POST" && url.pathname === "/api/collector/assisted-batches") {
     const batch = await readJsonBody(request);
-    sendJson(response, 201, await importAssistedCollectorBatch(batch));
+    sendJson(response, 201, await importAssistedCollectorBatch(batch, options));
     return true;
   }
 
   if (request.method === "GET" && url.pathname === "/api/research") {
-    sendJson(response, 200, await getResearchState());
+    sendJson(response, 200, await (options.getResearchState ?? getResearchState)());
     return true;
   }
 
@@ -287,30 +446,30 @@ async function routeApi(request, response, url, options = {}) {
     const researchState = await getResearchState();
     const episodeId = body.episodeId || researchState.selection?.episodeId;
     if (!episodeId) throw new Error("请先在热点概念雷达中选择一个正式候选");
-    sendJson(response, 200, await runAgent(episodeId, "research-agent"));
+    sendJson(response, 200, await runAgent(episodeId, "research-agent", options));
     return true;
   }
 
   if (request.method === "POST" && url.pathname === "/api/research/evidence-batches") {
     const batch = await readJsonBody(request);
-    sendJson(response, 201, await importResearchEvidenceBatch(batch));
+    sendJson(response, 201, await importResearchEvidenceBatch(batch, options));
     return true;
   }
 
   if (request.method === "GET" && url.pathname === "/api/trends") {
-    sendJson(response, 200, await getTrendRadarState());
+    sendJson(response, 200, await (options.getTrendRadarState ?? getTrendRadarState)());
     return true;
   }
 
   if (request.method === "POST" && url.pathname === "/api/trends/run") {
-    const result = await runTrendRadarAgent();
+    const result = await runTrendRadarAgent(options);
     sendJson(response, 200, result);
     return true;
   }
 
   if (request.method === "POST" && url.pathname === "/api/trends/signals") {
     const signal = await readJsonBody(request);
-    sendJson(response, 201, await ingestTrendSignal(signal));
+    sendJson(response, 201, await ingestTrendSignal(signal, options));
     return true;
   }
 
@@ -319,20 +478,32 @@ async function routeApi(request, response, url, options = {}) {
   );
   if (request.method === "POST" && trendSelectionMatch) {
     const body = await readJsonBody(request);
-    const result = await approveTrendCandidate(trendSelectionMatch[1], body.note ?? "");
+    assertClientDidNotSupplyActor(body);
+    const result = await approveTrendCandidate(
+      trendSelectionMatch[1],
+      body.note ?? "",
+      options
+    );
     sendJson(response, 200, result);
     return true;
   }
 
   if (request.method === "POST" && url.pathname === "/api/import/golden") {
-    const result = await importGoldenSample();
+    const importer = options.importGoldenSample ?? importGoldenSample;
+    const result = await importer({
+      actor: options.actor,
+      readEpisode: options.readEpisode,
+      writeEpisode: options.writeEpisode,
+      appendEvent: options.appendEvent,
+      now: options.now
+    });
     sendJson(response, 201, { episode: result.episode });
     return true;
   }
 
   const episodeMatch = /^\/api\/episodes\/([a-z0-9-]+)$/u.exec(url.pathname);
   if (request.method === "GET" && episodeMatch) {
-    sendJson(response, 200, { episode: await readEpisode(episodeMatch[1]) });
+    sendJson(response, 200, { episode: await readState(episodeMatch[1]) });
     return true;
   }
 
@@ -351,14 +522,16 @@ async function routeApi(request, response, url, options = {}) {
 
   const workflowMatch = /^\/api\/episodes\/([a-z0-9-]+)\/workflow$/u.exec(url.pathname);
   if (request.method === "GET" && workflowMatch) {
-    sendJson(response, 200, { workflow: await getWorkflowState(workflowMatch[1]) });
+    sendJson(response, 200, {
+      workflow: await getWorkflowState(workflowMatch[1], options)
+    });
     return true;
   }
 
   const metricsMatch = /^\/api\/episodes\/([a-z0-9-]+)\/agent-metrics$/u.exec(url.pathname);
   if (request.method === "GET" && metricsMatch) {
     sendJson(response, 200, {
-      metrics: summarizeAgentOperations(await readEpisode(metricsMatch[1]))
+      metrics: summarizeAgentOperations(await readState(metricsMatch[1]))
     });
     return true;
   }
@@ -367,7 +540,11 @@ async function routeApi(request, response, url, options = {}) {
     url.pathname
   );
   if (request.method === "GET" && visualProofReviewMatch) {
-    sendJson(response, 200, await verifyVisualProofApproval(visualProofReviewMatch[1]));
+    sendJson(
+      response,
+      200,
+      await verifyVisualProofApproval(visualProofReviewMatch[1], options)
+    );
     return true;
   }
   if (request.method === "POST" && visualProofReviewMatch) {
@@ -385,6 +562,7 @@ async function routeApi(request, response, url, options = {}) {
   );
   if (request.method === "POST" && visualProofApprovalMatch) {
     const body = await readJsonBody(request);
+    assertClientDidNotSupplyActor(body);
     const result = await approveVisualProofCandidate(visualProofApprovalMatch[1], body, options);
     sendJson(response, 200, {
       checkpoint: result.checkpoint,
@@ -415,6 +593,7 @@ async function routeApi(request, response, url, options = {}) {
   );
   if (request.method === "POST" && assetExecutionApprovalMatch) {
     const body = await readJsonBody(request);
+    assertClientDidNotSupplyActor(body);
     const result = await approveAssetExecutionCandidate(
       assetExecutionApprovalMatch[1],
       body,
@@ -432,6 +611,7 @@ async function routeApi(request, response, url, options = {}) {
   );
   if (request.method === "POST" && assetExecutionRejectionMatch) {
     const body = await readJsonBody(request);
+    assertClientDidNotSupplyActor(body);
     const result = await rejectAssetExecutionCandidate(
       assetExecutionRejectionMatch[1],
       body,
@@ -481,6 +661,7 @@ async function routeApi(request, response, url, options = {}) {
       .exec(url.pathname);
   if (request.method === "POST" && externalAssetRetryAdjudicationMatch) {
     const body = await readJsonBody(request);
+    assertClientDidNotSupplyActor(body);
     const result = await adjudicateAmbiguousExternalAssetReceipt(
       externalAssetRetryAdjudicationMatch[1],
       {
@@ -494,7 +675,11 @@ async function routeApi(request, response, url, options = {}) {
         confirmation: body.confirmation,
         note: body.note
       },
-      { actor: "human:Zhengjiazhi" }
+      {
+        ...options,
+        actor: options.actor,
+        capabilityOperation: "external-asset:retry-adjudication"
+      }
     );
     sendJson(response, 200, {
       candidateHash: result.adjudication.candidateHash ?? body.candidateHash,
@@ -512,7 +697,7 @@ async function routeApi(request, response, url, options = {}) {
     url.pathname
   );
   if (request.method === "POST" && shadowPlanMatch) {
-    const result = await runShadowPlanning(shadowPlanMatch[1]);
+    const result = await runShadowPlanning(shadowPlanMatch[1], options);
     sendJson(response, 200, { episode: result.episode, plan: result.record });
     return true;
   }
@@ -522,7 +707,22 @@ async function routeApi(request, response, url, options = {}) {
   );
   if (request.method === "POST" && controlModeMatch) {
     const body = await readJsonBody(request);
-    const result = await setControlMode(controlModeMatch[1], body.mode);
+    assertClientDidNotSupplyActor(body);
+    if (
+      body.mode === "active" &&
+      body.activeAuthorization?.actorId !== options.actor
+    ) {
+      const error = new Error("active 授权身份与当前服务端操作者不一致");
+      error.code = "active_authorization_actor_mismatch";
+      error.statusCode = 403;
+      throw error;
+    }
+    const result = await setControlMode(controlModeMatch[1], body.mode, {
+      ...options,
+      actor: options.actor,
+      activeAuthorization: body.activeAuthorization,
+      verifyActiveAuthorization: options.verifyActiveAuthorization
+    });
     sendJson(response, 200, {
       episode: result.episode,
       changed: result.changed,
@@ -536,8 +736,113 @@ async function routeApi(request, response, url, options = {}) {
   );
   if (request.method === "POST" && controlStopMatch) {
     const body = await readJsonBody(request);
-    const episode = await setStopRequest(controlStopMatch[1], body.requested ?? true);
+    assertClientDidNotSupplyActor(body);
+    const episode = await setStopRequest(
+      controlStopMatch[1],
+      body.requested ?? true,
+      options
+    );
     sendJson(response, 200, { episode });
+    return true;
+  }
+
+  const budgetReconciliationMatch =
+    /^\/api\/episodes\/([a-z0-9-]+)\/control\/budget\/reconcile-ambiguous$/u.exec(
+      url.pathname
+    );
+  if (request.method === "POST" && budgetReconciliationMatch) {
+    assertBudgetReconciliationHttpAuthorized(request, {
+      ...reconciliationAuth,
+      actor: options.actor
+    });
+    const body = await readJsonBody(request);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new BudgetReconciliationError(
+        "人工预算对账 JSON 必须是对象",
+        "budget_reconciliation_input_invalid"
+      );
+    }
+    if (body.actor !== undefined) {
+      throw new BudgetReconciliationError(
+        "客户端不能自报人工预算对账身份",
+        "budget_reconciliation_client_actor_forbidden"
+      );
+    }
+    const allowedFields = new Set([
+      "reservationId",
+      "usedCalls",
+      "usedCostUsd",
+      "confirmation"
+    ]);
+    const unexpectedFields = Object.keys(body).filter((key) => !allowedFields.has(key));
+    if (unexpectedFields.length > 0) {
+      throw new BudgetReconciliationError(
+        `人工预算对账包含未授权字段：${unexpectedFields.join("、")}`,
+        "budget_reconciliation_input_invalid"
+      );
+    }
+    const result = await reconcileAmbiguousProviderBudget(
+      budgetReconciliationMatch[1],
+      {
+        reservationId: body.reservationId,
+        usedCalls: body.usedCalls,
+        usedCostUsd: body.usedCostUsd,
+        actor: options.actor,
+        confirmation: body.confirmation
+      },
+      {
+        readEpisode: options.readEpisode,
+        writeEpisode: options.writeEpisode
+      }
+    );
+    sendJson(response, 200, {
+      reconciliation: result.reconciliation,
+      budget: result.episode.control.budget
+    });
+    return true;
+  }
+
+  const providerResultAdjudicationMatch =
+    /^\/api\/episodes\/([a-z0-9-]+)\/control\/provider-results\/adjudicate$/u.exec(
+      url.pathname
+    );
+  if (request.method === "POST" && providerResultAdjudicationMatch) {
+    const body = await readJsonBody(request);
+    assertClientDidNotSupplyActor(body);
+    const allowedFields = new Set([
+      "target",
+      "decision",
+      "confirmation",
+      "expectedStateVersion",
+      "reservationIds",
+      "artifactVersion",
+      "artifactHash",
+      "reviewReportId",
+      "note"
+    ]);
+    const unexpectedFields = Object.keys(body ?? {})
+      .filter((key) => !allowedFields.has(key));
+    if (unexpectedFields.length > 0) {
+      const error = new Error(
+        `Provider 结果裁决包含未授权字段：${unexpectedFields.join("、")}`
+      );
+      error.code = "provider_result_adjudication_input_invalid";
+      error.statusCode = 400;
+      throw error;
+    }
+    const result = await adjudicateProviderResultCommit(
+      providerResultAdjudicationMatch[1],
+      body,
+      {
+        ...options,
+        capabilityOperation: "provider-result:adjudicate"
+      }
+    );
+    sendJson(response, 200, {
+      adjudication: result.adjudication,
+      unchanged: result.unchanged,
+      stateVersion: result.episode.control?.stateVersion ?? null
+    });
     return true;
   }
 
@@ -546,6 +851,7 @@ async function routeApi(request, response, url, options = {}) {
   );
   if (request.method === "POST" && assistedPrepareMatch) {
     const result = await prepareAssistedDispatch(assistedPrepareMatch[1], {
+      ...options,
       providerHealth: getProviderHealthSnapshot()
     });
     sendJson(response, 200, result);
@@ -557,9 +863,15 @@ async function routeApi(request, response, url, options = {}) {
   );
   if (request.method === "POST" && assistedConfirmMatch) {
     const body = await readJsonBody(request);
+    assertClientDidNotSupplyActor(body);
     const result = await confirmAssistedDispatch(assistedConfirmMatch[1], body.dispatchId, {
+      ...options,
       providerHealth: getProviderHealthSnapshot(),
-      runWorker: runAgent
+      runWorker: (episodeId, workerId, workerOptions) => runAgent(
+        episodeId,
+        workerId,
+        { ...options, ...workerOptions }
+      )
     });
     sendJson(response, 200, result);
     return true;
@@ -570,8 +882,13 @@ async function routeApi(request, response, url, options = {}) {
   );
   if (request.method === "POST" && activeRunMatch) {
     const result = await runActiveCycle(activeRunMatch[1], {
+      ...options,
       providerHealth: getProviderHealthSnapshot(),
-      runWorker: runAgent
+      runWorker: (episodeId, workerId, workerOptions) => runAgent(
+        episodeId,
+        workerId,
+        { ...options, ...workerOptions }
+      )
     });
     sendJson(response, 200, result);
     return true;
@@ -585,8 +902,9 @@ async function routeApi(request, response, url, options = {}) {
     const result = await saveVoiceUpload(voiceUploadMatch[1], {
       fileName: decodeURIComponent(String(encodedFileName)),
       contentType: request.headers["content-type"] ?? "application/octet-stream",
-      data: await readBinaryBody(request)
-    });
+      data: await readBinaryBody(request, 32 * 1024 * 1024),
+      rights: uploadRightsFromHeaders(request)
+    }, options);
     sendJson(response, 201, { episode: result.episode, bytes: result.bytes });
     return true;
   }
@@ -605,20 +923,12 @@ async function routeApi(request, response, url, options = {}) {
       url.pathname
     );
   if (request.method === "POST" && localOfflineVoiceRegistrationMatch) {
-    const result = await registerApprovedLocalOfflineTts(
-      localOfflineVoiceRegistrationMatch[1],
-      await readJsonBody(request)
+    const error = new Error(
+      "旧版本地 TTS 登记证明口径已冻结；请通过受认证的 voice/upload 登记当前本地 WAV"
     );
-    sendJson(response, result.unchanged ? 200 : 201, {
-      episode: result.episode,
-      candidateId: result.candidateId,
-      candidateHash: result.candidateHash,
-      machineVerificationId: result.machineVerificationId,
-      machineVerificationHash: result.machineVerificationHash,
-      verificationId: result.verificationId ?? null,
-      unchanged: result.unchanged
-    });
-    return true;
+    error.code = "legacy_local_tts_registration_suspended";
+    error.statusCode = 409;
+    throw error;
   }
 
   const assetUploadMatch = /^\/api\/episodes\/([a-z0-9-]+)\/assets\/upload$/u.exec(
@@ -635,8 +945,9 @@ async function routeApi(request, response, url, options = {}) {
       model: decodeURIComponent(String(request.headers["x-model"] ?? "")),
       maximumCostUsd: Number(request.headers["x-maximum-cost-usd"] ?? 0),
       contentType: request.headers["content-type"] ?? "application/octet-stream",
-      data: await readBinaryBody(request)
-    });
+      data: await readBinaryBody(request),
+      rights: uploadRightsFromHeaders(request)
+    }, options);
     sendJson(response, 201, { episode: result.episode, asset: result.asset });
     return true;
   }
@@ -645,14 +956,14 @@ async function routeApi(request, response, url, options = {}) {
     url.pathname
   );
   if (request.method === "POST" && agentMatch) {
-    const result = await runAgent(agentMatch[1], agentMatch[2]);
+    const result = await runAgent(agentMatch[1], agentMatch[2], options);
     sendJson(response, 200, result);
     return true;
   }
 
   const nextMatch = /^\/api\/episodes\/([a-z0-9-]+)\/run-next$/u.exec(url.pathname);
   if (request.method === "POST" && nextMatch) {
-    const result = await runNextReadyAgent(nextMatch[1]);
+    const result = await runNextReadyAgent(nextMatch[1], options);
     sendJson(response, 200, result);
     return true;
   }
@@ -662,6 +973,7 @@ async function routeApi(request, response, url, options = {}) {
   );
   if (request.method === "POST" && approvalMatch) {
     const body = await readJsonBody(request);
+    assertClientDidNotSupplyActor(body);
     const episode = await approveGate(approvalMatch[1], approvalMatch[2], body, options);
     sendJson(response, 200, { episode });
     return true;
@@ -672,6 +984,7 @@ async function routeApi(request, response, url, options = {}) {
   );
   if (request.method === "POST" && rejectionMatch) {
     const body = await readJsonBody(request);
+    assertClientDidNotSupplyActor(body);
     const episode = await rejectGate(rejectionMatch[1], rejectionMatch[2], body, options);
     sendJson(response, 200, { episode });
     return true;
@@ -683,12 +996,24 @@ async function routeApi(request, response, url, options = {}) {
 function approvalRouteDependencies(options = {}) {
   const allowed = [
     "readEpisode",
+    "listEpisodes",
+    "readRecentEvents",
     "writeEpisode",
     "appendEvent",
+    "getCloudBackupStatus",
+    "getCollectorState",
+    "getResearchState",
+    "getTrendRadarState",
     "readApprovalArtifact",
     "inspectFileIntegrity",
+    "assertCurrentApprovalArtifactIntegrity",
     "inspectVisualProofCandidate",
-    "review"
+    "review",
+    "readEvaluationSuite",
+    "evaluationSuite",
+    "verifyActiveAuthorization",
+    "importGoldenSample",
+    "now"
   ];
   return Object.fromEntries(
     allowed
@@ -699,6 +1024,13 @@ function approvalRouteDependencies(options = {}) {
 
 export async function createStudioServer(options = {}) {
   if (options.recoverOnStart !== false) {
+    const uploadRecovery = options.uploadRecovery ?? {};
+    await recoverPendingUploadTransactions({
+      ...uploadRecovery,
+      allowedRoot: uploadRecovery.allowedRoot ?? options.publicRoot ?? publicRoot,
+      listEpisodes: uploadRecovery.listEpisodes ?? options.listEpisodes,
+      appendEvent: uploadRecovery.appendEvent ?? options.appendEvent ?? appendEvent
+    });
     await recoverInterruptedRuns(options.recovery ?? {});
   }
   const config = await readConfig();
@@ -708,31 +1040,88 @@ export async function createStudioServer(options = {}) {
     throw error;
   }
   const routeOptions = approvalRouteDependencies(options);
+  const reconciliationAuth = {
+    budgetReconciliationToken: options.budgetReconciliationToken
+  };
+  const operatorAuth = {
+    actor: options.operatorActor ?? options.actor,
+    operatorToken: options.operatorToken
+  };
+  const capabilityAuthority = createCapabilityAuthority({
+    secret: options.capabilitySecret,
+    now: options.capabilityNow,
+    defaultTtlMs: options.capabilityTtlMs,
+    maximumTtlMs: options.capabilityMaximumTtlMs,
+    maximumCalls: options.capabilityMaximumCalls,
+    maximumCostUsd: options.capabilityMaximumCostUsd
+  });
+  const operatorSessionAuthority = createOperatorSessionAuthority({
+    actor: operatorAuth.actor,
+    operatorToken: operatorAuth.operatorToken,
+    now: options.operatorSessionNow,
+    sessionTtlMs: options.operatorSessionTtlMs,
+    unlockTtlMs: options.operatorUnlockTtlMs
+  });
+  const servedPublicRoot = resolve(options.publicRoot ?? publicRoot);
+  const servedOutputRoot = resolve(options.outputRoot ?? studioOutputRoot);
+  const servedWebRoot = resolve(options.webRoot ?? webRoot);
   const server = http.createServer(async (request, response) => {
     try {
       const url = new URL(request.url, `http://${config.host}:${config.port}`);
       if (url.pathname.startsWith("/api/")) {
-        if (!new Set(["GET", "HEAD", "OPTIONS"]).has(request.method)) {
-          const origin = request.headers.origin;
-          if (origin) {
-            let parsedOrigin;
-            try {
-              parsedOrigin = new URL(origin);
-            } catch {
-              const error = new Error("请求来源格式无效");
-              error.code = "forbidden_origin";
-              error.statusCode = 403;
-              throw error;
-            }
-            if (!localHosts.has(parsedOrigin.hostname) || Number(parsedOrigin.port || 80) !== config.port) {
-              const error = new Error("请求来源不属于本地控制台");
-              error.code = "forbidden_origin";
-              error.statusCode = 403;
-              throw error;
-            }
+        if (request.method === "POST" && url.pathname === "/api/operator/session") {
+          assertLocalRequestOrigin(request, config, { required: true });
+          const body = await readJsonBody(request, 16 * 1024);
+          if (
+            !body ||
+            typeof body !== "object" ||
+            Array.isArray(body) ||
+            Object.keys(body).some((key) => key !== "unlockCode")
+          ) {
+            const error = new Error("operator session 解锁请求格式无效");
+            error.code = "operator_session_input_invalid";
+            error.statusCode = 400;
+            throw error;
           }
+          const session = operatorSessionAuthority.createSession(request, body);
+          sendJson(response, 201, {
+            actor: session.actor,
+            csrfToken: session.csrfToken,
+            expiresAt: session.expiresAt
+          }, { "set-cookie": session.cookies });
+          return;
         }
-        if (!(await routeApi(request, response, url, routeOptions))) {
+        const mutating = !new Set(["GET", "HEAD", "OPTIONS"]).has(request.method);
+        let requestRouteOptions = routeOptions;
+        if (mutating) {
+          assertLocalRequestOrigin(request, config);
+          const providerResultAdjudication =
+            /^\/api\/episodes\/[a-z0-9-]+\/control\/provider-results\/adjudicate$/u
+              .test(url.pathname);
+          const serviceTokenAllowed = options.allowServiceTokenMutations === true
+            && !providerResultAdjudication;
+          const operator = serviceTokenAllowed &&
+            request.headers["x-operator-token"] !== undefined
+            ? authenticateOperatorRequest(request, operatorAuth)
+            : operatorSessionAuthority.authenticateRequest(request);
+          requireSideEffectGrant(
+            { authorizeSideEffect: (spec) => capabilityAuthority.authorize(spec) },
+            httpMutationCapabilitySpec(url, request.method)
+          );
+          requestRouteOptions = {
+            ...routeOptions,
+            actor: operator.actor,
+            authorizeSideEffect: (spec) => capabilityAuthority.authorize(spec),
+            requireSideEffectCapability: true
+          };
+        }
+        if (!(await routeApi(
+          request,
+          response,
+          url,
+          requestRouteOptions,
+          reconciliationAuth
+        ))) {
           sendError(response, new Error("接口不存在"), 404);
         }
         return;
@@ -740,7 +1129,11 @@ export async function createStudioServer(options = {}) {
 
       if (url.pathname.startsWith("/assets/")) {
         const relativePath = decodeURIComponent(url.pathname.slice("/assets/".length));
-        await serveFile(request, response, ensureInside(publicRoot, resolve(publicRoot, relativePath)));
+        await serveFile(
+          request,
+          response,
+          await resolveExistingPathInside(servedPublicRoot, resolve(servedPublicRoot, relativePath))
+        );
         return;
       }
 
@@ -749,13 +1142,17 @@ export async function createStudioServer(options = {}) {
         await serveFile(
           request,
           response,
-          ensureInside(studioOutputRoot, resolve(studioOutputRoot, relativePath))
+          await resolveExistingPathInside(servedOutputRoot, resolve(servedOutputRoot, relativePath))
         );
         return;
       }
 
       const webPath = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
-      await serveFile(request, response, ensureInside(webRoot, resolve(webRoot, webPath)));
+      await serveFile(
+        request,
+        response,
+        await resolveExistingPathInside(servedWebRoot, resolve(servedWebRoot, webPath))
+      );
     } catch (error) {
       const statusCode = error?.statusCode
         ?? (error?.code === "ENOENT"
@@ -767,12 +1164,21 @@ export async function createStudioServer(options = {}) {
     }
   });
 
-  return { server, config };
+  return {
+    server,
+    config,
+    operatorUnlockCode: operatorSessionAuthority.startupUnlockCode
+  };
 }
 
 if (typeof process !== "undefined" && process.argv[1] === fileURLToPath(import.meta.url)) {
-  const { server, config } = await createStudioServer();
+  await loadLocalEnvironment();
+  const securityOptions = operatorSecurityOptionsFromEnvironment(process.env);
+  const { server, config, operatorUnlockCode } = await createStudioServer(securityOptions);
   server.listen(config.port, config.host, () => {
     console.log(`AI Concept Studio: http://${config.host}:${config.port}`);
+    if (operatorUnlockCode) {
+      console.log(`本次一次性操作解锁码：${operatorUnlockCode}`);
+    }
   });
 }

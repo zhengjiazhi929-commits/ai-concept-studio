@@ -1,10 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
-import { readEpisode } from "../src/shared/store.mjs";
-import { studioRoot } from "../src/shared/paths.mjs";
-import { currentGateArtifactHash } from "../src/shared/workflow.mjs";
+import { readFixtureEpisode } from "./episode-fixture.mjs";
 import {
   assertWorkerRunAllowed,
   kernelSnapshot,
@@ -12,10 +8,10 @@ import {
   validateKernelPlan
 } from "../src/server/control/workflow-kernel.mjs";
 import { runAgent, runNextReadyAgent } from "../src/server/orchestrator.mjs";
-import {
-  HYBRID_GENERATION_PROFILES,
-  adaptApprovedStoryboardToShortAssetPlan
-} from "../src/server/production/short-asset-plan-adapter.mjs";
+import { HYBRID_GENERATION_PROFILES } from
+  "../src/server/production/short-asset-plan-adapter.mjs";
+import { adaptStoryboardWithSyntheticExternalRights } from
+  "./synthetic-external-rights.fixture.mjs";
 import {
   approveAssetExecutionCandidate,
   beginAssetExecutionPreflight,
@@ -24,6 +20,9 @@ import {
 } from "../src/server/reviews/asset-execution-checkpoint.mjs";
 import { inspectAssetExecutionPreflight } from
   "../src/server/reviews/asset-execution-preflight.mjs";
+import { currentGateArtifactHash } from "../src/shared/workflow.mjs";
+import { historicalApprovedStoryboardV3Episode } from
+  "./historical-approved-storyboard-v3.fixture.mjs";
 
 const WORKFLOW_PREFLIGHT_FACTS = Object.freeze({
   aihubmix: {
@@ -49,66 +48,6 @@ const WORKFLOW_PREFLIGHT_FACTS = Object.freeze({
   }
 });
 
-const SHORT_EPISODE_ID = "agent-skill-tool-mcp-60s-20260813";
-const HISTORICAL_STORYBOARD_V3_HASH =
-  "29f0914a188c5d17d7bf9e4f0adafb0fdbb1ce7b0665498e5d390c9e9e4bf182";
-
-async function withApprovedHistoricalStoryboardV3(source) {
-  const episode = structuredClone(source);
-  const artifact = JSON.parse(await readFile(resolve(
-    studioRoot,
-    "data",
-    "production",
-    "episodes",
-    SHORT_EPISODE_ID,
-    "storyboard-draft-v003.json"
-  ), "utf8"));
-  const versions = episode.production.storyboardDraft.versions
-    .filter(({ version }) => version <= 3)
-    .map((entry) => structuredClone(entry));
-  const version = versions.find((entry) => entry.version === 3);
-  assert.ok(version, "测试夹具必须保留历史 Storyboard v3 元数据");
-  episode.production.storyboardDraft = {
-    ...version,
-    needsRevision: false,
-    versions
-  };
-  episode.scenes = structuredClone(artifact.timeline.scenes);
-  episode.subtitles = structuredClone(artifact.timeline.subtitles);
-  episode.render.durationSeconds = artifact.timeline.durationSeconds;
-  const artifactHash = currentGateArtifactHash(episode, "storyboard");
-  assert.equal(artifactHash, HISTORICAL_STORYBOARD_V3_HASH);
-  const reportId = "test-storyboard-v3-machine-pass";
-  episode.control.reviewEnabled = true;
-  episode.reviews.storyboard = {
-    status: "passed",
-    artifactVersion: 3,
-    artifactHash,
-    rubricVersion: "storyboard-v3",
-    revisionRounds: 0,
-    latestReportId: reportId,
-    reports: [{
-      id: reportId,
-      stage: "storyboard",
-      decision: "pass",
-      artifactVersion: 3,
-      artifactHash
-    }]
-  };
-  episode.approvals.storyboard = {
-    ...episode.approvals.storyboard,
-    status: "approved",
-    currentVersion: 3,
-    provenance: "reviewed-v2",
-    reviewReportId: reportId,
-    artifactHash
-  };
-  const storyboardStep = episode.pipeline.find((step) => step.gate === "storyboard");
-  storyboardStep.status = "complete";
-  storyboardStep.requiresHuman = false;
-  return episode;
-}
-
 function memoryStore(initialEpisode, evidence = {}) {
   let stored = structuredClone(initialEpisode);
   return {
@@ -124,18 +63,96 @@ function memoryStore(initialEpisode, evidence = {}) {
   };
 }
 
-async function approvedAndPreflightPassedAssetEpisode() {
-  const source = await withApprovedHistoricalStoryboardV3(
-    await readEpisode(SHORT_EPISODE_ID)
+function approveReviewedFixtureGate(episode, gate, version, reportId) {
+  const artifactHash = currentGateArtifactHash(episode, gate);
+  const approval = {
+    at: "2026-08-13T08:00:00.000Z",
+    gate,
+    decision: "approved",
+    note: "Immutable Workflow Kernel test fixture",
+    version
+  };
+  episode.reviews[gate] = {
+    status: "passed",
+    artifactVersion: version,
+    artifactHash,
+    rubricVersion: `${gate}-fixture-v1`,
+    revisionRounds: 0,
+    latestReportId: reportId,
+    reports: [{
+      id: reportId,
+      stage: gate,
+      decision: "pass",
+      artifactVersion: version,
+      artifactHash,
+      rubricVersion: `${gate}-fixture-v1`,
+      confidence: 1,
+      blockingIssues: [],
+      warnings: [],
+      passedChecks: ["immutable-fixture"]
+    }]
+  };
+  episode.approvals[gate] = {
+    status: "approved",
+    at: approval.at,
+    note: approval.note,
+    feedback: "",
+    currentVersion: version,
+    history: [approval],
+    provenance: "reviewed-v2",
+    reviewReportId: reportId,
+    artifactHash
+  };
+  episode.approvalHistory.push(approval);
+}
+
+function addApprovedKernelPrerequisites(episode) {
+  episode.research = {
+    version: 3,
+    artifactPath: "studio/tests/fixtures/workflow-kernel/research-snapshot-v003.json",
+    content: { claims: [], sources: [] },
+    versions: []
+  };
+  episode.production.scriptDraft = {
+    version: 2,
+    artifactPath: "studio/tests/fixtures/workflow-kernel/script-draft-v002.json",
+    content: {
+      title: episode.title,
+      sections: structuredClone(episode.derivation.sourceSections)
+    },
+    needsRevision: false,
+    versions: []
+  };
+  approveReviewedFixtureGate(
+    episode,
+    "research",
+    3,
+    "workflow-kernel-fixture-research-v3-pass"
   );
+  approveReviewedFixtureGate(
+    episode,
+    "script",
+    2,
+    "workflow-kernel-fixture-script-v2-pass"
+  );
+}
+
+async function approvedAndPreflightPassedAssetEpisode() {
+  const source = historicalApprovedStoryboardV3Episode();
+  addApprovedKernelPrerequisites(source);
   source.production.assetPlanDirection = {
     strategy: "hybrid-api-selective",
     generationProfile:
       HYBRID_GENERATION_PROFILES.AIHUBMIX_VOLCENGINE_SEEDANCE_2_5_720P,
     selectedBy: "human"
   };
-  const plan = adaptApprovedStoryboardToShortAssetPlan(source);
-  source.production.assetPlan.content = plan;
+  const plan = adaptStoryboardWithSyntheticExternalRights(source);
+  source.production.assetPlan = {
+    version: 1,
+    artifactPath: "studio/tests/fixtures/workflow-kernel/asset-plan-v001.json",
+    content: plan,
+    needsRevision: false
+  };
   const document = JSON.stringify({ episodeId: source.id, plan });
   const evidence = {
     readFile: async () => document,
@@ -190,7 +207,7 @@ async function approvedAndPreflightPassedAssetEpisode() {
 }
 
 test("Kernel 只给 Main Agent 暴露通过人工前置闸门的合法动作", async () => {
-  const episode = await readEpisode("golden-001");
+  const episode = await readFixtureEpisode();
   for (const step of episode.pipeline) step.status = "pending";
   episode.pipeline.find((step) => step.agent === "storyboard-agent").status = "ready";
   episode.approvals.script.status = "pending";
@@ -202,7 +219,7 @@ test("Kernel 只给 Main Agent 暴露通过人工前置闸门的合法动作", a
 });
 
 test("固定回退路径可以显式重跑已完成步骤，Main Agent 不可以", async () => {
-  const episode = await readEpisode("golden-001");
+  const episode = await readFixtureEpisode();
   const script = episode.pipeline.find((step) => step.agent === "script-agent");
   script.status = "complete";
   assert.equal(assertWorkerRunAllowed(episode, "script-agent").agent, "script-agent");
@@ -213,7 +230,7 @@ test("固定回退路径可以显式重跑已完成步骤，Main Agent 不可以
 });
 
 test("Kernel 拒绝并发计划和缺少人工闸门的 Worker", async () => {
-  const episode = await readEpisode("golden-001");
+  const episode = await readFixtureEpisode();
   episode.pipeline.find((step) => step.agent === "storyboard-agent").status = "ready";
   episode.approvals.script.status = "pending";
   const result = validateKernelPlan(episode, {
@@ -230,7 +247,7 @@ test("Kernel 拒绝并发计划和缺少人工闸门的 Worker", async () => {
 });
 
 test("Kernel 追加路由历史并累计实际调用与费用，不重复写同一决策", async () => {
-  const episode = await readEpisode("golden-001");
+  const episode = await readFixtureEpisode();
   const decision = {
     id: "route-test-1",
     profile: "creative-structured",
@@ -248,7 +265,7 @@ test("Kernel 追加路由历史并累计实际调用与费用，不重复写同�
 });
 
 test("固定回退调度器会按 Kernel 把机器审核问题交回 blocked Worker", async () => {
-  let stored = await readEpisode("golden-001");
+  let stored = await readFixtureEpisode();
   for (const step of stored.pipeline) step.status = "pending";
   stored.pipeline.find((step) => step.agent === "script-agent").status = "blocked";
   stored.approvals.script.status = "pending";
@@ -334,7 +351,7 @@ test("固定回退在调用 Worker 前拒绝缺失或扩大的素材工具集合
 });
 
 test("直接运行 Worker 会按最新 Episode 和 Manifest 重新检查工具授权", async () => {
-  let stored = await readEpisode("golden-001");
+  let stored = await readFixtureEpisode();
   stored.pipeline.find((step) => step.agent === "script-agent").status = "ready";
   stored.control.allowedTools = [];
   let called = false;
@@ -358,7 +375,7 @@ test("直接运行 Worker 会按最新 Episode 和 Manifest 重新检查工具�
 });
 
 test("素材执行方案等待人工审批时 Kernel 不会重复运行 Asset Agent", async () => {
-  const episode = await readEpisode("golden-001");
+  const episode = await readFixtureEpisode();
   for (const step of episode.pipeline) step.status = "pending";
   episode.pipeline.find((step) => step.agent === "asset-agent").status = "blocked";
   episode.approvals.storyboard.status = "approved";
@@ -418,7 +435,7 @@ test("素材候选已批准但预检失效时 Kernel 只允许运行预检检查
 });
 
 test("旁白缺少人工授权音频时 Kernel 只等待输入，不重复运行 Voice Agent", async () => {
-  const episode = await readEpisode("golden-001");
+  const episode = await readFixtureEpisode();
   for (const step of episode.pipeline) step.status = "complete";
   const voice = episode.pipeline.find((step) => step.agent === "voice-agent");
   voice.status = "blocked";

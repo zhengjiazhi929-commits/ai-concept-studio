@@ -54,19 +54,105 @@ const trendPoolLabels = {
   already_covered: "已制作"
 };
 
+let operatorCsrfToken = null;
+let operatorUnlockPromise = null;
+const operatorSessionRecoveryCodes = new Set([
+  "operator_auth_forbidden",
+  "operator_session_expired",
+  "operator_session_csrf_forbidden"
+]);
+
+function cookieValue(name) {
+  const prefix = `${name}=`;
+  const entry = document.cookie
+    .split(";")
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(prefix));
+  return entry ? entry.slice(prefix.length) : null;
+}
+
+function mutatingMethod(method) {
+  return !new Set(["GET", "HEAD", "OPTIONS"]).has(String(method).toUpperCase());
+}
+
+function clearOperatorSessionClientState() {
+  operatorCsrfToken = null;
+  document.cookie = "acs_operator_csrf=; Path=/; SameSite=Strict; Max-Age=0";
+}
+
+async function unlockOperatorSession() {
+  if (operatorUnlockPromise) return operatorUnlockPromise;
+  operatorUnlockPromise = (async () => {
+    let unlockCode = window.prompt("请输入启动窗口显示的一次性操作解锁码");
+    if (!unlockCode?.trim()) {
+      const error = new Error("未输入操作解锁码，本次写操作已取消");
+      error.code = "operator_unlock_cancelled";
+      throw error;
+    }
+    try {
+      const response = await fetch("/api/operator/session", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ unlockCode: unlockCode.trim() })
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(body.error || `解锁失败：${response.status}`);
+        error.status = response.status;
+        error.code = typeof body.code === "string"
+          ? body.code
+          : "operator_session_failed";
+        throw error;
+      }
+      operatorCsrfToken = body.csrfToken;
+      return operatorCsrfToken;
+    } finally {
+      unlockCode = null;
+    }
+  })();
+  try {
+    return await operatorUnlockPromise;
+  } finally {
+    operatorUnlockPromise = null;
+  }
+}
+
 async function api(path, options = {}) {
-  const response = await fetch(path, {
-    headers: { "content-type": "application/json", ...(options.headers ?? {}) },
-    ...options
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
+  const method = String(options.method ?? "GET").toUpperCase();
+  const mutating = mutatingMethod(method);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const headers = {
+      "content-type": "application/json",
+      ...(options.headers ?? {})
+    };
+    if (mutating) {
+      operatorCsrfToken = operatorCsrfToken ?? cookieValue("acs_operator_csrf");
+      if (!operatorCsrfToken) operatorCsrfToken = await unlockOperatorSession();
+      headers["x-operator-csrf"] = operatorCsrfToken;
+    }
+    const response = await fetch(path, {
+      ...options,
+      method,
+      credentials: "same-origin",
+      headers
+    });
+    const body = await response.json().catch(() => ({}));
+    if (response.ok) return body;
+    if (
+      mutating &&
+      attempt === 0 &&
+      operatorSessionRecoveryCodes.has(body.code)
+    ) {
+      clearOperatorSessionClientState();
+      operatorCsrfToken = await unlockOperatorSession();
+      continue;
+    }
     const error = new Error(body.error || `请求失败：${response.status}`);
     error.status = response.status;
     error.code = typeof body.code === "string" ? body.code : "request_failed";
     throw error;
   }
-  return body;
 }
 
 function assetUrl(path = "") {
@@ -113,6 +199,43 @@ function showToast(message, tone = "info") {
   showToast.timer = window.setTimeout(() => {
     toast.hidden = true;
   }, 4200);
+}
+
+function collectUploadRights(kind) {
+  const authorOrSource = window.prompt(
+    kind === "voice" ? "请输入旁白录音者或授权来源" : "请输入素材作者或来源"
+  )?.trim();
+  if (!authorOrSource) return null;
+  const license = window.prompt(
+    "请输入明确的许可证或权利依据（不能填写 unknown / pending）"
+  )?.trim();
+  if (!license) return null;
+  const allowedUse = window.prompt(
+    "请输入允许用途",
+    "private-internal-review"
+  )?.trim();
+  if (!allowedUse) return null;
+  const attributionRequirements = window.prompt(
+    "请输入署名要求；无需署名请填写 none",
+    "none"
+  )?.trim();
+  if (!attributionRequirements) return null;
+  const privacyPortraitStatus = window.prompt(
+    kind === "voice"
+      ? "请输入隐私/声音授权状态：consent-recorded 或 synthetic-no-real-person"
+      : "请输入隐私/肖像状态：no-identifiable-person、consent-recorded、fictional-data、project-original",
+    kind === "voice" ? "consent-recorded" : "no-identifiable-person"
+  )?.trim();
+  if (!privacyPortraitStatus) return null;
+  const sourceUrl = window.prompt("如来源有网页，请输入 URL；本地原创可留空", "")?.trim() ?? "";
+  return {
+    "x-rights-author-source": encodeURIComponent(authorOrSource),
+    "x-rights-source-url": encodeURIComponent(sourceUrl),
+    "x-rights-license": encodeURIComponent(license),
+    "x-rights-allowed-use": encodeURIComponent(allowedUse),
+    "x-rights-attribution": encodeURIComponent(attributionRequirements),
+    "x-rights-privacy": encodeURIComponent(privacyPortraitStatus)
+  };
 }
 
 function clearOpenApprovalReview() {
@@ -906,6 +1029,11 @@ document.addEventListener("change", (event) => {
     const file = event.target.files?.[0];
     const planItemId = state.pendingAssetPlanItemId;
     if (!file || !planItemId) return;
+    const rightsHeaders = collectUploadRights("asset");
+    if (!rightsHeaders) {
+      showToast("许可证台账未填写完整，素材未上传", "error");
+      return;
+    }
     void withBusy(async () => {
       showToast(`正在上传素材 ${planItemId}`);
       await api(`/api/episodes/${state.episode.id}/assets/upload`, {
@@ -913,7 +1041,8 @@ document.addEventListener("change", (event) => {
         headers: {
           "content-type": file.type || "application/octet-stream",
           "x-file-name": encodeURIComponent(file.name),
-          "x-plan-item-id": encodeURIComponent(planItemId)
+          "x-plan-item-id": encodeURIComponent(planItemId),
+          ...rightsHeaders
         },
         body: file
       });
@@ -925,13 +1054,19 @@ document.addEventListener("change", (event) => {
   if (event.target.id !== "voiceFile") return;
   const file = event.target.files?.[0];
   if (!file) return;
+  const rightsHeaders = collectUploadRights("voice");
+  if (!rightsHeaders) {
+    showToast("旁白授权台账未填写完整，文件未上传", "error");
+    return;
+  }
   void withBusy(async () => {
     showToast("正在上传旁白文件");
     await api(`/api/episodes/${state.episode.id}/voice/upload`, {
       method: "POST",
       headers: {
         "content-type": file.type || "application/octet-stream",
-        "x-file-name": encodeURIComponent(file.name)
+        "x-file-name": encodeURIComponent(file.name),
+        ...rightsHeaders
       },
       body: file
     });

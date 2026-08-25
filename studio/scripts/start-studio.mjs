@@ -2,8 +2,13 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createStudioServer } from "../src/server/app.mjs";
 import { browserLaunchCommand } from "../src/shared/browser-launch.mjs";
+import { loadLocalEnvironment } from "../src/shared/env.mjs";
+import { operatorSecurityOptionsFromEnvironment } from
+  "../src/server/security/operator-auth.mjs";
 
-const { server, config } = await createStudioServer();
+await loadLocalEnvironment();
+const securityOptions = operatorSecurityOptionsFromEnvironment(process.env);
+const { server, config, operatorUnlockCode } = await createStudioServer(securityOptions);
 
 server.listen(config.port, config.host);
 try {
@@ -16,6 +21,9 @@ try {
 
 const url = `http://${config.host}:${config.port}`;
 console.log(`AI Concept Studio 已启动：${url}`);
+if (operatorUnlockCode) {
+  console.log(`本次一次性操作解锁码：${operatorUnlockCode}`);
+}
 console.log("关闭这个窗口即可停止系统，本地数据和已生成视频不会丢失。");
 
 const launch = browserLaunchCommand(url);

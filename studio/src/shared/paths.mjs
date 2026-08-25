@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { realpath } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -96,6 +97,36 @@ export function ensureInside(root, target) {
     throw new Error(`Path escapes allowed root: ${normalizedTarget}`);
   }
   return normalizedTarget;
+}
+
+export async function resolveExistingPathInside(root, target) {
+  const normalizedRoot = resolve(root);
+  const boundaryForbidden = () => {
+    const error = new Error("Path is outside the allowed static boundary");
+    error.code = "path_boundary_forbidden";
+    error.statusCode = 403;
+    return error;
+  };
+  let normalizedTarget;
+  try {
+    normalizedTarget = ensureInside(normalizedRoot, target);
+  } catch {
+    throw boundaryForbidden();
+  }
+  const [realRoot, realTarget] = await Promise.all([
+    realpath(normalizedRoot),
+    realpath(normalizedTarget)
+  ]);
+  try {
+    ensureInside(realRoot, realTarget);
+  } catch {
+    throw boundaryForbidden();
+  }
+  const expectedRealTarget = resolve(realRoot, relative(normalizedRoot, normalizedTarget));
+  if (realTarget !== expectedRealTarget) {
+    throw boundaryForbidden();
+  }
+  return realTarget;
 }
 
 export function workspaceRelativePath(target) {

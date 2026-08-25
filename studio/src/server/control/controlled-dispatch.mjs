@@ -3,12 +3,7 @@ import {
   ensureAgentArchitecture
 } from "../../shared/agent-contracts.mjs";
 import { appendEvent, readEpisode, writeEpisode } from "../../shared/store.mjs";
-import { summarizeShadowEvaluations } from "./main-agent-evaluator.mjs";
-import {
-  DEFAULT_EVALUATION_SUITE,
-  readEvaluationSuiteConfig,
-  summarizeReleaseEvaluations
-} from "./evaluation-suite.mjs";
+import { getAmbiguousBudgetReservationIds } from "./budget-ledger.mjs";
 import { runShadowPlanning } from "./main-agent.mjs";
 import { assertKernelPlanAllowed } from "./workflow-kernel.mjs";
 
@@ -87,6 +82,15 @@ export function controlStopReason(sourceEpisode, options = {}) {
     });
   }
 
+  const ambiguousReservationIds = getAmbiguousBudgetReservationIds(episode);
+  if (ambiguousReservationIds.length > 0) {
+    return pauseResult(
+      "budget_reconciliation_required",
+      "存在中断后尚未人工核对的 Provider 调用，预算和后续调度保持冻结",
+      { ambiguousReservationIds }
+    );
+  }
+
   const humanStep = episode.pipeline.find((step) => step.requiresHuman);
   if (humanStep) {
     return pauseResult("human_intervention", "Worker 已请求人工介入", {
@@ -110,15 +114,72 @@ export function controlStopReason(sourceEpisode, options = {}) {
   return null;
 }
 
-function shadowRecords(episode) {
-  return episode.planHistory.filter((record) => !record.mode || record.mode === "shadow");
+function modeAdmissionUnavailable(details = {}) {
+  const operationMessage = details.operation
+    ? `；已拒绝 ${details.operation}`
+    : "";
+  const error = new Error(
+    `可信正式评测 Runner、签名证明与不可篡改证据存储尚未接入${operationMessage}` +
+    "；请通过控制模式接口显式切换到 shadow"
+  );
+  error.code = "control_mode_admission_unavailable";
+  error.statusCode = 409;
+  error.persistedMode = details.persistedMode ?? null;
+  error.operation = details.operation ?? null;
+  error.safeFallbackMode = "shadow";
+  return error;
 }
 
 export function transitionControlMode(sourceEpisode, requestedMode, options = {}) {
   if (!CONTROL_MODES.has(requestedMode)) throw new Error(`未知控制模式：${requestedMode}`);
   const episode = ensureAgentArchitecture(sourceEpisode);
   const currentMode = episode.control.mode;
-  if (currentMode === requestedMode) return { episode, changed: false, evaluation: null };
+  if (currentMode === requestedMode) {
+    if (requestedMode !== "shadow") {
+      throw modeAdmissionUnavailable({
+        persistedMode: currentMode,
+        operation: "control mode transition"
+      });
+    }
+    const shadowNeedsNormalization = Boolean(
+      requestedMode === "shadow" &&
+      (
+        episode.control.mainAgentEnabled ||
+        episode.control.modelRouterEnabled ||
+        episode.control.pendingDispatch
+      )
+    );
+    if (!shadowNeedsNormalization) {
+      return { episode, changed: false, evaluation: null };
+    }
+    if (episode.control.pendingDispatch?.status === "executing") {
+      throw new Error("受控调度正在执行，必须等待动作边界后再收回 shadow 执行开关");
+    }
+    const at = timestamp(options.now);
+    if (episode.control.pendingDispatch) {
+      episode.dispatchHistory.push({
+        id: `${episode.control.pendingDispatch.id}-cancelled`,
+        at,
+        mode: "assisted",
+        planId: episode.control.pendingDispatch.planId,
+        workerId: episode.control.pendingDispatch.plan?.workerId ?? null,
+        status: "cancelled",
+        reasonCode: "shadow_mode_normalized"
+      });
+    }
+    episode.control.mainAgentEnabled = false;
+    episode.control.modelRouterEnabled = false;
+    episode.control.pendingDispatch = null;
+    episode.history.push({
+      at,
+      type: "control-shadow-normalized",
+      from: currentMode,
+      to: requestedMode,
+      message: "shadow 模式已收回 Main Agent 与 Model Router 执行开关"
+    });
+    episode.updatedAt = at;
+    return { episode, changed: true, evaluation: null };
+  }
 
   const allowed = {
     shadow: new Set(["assisted"]),
@@ -129,30 +190,11 @@ export function transitionControlMode(sourceEpisode, requestedMode, options = {}
     throw new Error(`不允许从 ${currentMode} 直接切换到 ${requestedMode}`);
   }
 
-  let evaluation = null;
-  if (
-    (currentMode === "shadow" && requestedMode === "assisted") ||
-    (currentMode === "assisted" && requestedMode === "active")
-  ) {
-    const shadow = summarizeShadowEvaluations(shadowRecords(episode), options.thresholds);
-    const release = summarizeReleaseEvaluations(
-      episode.evaluationHistory,
-      options.evaluationSuite ?? DEFAULT_EVALUATION_SUITE
-    );
-    evaluation = { passed: shadow.passed && release.passed, shadow, release };
-    if (!shadow.passed) {
-      throw new Error("影子评测尚未达到模式升级门槛");
-    }
-    if (!release.passed) throw new Error("独立正式评测集尚未达到模式升级门槛");
-    if (!episode.control.fixedFallbackEnabled) {
-      throw new Error("固定调度回退路径未启用，不能升级控制模式");
-    }
-  }
-  if (requestedMode === "active") {
-    if (!episode.control.reviewEnabled) throw new Error("机器审核未启用，不能进入 active");
-    if (!episode.control.mainAgentEnabled || !episode.control.modelRouterEnabled) {
-      throw new Error("Main Agent 或 Model Router 未启用，不能进入 active");
-    }
+  if (requestedMode !== "shadow") {
+    throw modeAdmissionUnavailable({
+      persistedMode: currentMode,
+      operation: "control mode transition"
+    });
   }
 
   const at = timestamp(options.now);
@@ -171,8 +213,8 @@ export function transitionControlMode(sourceEpisode, requestedMode, options = {}
     });
   }
   episode.control.mode = requestedMode;
-  episode.control.mainAgentEnabled = true;
-  episode.control.modelRouterEnabled = true;
+  episode.control.mainAgentEnabled = false;
+  episode.control.modelRouterEnabled = false;
   episode.control.pendingDispatch = null;
   episode.history.push({
     at,
@@ -182,25 +224,30 @@ export function transitionControlMode(sourceEpisode, requestedMode, options = {}
     message: `控制模式从 ${currentMode} 切换为 ${requestedMode}`
   });
   episode.updatedAt = at;
-  return { episode, changed: true, evaluation };
+  return { episode, changed: true, evaluation: null };
 }
 
 export async function setControlMode(episodeId, requestedMode, options = {}) {
   const readState = options.readEpisode ?? readEpisode;
   const writeState = options.writeEpisode ?? writeEpisode;
   const recordEvent = options.appendEvent ?? appendEvent;
-  const evaluationSuite = options.evaluationSuite ?? await readEvaluationSuiteConfig();
-  const changed = transitionControlMode(await readState(episodeId), requestedMode, {
-    ...options,
-    evaluationSuite
-  });
+  const sourceEpisode = await readState(episodeId);
+  const changed = transitionControlMode(sourceEpisode, requestedMode, options);
   if (changed.changed) {
     await writeState(changed.episode);
     await recordEvent({
       type: "control.mode_changed",
       episodeId,
       mode: requestedMode,
-      message: `控制模式已切换为 ${requestedMode}`
+      message: `控制模式已切换为 ${requestedMode}`,
+      ...(requestedMode === "active"
+        ? {
+            authorizationId: options.activeAuthorization?.authorizationId,
+            authorizationNonce: options.activeAuthorization?.nonce,
+            actorId: options.activeAuthorization?.actorId,
+            releaseEvidenceHash: options.activeAuthorization?.releaseEvidenceHash
+          }
+        : {})
     });
   }
   return changed;
@@ -244,11 +291,14 @@ export async function setStopRequest(episodeId, requested, options = {}) {
   return episode;
 }
 
-function assertMode(episode, expected) {
+function assertDispatchModeAdmitted(episode, expected, operation) {
   if (episode.control.mode !== expected) {
     throw new Error(`当前为 ${episode.control.mode} 模式，不能执行 ${expected} 调度`);
   }
-  if (!episode.control.mainAgentEnabled) throw new Error("Main Agent 未启用");
+  throw modeAdmissionUnavailable({
+    persistedMode: episode.control.mode,
+    operation
+  });
 }
 
 function assertNoStop(episode, options) {
@@ -311,7 +361,7 @@ async function prepareAssistedDispatchUnlocked(episodeId, options = {}) {
   const writeState = options.writeEpisode ?? writeEpisode;
   const recordEvent = options.appendEvent ?? appendEvent;
   let episode = ensureAgentArchitecture(await readState(episodeId));
-  assertMode(episode, "assisted");
+  assertDispatchModeAdmitted(episode, "assisted", "assisted prepare");
   if (episode.control.pendingDispatch) throw new Error("已有调度动作等待人工确认");
   const stop = controlStopReason(episode, options);
   if (stop) return { episode, status: "paused", stop };
@@ -502,7 +552,7 @@ async function confirmAssistedDispatchUnlocked(episodeId, dispatchId, options = 
   const readState = options.readEpisode ?? readEpisode;
   const writeState = options.writeEpisode ?? writeEpisode;
   let episode = ensureAgentArchitecture(await readState(episodeId));
-  assertMode(episode, "assisted");
+  assertDispatchModeAdmitted(episode, "assisted", "assisted confirm");
   assertNoStop(episode, options);
   const pending = episode.control.pendingDispatch;
   if (!pending || pending.id !== dispatchId || pending.status !== "waiting_confirmation") {
@@ -534,7 +584,7 @@ export async function confirmAssistedDispatch(episodeId, dispatchId, options = {
 async function runActiveCycleUnlocked(episodeId, options = {}) {
   const readState = options.readEpisode ?? readEpisode;
   let episode = ensureAgentArchitecture(await readState(episodeId));
-  assertMode(episode, "active");
+  assertDispatchModeAdmitted(episode, "active", "active run");
   if (!episode.control.modelRouterEnabled) throw new Error("Model Router 未启用");
   const maximumActions = Math.max(1, Math.min(32, options.maxActions ?? 8));
   const dispatches = [];

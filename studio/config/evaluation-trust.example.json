@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "version": "evaluation-trust-v1",
+  "keys": [
+    {
+      "keyId": "local-release-runner-001",
+      "status": "trusted",
+      "publicKeyPem": "REPLACE_WITH_ED25519_PUBLIC_KEY_PEM"
+    }
+  ]
+}

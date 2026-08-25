@@ -20,6 +20,12 @@ import {
   claimPersistedEpisodeOperation,
   releasePersistedEpisodeOperation
 } from "./episode-operation-lock.mjs";
+import { getAmbiguousBudgetReservationIds } from "./budget-ledger.mjs";
+import { buildMainAgentInstructions } from "./main-agent-prompt.mjs";
+import {
+  requireSideEffectGrant,
+  SideEffectAuthorizationError
+} from "../security/side-effect-capability.mjs";
 
 const nullableString = { anyOf: [{ type: "string" }, { type: "null" }] };
 const mainPlanSchema = {
@@ -61,6 +67,10 @@ const mainPlanSchema = {
   ]
 };
 
+function timestamp(now) {
+  return (now instanceof Date ? now : new Date(now ?? Date.now())).toISOString();
+}
+
 function combinedValidation(episode, plan, options = {}) {
   const contract = validateMainAgentPlan(plan);
   const kernel = validateKernelPlan(episode, plan, { activeRun: options.activeRun });
@@ -84,11 +94,140 @@ function evaluatePlanAgainstEpisode(sourceEpisode, result, options = {}) {
   return { ...result, context, validation, evaluation };
 }
 
-export async function generateShadowPlan(sourceEpisode, options = {}) {
-  if (!options.planner && !sourceEpisode.control?.mainAgentEnabled) {
-    throw new Error("Main Agent 尚未启用，不能发起模型规划");
-  }
+function successfulProviderSettlementsAfter(episode, since) {
+  const sinceMs = Date.parse(since ?? "");
+  if (!Number.isFinite(sinceMs)) return [];
+  return (episode.history ?? []).filter((entry) => (
+    entry?.type === "budget-reservation-settled" &&
+    entry?.status === "settled" &&
+    entry?.settlementStatus === "completed_success" &&
+    Number.isFinite(Date.parse(entry.at ?? "")) &&
+    Date.parse(entry.at) >= sinceMs
+  ));
+}
+
+function planningAuthorization(sourceEpisode, options = {}) {
   const planningMode = options.mode ?? sourceEpisode.control?.mode ?? "shadow";
+  const ambiguousReservationIds = getAmbiguousBudgetReservationIds(sourceEpisode);
+  if (ambiguousReservationIds.length > 0) {
+    const error = new Error(
+      "存在中断后尚未人工核对的 Provider 调用，Main Agent 规划和预算保持冻结"
+    );
+    error.code = "budget_reconciliation_required";
+    error.requiresHuman = true;
+    error.ambiguousReservationIds = ambiguousReservationIds;
+    throw error;
+  }
+  if (sourceEpisode.control?.budget?.overrun === true) {
+    const error = new Error(
+      "预算存在超额或 Provider 结果提交不明记录，Main Agent 规划保持冻结"
+    );
+    error.code = "cost_budget_overrun";
+    error.requiresHuman = true;
+    throw error;
+  }
+  if (sourceEpisode.control?.mainAgentEnabled) {
+    return { bootstrap: false, planningMode };
+  }
+  const bootstrapAllowed = Boolean(
+    planningMode === "shadow" &&
+    sourceEpisode.control?.mode === "shadow" &&
+    sourceEpisode.control?.fixedFallbackEnabled === true &&
+    !sourceEpisode.control?.pendingDispatch
+  );
+  if (!bootstrapAllowed) {
+    const error = new Error(
+      "Main Agent 尚未启用；只有保留固定回退且没有待执行动作的 shadow 模式可以进行只规划 bootstrap"
+    );
+    error.code = "main_agent_bootstrap_not_allowed";
+    throw error;
+  }
+  return { bootstrap: true, planningMode };
+}
+
+function realPlanningBudget(sourceEpisode) {
+  const budget = sourceEpisode.control?.budget;
+  if (!Number.isInteger(budget?.maxCalls) || !Number.isFinite(budget?.maxCostUsd)) {
+    throw new SideEffectAuthorizationError(
+      "真实 Main Agent 规划必须先配置有限的调用次数和费用预算",
+      "side_effect_capability_budget_unbounded",
+      {},
+      403
+    );
+  }
+  const remainingCalls = budget.maxCalls
+    - (budget.usedCalls ?? 0)
+    - (budget.reservedCalls ?? 0);
+  const remainingCostUsd = Number((
+    budget.maxCostUsd
+    - (budget.usedCostUsd ?? 0)
+    - (budget.reservedCostUsd ?? 0)
+  ).toFixed(6));
+  if (remainingCalls < 1 || remainingCostUsd <= 0) {
+    throw new SideEffectAuthorizationError(
+      "真实 Main Agent 规划的调用次数或费用预算已经耗尽",
+      "side_effect_capability_budget_exhausted",
+      {},
+      403
+    );
+  }
+  return { maxCalls: 1, maxCostUsd: remainingCostUsd };
+}
+
+function assertRealPlanningEnabled(sourceEpisode) {
+  if (
+    sourceEpisode.control?.mainAgentEnabled !== true ||
+    sourceEpisode.control?.modelRouterEnabled !== true
+  ) {
+    const error = new Error(
+      "真实 Main Agent 规划要求 Main Agent 与 Model Router 开关同时启用"
+    );
+    error.code = "main_agent_real_planning_disabled";
+    error.statusCode = 403;
+    throw error;
+  }
+}
+
+function requirePlanningCapability(
+  sourceEpisode,
+  options = {},
+  includeStateWrite = false,
+  includeModelSideEffects = true
+) {
+  const usesRealClient = includeModelSideEffects &&
+    options.planner === undefined &&
+    options.client === undefined;
+  const scopes = new Set(includeStateWrite ? ["state.write"] : []);
+  let budget = { maxCalls: 0, maxCostUsd: 0 };
+  if (usesRealClient) {
+    assertRealPlanningEnabled(sourceEpisode);
+    budget = realPlanningBudget(sourceEpisode);
+    scopes.add("model.invoke");
+    scopes.add("network.request");
+    scopes.add("paid.invoke");
+  }
+  if (scopes.size === 0) return null;
+  if (!options.sideEffectGrant && typeof options.authorizeSideEffect !== "function") {
+    throw new SideEffectAuthorizationError(
+      "缺少服务端签发的副作用 Capability",
+      "side_effect_capability_missing",
+      {},
+      403
+    );
+  }
+  return requireSideEffectGrant(options, {
+    episodeId: sourceEpisode.id,
+    operation: options.capabilityOperation ?? "main-agent:shadow-plan",
+    scopes: [...scopes],
+    ...budget
+  });
+}
+
+export async function generateShadowPlan(sourceEpisode, options = {}) {
+  const authorization = planningAuthorization(sourceEpisode, options);
+  const capabilityOperation = options.capabilityOperation ?? "main-agent:shadow-plan";
+  const sideEffectGrant = requirePlanningCapability(sourceEpisode, options, false);
+  const planningMode = authorization.planningMode;
   const initialContext = buildMainAgentContext(sourceEpisode, {
     activeRun: options.activeRun,
     providerHealth: options.providerHealth ?? getProviderHealthSnapshot()
@@ -99,18 +238,22 @@ export async function generateShadowPlan(sourceEpisode, options = {}) {
   if (options.planner) {
     plan = await options.planner(structuredClone(initialContext));
   } else {
-    const client = options.client ?? (await createAiClient());
+    const client = options.client ?? (await createAiClient({
+      sideEffectGrant,
+      capabilityOperation,
+      requireSideEffectCapability: true
+    }));
     const result = await client.generateStructured("main-agent", {
       schemaName: "main_agent_shadow_plan",
       schema: mainPlanSchema,
-      instructions:
-        `你是受 Workflow Kernel 约束的 Main Agent。只能从 legalActions 中选择，不能批准人工闸门、不能指定 Provider 或模型、不能直接写状态或文件。当前为 ${planningMode} 模式：只提出一条结构化建议，是否执行由受控调度器决定。遇到审批、人工输入、停止、预算或证据冲突时选择等待或停止。`,
+      instructions: buildMainAgentInstructions(planningMode),
       input: JSON.stringify(initialContext),
       taskProfile: "planner",
       routingContext: {
         episodeId: sourceEpisode.id,
         control: sourceEpisode.control,
-        persistBudget: true
+        persistBudget: true,
+        capabilityOperation
       },
       estimatedInputTokens: Math.ceil(JSON.stringify(initialContext).length / 4),
       maxOutputTokens: 1200
@@ -121,7 +264,14 @@ export async function generateShadowPlan(sourceEpisode, options = {}) {
   }
   return evaluatePlanAgainstEpisode(
     sourceEpisode,
-    { plan, routingDecision, attempts },
+    {
+      plan,
+      routingDecision,
+      attempts,
+      routingUsed: Boolean(routingDecision),
+      bootstrap: authorization.bootstrap,
+      planningOnly: planningMode === "shadow"
+    },
     options
   );
 }
@@ -140,6 +290,26 @@ export async function runShadowPlanning(episodeId, options = {}) {
   let operationClaimed = false;
   try {
     episode = ensureAgentArchitecture(await readState(episodeId));
+    const authorization = planningAuthorization(episode, {
+      ...options,
+      mode: planningMode
+    });
+    const defaultStateDependencies =
+      options.writeEpisode === undefined || options.appendEvent === undefined;
+    const stateCapabilityRequired = defaultStateDependencies ||
+      options.requireSideEffectCapability === true;
+    if (stateCapabilityRequired) {
+      requirePlanningCapability(
+        episode,
+        {
+          ...options,
+          capabilityOperation: `${options.capabilityOperation ??
+            "main-agent:shadow-plan"}:state`
+        },
+        true,
+        false
+      );
+    }
     operationId = `operation:plan-${episodeId}-v${episode.control.planVersion + 1}`;
     claimPersistedEpisodeOperation(episode, {
       id: operationId,
@@ -150,6 +320,10 @@ export async function runShadowPlanning(episodeId, options = {}) {
       now: options.now,
       mode: planningMode
     });
+    const bootstrap = authorization.bootstrap;
+    episode.control.currentPlan.bootstrap = bootstrap;
+    episode.control.currentPlan.planningOnly = planningMode === "shadow";
+    episode.control.currentPlan.routingUsed = null;
     attemptId = episode.control.currentPlan.id;
     await writeState(episode);
     operationClaimed = true;
@@ -158,7 +332,12 @@ export async function runShadowPlanning(episodeId, options = {}) {
       episodeId,
       message: `Main Agent 开始生成 ${planningMode} 计划`
     });
-    const generated = await generateShadowPlan(episode, options);
+    const generated = await generateShadowPlan(episode, {
+      ...options,
+      sideEffectGrant: stateCapabilityRequired
+        ? undefined
+        : options.sideEffectGrant
+    });
     episode = ensureAgentArchitecture(await readState(episodeId));
     if (
       episode.control.currentPlan?.id !== attemptId ||
@@ -182,6 +361,9 @@ export async function runShadowPlanning(episodeId, options = {}) {
       now: options.now,
       mode: planningMode
     });
+    completed.record.bootstrap = Boolean(result.bootstrap);
+    completed.record.planningOnly = planningMode === "shadow";
+    completed.record.routingUsed = Boolean(result.routingUsed);
     episode = completed.episode;
     releasePersistedEpisodeOperation(episode, operationId);
     await writeState(episode);
@@ -190,8 +372,15 @@ export async function runShadowPlanning(episodeId, options = {}) {
       type: `main-agent.${planningMode}.completed`,
       episodeId,
       status: completed.record.status,
+      bootstrap: Boolean(result.bootstrap),
+      planningOnly: planningMode === "shadow",
+      routingUsed: Boolean(result.routingUsed),
       message: result.validation.valid
-        ? `${planningMode} 计划已记录，尚未执行`
+        ? result.bootstrap
+          ? result.routingUsed
+            ? "shadow bootstrap 计划已记录；Model Router 仅用于本次受预算约束的规划选路，Main Agent 控制开关保持关闭，未派发 Worker"
+            : "shadow bootstrap 计划已记录；本次使用注入 planner 且未使用 Model Router，Main Agent 控制开关保持关闭，未派发 Worker"
+          : `${planningMode} 计划已记录，尚未执行`
         : "越权或非法计划已拒绝并记录"
     });
     return { episode, record: completed.record, context: result.context };
@@ -199,16 +388,68 @@ export async function runShadowPlanning(episodeId, options = {}) {
     const latest = await readState(episodeId).catch(() => null);
     let failed = null;
     let recoveryEpisode = latest ? ensureAgentArchitecture(latest) : null;
+    const planningStartedAt = latest?.control?.currentPlan?.id === attemptId
+      ? latest.control.currentPlan.startedAt
+      : null;
+    const uncommittedProviderResults = successfulProviderSettlementsAfter(
+      recoveryEpisode ?? {},
+      planningStartedAt
+    );
+    const providerResultCommitUnknown = Boolean(
+      attemptId &&
+      latest?.control?.currentPlan?.id === attemptId &&
+      latest.control.currentPlan.status === "planning" &&
+      uncommittedProviderResults.length > 0
+    );
+    const recordedError = providerResultCommitUnknown
+      ? Object.assign(
+          new Error(
+            "Provider 已成功结算，但 Main Agent 计划是否完成提交无法确认；已禁止自动重试，必须人工核对"
+          ),
+          {
+            code: "provider_result_commit_unknown",
+            requiresHuman: true,
+            reservationIds: uncommittedProviderResults.map(
+              (entry) => entry.reservationId
+            )
+          }
+        )
+      : error;
     if (
       latest &&
       attemptId &&
       latest.control?.currentPlan?.id === attemptId &&
       latest.control.currentPlan.status === "planning"
     ) {
-      failed = failPlanAttempt(latest, error, {
+      failed = failPlanAttempt(latest, recordedError, {
         now: options.now,
         mode: planningMode
       });
+      failed.record.bootstrap = Boolean(latest.control.currentPlan.bootstrap);
+      failed.record.planningOnly = planningMode === "shadow";
+      failed.record.routingUsed = Boolean(error?.routingDecision);
+      if (providerResultCommitUnknown) {
+        const at = timestamp(options.now);
+        const reservationIds = uncommittedProviderResults.map(
+          (entry) => entry.reservationId
+        );
+        const previousBudgetOverrun = Boolean(failed.episode.control.budget.overrun);
+        failed.record.requiresHuman = true;
+        failed.record.uncommittedProviderResultIds = reservationIds;
+        failed.episode.control.budget.overrun = true;
+        failed.episode.history.push({
+          at,
+          type: "provider-result-commit-unknown",
+          status: "blocked",
+          agentId: "main-agent",
+          failureCode: "provider_result_commit_unknown",
+          reservationIds,
+          previousBudgetOverrun,
+          message:
+            "Main Agent 的 Provider 结果已成功结算，但计划是否完成提交无法确认；已禁止自动重试"
+        });
+        failed.episode.updatedAt = at;
+      }
       recoveryEpisode = failed.episode;
     }
     if (recoveryEpisode && operationClaimed) {
@@ -220,9 +461,13 @@ export async function runShadowPlanning(episodeId, options = {}) {
       type: `main-agent.${planningMode}.failed`,
       episodeId,
       status: "failed",
-      message: error instanceof Error ? error.message : "Main Agent 规划失败"
+      failureCode: recordedError?.code ?? "planning_failed",
+      requiresHuman: recordedError?.requiresHuman === true,
+      message: recordedError instanceof Error
+        ? recordedError.message
+        : "Main Agent 规划失败"
     });
-    throw error;
+    throw recordedError;
   } finally {
     releaseOperation();
   }

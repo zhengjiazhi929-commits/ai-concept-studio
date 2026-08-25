@@ -3,6 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import { relative } from "node:path";
 import { workspaceRoot } from "../../shared/paths.mjs";
 import { appendEvent, readEpisode, writeEpisode } from "../../shared/store.mjs";
+import { requireSideEffectGrant } from "../security/side-effect-capability.mjs";
 import {
   latestReviewFeedback,
   resetApprovalForVersion
@@ -49,6 +50,69 @@ async function fileRecord(path) {
   };
 }
 
+function requireResearchSideEffects(options, fullyInjected, operation, scopes) {
+  // Test-only seam: every side-effect dependency must be injected, and an
+  // explicit capability requirement always wins. Default/HTTP paths cannot
+  // enter this branch because at least one production dependency remains.
+  if (fullyInjected && options.requireSideEffectCapability !== true) return null;
+  return requireSideEffectGrant(options, {
+    episodeId: options.episodeId ?? "studio",
+    operation: options.capabilityOperation ?? operation,
+    scopes,
+    maxCalls: 0,
+    maxCostUsd: 0
+  });
+}
+
+function researchRunDependencies(options = {}) {
+  const injected = options.dependencies ?? {};
+  const required = [
+    "fileRecord",
+    "readLatestResearchPack",
+    "readResearchConfig",
+    "writeResearchAssistTask",
+    "writeResearchPack"
+  ];
+  return {
+    values: {
+      fileRecord: injected.fileRecord ?? fileRecord,
+      inspectPrimarySource: injected.inspectPrimarySource ?? inspectPrimarySource,
+      readLatestResearchPack:
+        injected.readLatestResearchPack ?? readLatestResearchPack,
+      readResearchConfig: injected.readResearchConfig ?? readResearchConfig,
+      writeResearchAssistTask:
+        injected.writeResearchAssistTask ?? writeResearchAssistTask,
+      writeResearchPack: injected.writeResearchPack ?? writeResearchPack
+    },
+    fullyInjected: required.every((name) => typeof injected[name] === "function") &&
+      (
+        typeof injected.inspectPrimarySource === "function" ||
+        typeof options.fetchImpl === "function"
+      )
+  };
+}
+
+function researchImportDependencies(options = {}) {
+  const injected = options.dependencies ?? {};
+  const defaults = {
+    appendEvent,
+    fileRecord,
+    readEpisode,
+    readLatestResearchPack,
+    readResearchConfig,
+    writeEpisode,
+    writeResearchEvidenceBatch,
+    writeResearchPack
+  };
+  const names = Object.keys(defaults);
+  return {
+    values: Object.fromEntries(
+      names.map((name) => [name, injected[name] ?? defaults[name]])
+    ),
+    fullyInjected: names.every((name) => typeof injected[name] === "function")
+  };
+}
+
 function mergeSourceDocs(current, additions) {
   const records = new Map((current ?? []).map((item) => [item.path, item]));
   for (const item of additions) records.set(item.path, item);
@@ -69,19 +133,27 @@ export function researchStepAfterEvidenceImport(step, pack) {
 }
 
 export async function runEpisodeResearchAgent(episode, options = {}) {
-  const config = await readResearchConfig();
+  const { values: dependencies, fullyInjected } = researchRunDependencies(options);
+  requireResearchSideEffects(
+    { ...options, episodeId: episode.id },
+    fullyInjected,
+    "research:run",
+    ["filesystem.write", "network.request"]
+  );
+  const config = await dependencies.readResearchConfig();
   const now = options.now instanceof Date ? options.now : new Date(options.now ?? Date.now());
   const fresh = buildResearchPlan({ episode, config, now });
-  const current = await readLatestResearchPack(episode.id);
+  const current = await dependencies.readLatestResearchPack(episode.id);
   let pack = reconcileResearchPack(current, fresh, config);
   const inspections = await mapWithConcurrency(
     pack.sources,
     config.maxConcurrency,
     (source) =>
-      inspectPrimarySource(source, {
+      dependencies.inspectPrimarySource(source, {
         config,
         now,
-        fetchImpl: options.fetchImpl ?? fetch
+        fetchImpl: options.fetchImpl,
+        lookupImpl: options.lookupImpl
       })
   );
   pack = mergeSourceInspections(pack, inspections, config, now);
@@ -95,33 +167,43 @@ export async function runEpisodeResearchAgent(episode, options = {}) {
     ...buildResearchAssistTask(pack, config, now),
     reviewFeedback: reviewFeedback || null
   };
-  const runPath = await writeResearchPack(pack);
-  const assistTaskPath = await writeResearchAssistTask(assistTask);
+  const runPath = await dependencies.writeResearchPack(pack);
+  const assistTaskPath = await dependencies.writeResearchAssistTask(assistTask);
   return {
     pack,
     assistTask,
     runPath,
     assistTaskPath,
-    sourceDocs: await Promise.all([fileRecord(runPath), fileRecord(assistTaskPath)])
+    sourceDocs: await Promise.all([
+      dependencies.fileRecord(runPath),
+      dependencies.fileRecord(assistTaskPath)
+    ])
   };
 }
 
 export async function importResearchEvidenceBatch(batch, options = {}) {
-  const config = await readResearchConfig();
+  const { values: dependencies, fullyInjected } = researchImportDependencies(options);
+  requireResearchSideEffects(
+    { ...options, episodeId: batch?.episodeId ?? "studio" },
+    fullyInjected,
+    "research:import-evidence",
+    ["state.write", "filesystem.write"]
+  );
+  const config = await dependencies.readResearchConfig();
   const validation = validateResearchEvidenceBatch(batch, config);
   if (!validation.valid) throw new Error(validation.errors.join("; "));
-  const current = await readLatestResearchPack(batch.episodeId);
+  const current = await dependencies.readLatestResearchPack(batch.episodeId);
   if (!current) throw new Error(`还没有 ${batch.episodeId} 的研究计划，请先运行研究 Agent`);
   const now = options.now instanceof Date ? options.now : new Date(options.now ?? Date.now());
   const pack = mergeEvidenceBatch(current, batch, config, now);
-  const batchPath = await writeResearchEvidenceBatch(batch);
-  const runPath = await writeResearchPack(pack);
+  const batchPath = await dependencies.writeResearchEvidenceBatch(batch);
+  const runPath = await dependencies.writeResearchPack(pack);
   const [batchRecord, packRecord] = await Promise.all([
-    fileRecord(batchPath),
-    fileRecord(runPath)
+    dependencies.fileRecord(batchPath),
+    dependencies.fileRecord(runPath)
   ]);
 
-  const episode = await readEpisode(batch.episodeId);
+  const episode = await dependencies.readEpisode(batch.episodeId);
   const stepIndex = episode.pipeline.findIndex((step) => step.agent === "research-agent");
   if (stepIndex < 0) throw new Error("这一期缺少研究 Agent 流水线步骤");
   const ready = pack.readiness.readyForFactApproval;
@@ -152,8 +234,8 @@ export async function importResearchEvidenceBatch(batch, options = {}) {
     type: "research-evidence-import",
     message: `导入 ${batch.sources.length} 份来源和 ${batch.claims.length} 条主张`
   });
-  await writeEpisode(episode);
-  await appendEvent({
+  await dependencies.writeEpisode(episode);
+  await dependencies.appendEvent({
     type: "research.evidence-imported",
     episodeId: batch.episodeId,
     agentId: "research-agent",

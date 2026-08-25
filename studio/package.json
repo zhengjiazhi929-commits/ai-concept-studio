@@ -3,8 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@11.19.0",
   "engines": {
-    "node": ">=20.18.1"
+    "node": "24.19.0",
+    "pnpm": "11.19.0"
   },
   "scripts": {
     "start": "node src/server/app.mjs",
@@ -24,6 +26,9 @@
     "build:agent-skill-natural-voice-proof": "node scripts/build-agent-skill-natural-voice-proof.mjs",
     "build:agent-skill-local-tts-proof": "node scripts/build-agent-skill-local-tts-proof.mjs",
     "build:agent-skill-short-local-tts-candidate": "node scripts/build-agent-skill-short-local-tts-candidate.mjs",
+    "build:golden-local-voice": "node scripts/build-golden-local-voice-candidate.mjs",
+    "prepare:golden-upstream-gate": "node scripts/prepare-golden-m1-upstream-gate.mjs",
+    "build:golden-gate-dossier": "node scripts/build-golden-assets-voice-gate-dossier.mjs",
     "render:visual-sample": "node scripts/render-visual-system-sample.mjs",
     "qa:visual-transition": "node scripts/render-transition-qa.mjs",
     "qa": "node scripts/qa-preview.mjs golden-001",
@@ -32,17 +37,26 @@
     "motion:previews": "node scripts/render-motion-library-previews.mjs",
     "motion:check": "node scripts/check-motion-library.mjs",
     "motion:gallery": "pnpm --package=@remotion/cli@4.0.504 dlx remotion studio src/video/motion-library/index.jsx --no-open --port=4318",
+    "ci:render-smoke": "node scripts/ci-render-smoke.mjs",
+    "scan:secrets": "node scripts/scan-tracked-secrets.mjs",
+    "eval:attested": "node scripts/run-attested-evaluation.mjs",
+    "rehearse:rollback": "node scripts/rehearse-remediation-rollback.mjs",
     "test": "node --test tests/*.test.mjs",
-    "precheck": "node --check src/shared/redaction.mjs && node --check src/video/agent-skill-motion-plan.mjs && node --check src/video/agent-skill-full-video-plan.mjs && node --check src/server/reviews/human-approval-view.mjs && node --check src/server/reviews/asset-execution-preflight-runner.mjs && node --check src/server/production/external-assets.mjs && node --check scripts/render-agent-skill-full-video-stills.mjs",
-    "check": "node --check src/shared/browser-launch.mjs && node --check src/shared/env.mjs && node --check src/shared/ai-config.mjs && node --check src/shared/network.mjs && node --check src/shared/integrity.mjs && node --check src/shared/technical-diagram-contract.mjs && node --check src/shared/config-integrity.mjs && node --check src/shared/worker-manifests.mjs && node --check src/shared/audit-log.mjs && node --check src/shared/agent-contracts.mjs && node --check src/shared/versioned-json-store.mjs && node --check src/shared/workflow.mjs && node --check src/shared/production-profiles.mjs && node --check src/video/text-layout.mjs && node --check src/video/components/visual-system-v1/chapter-progress.mjs && node --check src/video/agent-skill-visual-proof-plan.mjs && node --check src/video/agent-skill-natural-voice-plan.mjs && node --check src/video/agent-skill-local-tts-plan.mjs && node --check src/video/agent-skill-short-local-tts-candidate.mjs && node --check src/video/agent-skill-short-plan.mjs && node --check scripts/render-agent-skill-visual-proof.mjs && node --check scripts/build-agent-skill-natural-voice-proof.mjs && node --check scripts/build-agent-skill-local-tts-proof.mjs && node --check scripts/build-agent-skill-short-local-tts-candidate.mjs && node --check scripts/create-agent-skill-60s-episode.mjs && node --check scripts/run-agent-skill-60s-script.mjs && node --check scripts/review-and-revise-agent-skill-60s-script.mjs && node --check src/server/app.mjs && node --check src/server/orchestrator.mjs && node --check src/server/control/policy-engine.mjs && node --check src/server/control/workflow-kernel.mjs && node --check src/server/control/model-router.mjs && node --check src/server/control/budget-ledger.mjs && node --check src/server/control/episode-operation-lock.mjs && node --check src/server/control/provider-health.mjs && node --check src/server/control/context-builder.mjs && node --check src/server/control/main-agent-evaluator.mjs && node --check src/server/control/evaluation-suite.mjs && node --check src/server/control/agent-observability.mjs && node --check src/server/control/policy-simulator.mjs && node --check src/server/control/plan-store.mjs && node --check src/server/control/main-agent.mjs && node --check src/server/control/controlled-dispatch.mjs && node --check src/server/reviews/checks.mjs && node --check src/server/reviews/context.mjs && node --check src/server/reviews/coordinator.mjs && node --check src/server/reviews/visual-proof-checkpoint.mjs && node --check src/server/reviews/asset-execution-checkpoint.mjs && node --check src/server/reviews/asset-execution-preflight.mjs && node --check src/server/reviews/rubrics/index.mjs && node --check src/server/reviews/rubrics/research.mjs && node --check src/server/reviews/rubrics/script.mjs && node --check src/server/reviews/rubrics/storyboard.mjs && node --check src/server/reviews/rubrics/assets.mjs && node --check src/server/reviews/rubrics/final.mjs && node --check src/server/reviews/validators/episode.mjs && node --check src/server/reviews/validators/timeline.mjs && node --check src/server/reviews/validators/assets.mjs && node --check src/server/reviews/validators/media.mjs && node --check src/server/renderer.mjs && node --check src/server/ai/client.mjs && node --check src/server/production/artifacts.mjs && node --check src/server/production/assets.mjs && node --check src/server/production/generator.mjs && node --check src/server/production/derived-episode.mjs && node --check src/server/production/short-script-adapter.mjs && node --check src/server/production/short-storyboard-adapter.mjs && node --check src/server/production/short-asset-plan-adapter.mjs && node --check src/server/production/local-code-implementation.mjs && node --check src/server/production/local-code-assets.mjs && node --check src/server/production/local-offline-voice.mjs && node --check src/server/production/quality.mjs && node --check src/server/production/voice.mjs && node --check src/server/trends/agent.mjs && node --check src/server/trends/engine.mjs && node --check src/server/trends/store.mjs && node --check src/server/collector/agent.mjs && node --check src/server/collector/adapters.mjs && node --check src/server/collector/normalizer.mjs && node --check src/server/collector/store.mjs && node --check src/server/research/agent.mjs && node --check src/server/research/engine.mjs && node --check src/server/research/fetcher.mjs && node --check src/server/research/store.mjs && node --check src/web/app.js"
+    "precheck": "node --check src/shared/redaction.mjs && node --check src/video/agent-skill-motion-plan.mjs && node --check src/video/agent-skill-full-video-plan.mjs && node --check src/server/reviews/human-approval-view.mjs && node --check src/server/reviews/asset-execution-preflight-runner.mjs && node --check src/server/production/external-assets.mjs && node --check src/server/security/operator-session.mjs && node --check scripts/render-agent-skill-full-video-stills.mjs && node --check scripts/start-studio.mjs",
+    "check": "node scripts/check-syntax.mjs",
+    "diff:check": "git diff --check && git diff --cached --check",
+    "verify": "pnpm scan:secrets && pnpm check && pnpm motion:check && pnpm test && pnpm rehearse:rollback && pnpm ci:render-smoke && pnpm diff:check"
   },
   "dependencies": {
-    "@phosphor-icons/react": "^2.1.10",
+    "@phosphor-icons/react": "2.1.10",
     "@remotion/bundler": "4.0.504",
     "@remotion/renderer": "4.0.504",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "remotion": "4.0.504",
     "undici": "7.29.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1"
   }
 }

@@ -1,14 +1,49 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { createStudioServer } from "../src/server/app.mjs";
-import { studioOutputRoot } from "../src/shared/paths.mjs";
+import { recoverInterruptedEpisode } from "../src/server/orchestrator.mjs";
+import { AMBIGUOUS_PROVIDER_BUDGET_CONFIRMATION } from
+  "../src/server/control/budget-ledger.mjs";
+import { readFixtureEpisode } from "./episode-fixture.mjs";
+
+const OPERATOR_TOKEN = "server-test-operator-token-20260824-at-least-32-bytes";
+const CAPABILITY_SECRET = "server-test-capability-secret-20260824-at-least-32-bytes";
 
 test("本地控制台 API 和视频分段读取可用", async () => {
-  const { server } = await createStudioServer({ recoverOnStart: false });
-  const fixtureDirectory = resolve(studioOutputRoot, ".test-fixtures");
+  const fixtureEpisode = await readFixtureEpisode();
+  const outputRoot = await mkdtemp(resolve(tmpdir(), "acs-server-test-"));
+  const { server } = await createStudioServer({
+    recoverOnStart: false,
+    operatorActor: "human:server-test",
+    operatorToken: OPERATOR_TOKEN,
+    allowServiceTokenMutations: true,
+    capabilitySecret: CAPABILITY_SECRET,
+    outputRoot,
+    listEpisodes: async () => [structuredClone(fixtureEpisode)],
+    readEpisode: async () => structuredClone(fixtureEpisode),
+    readRecentEvents: async () => [],
+    getTrendRadarState: async () => ({
+      run: {
+        summary: { formalCandidateCount: 5 },
+        candidates: [{ id: "agent-skill" }]
+      }
+    }),
+    getCollectorState: async () => ({
+      summary: { configuredSources: 18 },
+      sources: []
+    }),
+    getResearchState: async () => ({ selection: null, pack: null }),
+    getCloudBackupStatus: async () => ({
+      summary: "test fixture",
+      code: { configured: false },
+      media: { configured: false }
+    })
+  });
+  const fixtureDirectory = resolve(outputRoot, ".test-fixtures");
   const fixturePath = resolve(fixtureDirectory, "range.mp4");
   await mkdir(fixtureDirectory, { recursive: true });
   await writeFile(fixturePath, Buffer.alloc(256, 0x41));
@@ -33,7 +68,8 @@ test("本地控制台 API 和视频分段读取可用", async () => {
       method: "POST",
       headers: {
         origin: "http://127.0.0.1:4317",
-        "content-type": "application/json"
+        "content-type": "application/json",
+        "x-operator-token": OPERATOR_TOKEN
       },
       body: JSON.stringify({ providerId: "x".repeat(1024 * 1024) })
     });
@@ -118,6 +154,210 @@ test("本地控制台 API 和视频分段读取可用", async () => {
         server.close((error) => (error ? rejectClose(error) : resolveClose()));
       });
     }
-    await rm(fixtureDirectory, { recursive: true, force: true });
+    await rm(outputRoot, { recursive: true, force: true });
+  }
+});
+
+test("人工预算对账 HTTP 入口默认关闭且未授权请求零写入", async () => {
+  let writes = 0;
+  const { server } = await createStudioServer({
+    recoverOnStart: false,
+    readEpisode: async () => {
+      throw new Error("默认关闭时不应读取 Episode");
+    },
+    writeEpisode: async () => {
+      writes += 1;
+    }
+  });
+  try {
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/episodes/golden-001/control/budget/reconcile-ambiguous`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-budget-reconciliation-token": "client-cannot-enable-disabled-route-000000"
+        },
+        body: JSON.stringify({
+          reservationId: "route-disabled:attempt:1",
+          usedCalls: 0,
+          usedCostUsd: 0,
+          confirmation: AMBIGUOUS_PROVIDER_BUDGET_CONFIRMATION
+        })
+      }
+    );
+    assert.equal(response.status, 403);
+    assert.equal((await response.json()).code, "operator_auth_forbidden");
+    assert.equal(writes, 0);
+  } finally {
+    if (server.listening) {
+      await new Promise((resolveClose, rejectClose) => {
+        server.close((error) => (error ? rejectClose(error) : resolveClose()));
+      });
+    }
+  }
+});
+
+test("本地人工预算对账 API 使用服务端身份并严格确认后解除恢复冻结", async () => {
+  const source = structuredClone(await readFixtureEpisode());
+  const voice = source.pipeline.find((step) => step.agent === "voice-agent");
+  voice.status = "running";
+  voice.requiresHuman = false;
+  source.control.budget.reservations = [{
+    id: "route-http-recovery:attempt:1",
+    decisionId: "route-http-recovery",
+    calls: 1,
+    costUsd: 0.2,
+    costKnown: true,
+    reservedAt: "2026-08-24T03:00:00.000Z"
+  }];
+  source.control.budget.reservedCalls = 1;
+  source.control.budget.reservedCostUsd = 0.2;
+  let stored = recoverInterruptedEpisode(
+    source,
+    new Date("2026-08-24T03:01:00.000Z")
+  ).episode;
+  let writes = 0;
+  const budgetReconciliationToken = "test-budget-reconciliation-token-20260824-64-bytes";
+  const operatorToken = "test-budget-operator-token-20260824-at-least-32-bytes";
+  const { server } = await createStudioServer({
+    recoverOnStart: false,
+    operatorActor: "human:trusted-server-test",
+    operatorToken,
+    allowServiceTokenMutations: true,
+    capabilitySecret: CAPABILITY_SECRET,
+    budgetReconciliationToken,
+    readEpisode: async () => structuredClone(stored),
+    writeEpisode: async (next) => {
+      writes += 1;
+      stored = structuredClone(next);
+    }
+  });
+
+  try {
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    const endpoint =
+      `http://127.0.0.1:${address.port}/api/episodes/golden-001/control/budget/reconcile-ambiguous`;
+    const request = (body, suppliedToken = budgetReconciliationToken) => fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-operator-token": operatorToken,
+        ...(suppliedToken === null
+          ? {}
+          : { "x-budget-reconciliation-token": suppliedToken })
+      },
+      body: JSON.stringify(body)
+    });
+
+    const validRequest = {
+      reservationId: "route-http-recovery:attempt:1",
+      usedCalls: 1,
+      usedCostUsd: 0.1,
+      confirmation: AMBIGUOUS_PROVIDER_BUDGET_CONFIRMATION
+    };
+    const missingToken = await request(validRequest, null);
+    assert.equal(missingToken.status, 403);
+    assert.equal((await missingToken.json()).code, "budget_reconciliation_forbidden");
+    assert.equal(writes, 0);
+
+    const wrongToken = await request(validRequest, "wrong-budget-reconciliation-token-0000");
+    assert.equal(wrongToken.status, 403);
+    assert.equal((await wrongToken.json()).code, "budget_reconciliation_forbidden");
+    assert.equal(writes, 0);
+
+    const invalidShape = await request(null);
+    assert.equal(invalidShape.status, 400);
+    assert.equal(
+      (await invalidShape.json()).code,
+      "budget_reconciliation_input_invalid"
+    );
+    assert.equal(writes, 0);
+
+    const forgedActor = await request({
+      reservationId: "route-http-recovery:attempt:1",
+      usedCalls: 1,
+      usedCostUsd: 0.1,
+      actor: "human:forged-client",
+      confirmation: AMBIGUOUS_PROVIDER_BUDGET_CONFIRMATION
+    });
+    assert.equal(forgedActor.status, 400);
+    assert.equal(
+      (await forgedActor.json()).code,
+      "budget_reconciliation_client_actor_forbidden"
+    );
+    assert.equal(writes, 0);
+
+    const clientOverrun = await request({
+      reservationId: "route-http-recovery:attempt:1",
+      usedCalls: 1,
+      usedCostUsd: 0.1,
+      overrun: false,
+      confirmation: AMBIGUOUS_PROVIDER_BUDGET_CONFIRMATION
+    });
+    assert.equal(clientOverrun.status, 400);
+    assert.equal(
+      (await clientOverrun.json()).code,
+      "budget_reconciliation_input_invalid"
+    );
+    assert.equal(writes, 0);
+
+    const missingConfirmation = await request({
+      reservationId: "route-http-recovery:attempt:1",
+      usedCalls: 1,
+      usedCostUsd: 0.1,
+      confirmation: "not-confirmed"
+    });
+    assert.equal(missingConfirmation.status, 400);
+    assert.equal(
+      (await missingConfirmation.json()).code,
+      "budget_reconciliation_confirmation_required"
+    );
+    assert.equal(writes, 0);
+
+    const reconciled = await request({
+      reservationId: "route-http-recovery:attempt:1",
+      usedCalls: 1,
+      usedCostUsd: 0.1,
+      confirmation: AMBIGUOUS_PROVIDER_BUDGET_CONFIRMATION
+    });
+    assert.equal(reconciled.status, 200);
+    const body = await reconciled.json();
+    assert.equal(body.reconciliation.actor, "human:trusted-server-test");
+    assert.equal(body.reconciliation.confirmed, true);
+    assert.equal(body.reconciliation.actualOverrun, false);
+    assert.deepEqual(body.reconciliation.unfrozenAgentIds, ["voice-agent"]);
+    assert.equal(body.budget.reservations.length, 0);
+    assert.equal(JSON.stringify(body).includes(budgetReconciliationToken), false);
+    assert.equal(JSON.stringify(stored).includes(budgetReconciliationToken), false);
+    assert.equal(writes, 1);
+    assert.equal(
+      stored.pipeline.find((step) => step.agent === "voice-agent").requiresHuman,
+      false
+    );
+
+    const duplicate = await request({
+      reservationId: "route-http-recovery:attempt:1",
+      usedCalls: 1,
+      usedCostUsd: 0.1,
+      confirmation: AMBIGUOUS_PROVIDER_BUDGET_CONFIRMATION
+    });
+    assert.equal(duplicate.status, 409);
+    assert.equal(
+      (await duplicate.json()).code,
+      "budget_reconciliation_already_settled"
+    );
+    assert.equal(writes, 1);
+  } finally {
+    if (server.listening) {
+      await new Promise((resolveClose, rejectClose) => {
+        server.close((error) => (error ? rejectClose(error) : resolveClose()));
+      });
+    }
   }
 });

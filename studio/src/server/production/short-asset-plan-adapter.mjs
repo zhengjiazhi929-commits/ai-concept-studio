@@ -724,6 +724,17 @@ export function adaptApprovedStoryboardToShortAssetPlan(episode) {
   const enhancements = strategy === SHORT_ASSET_PLAN_STRATEGIES.HYBRID_API_SELECTIVE
     ? hybridEnhancements(generationProfile, episode)
     : { items: [], calls: [] };
+  const registeredExternalRights = direction.externalRightsDeclarations;
+  const externalCalls = enhancements.calls.map((call) => {
+    const declaration = registeredExternalRights &&
+      typeof registeredExternalRights === "object" &&
+      !Array.isArray(registeredExternalRights)
+      ? registeredExternalRights[call.id]
+      : null;
+    return declaration
+      ? { ...call, rightsDeclaration: structuredClone(declaration) }
+      : call;
+  });
   const items = [...localItems, ...enhancements.items];
   const coveredScenes = new Set(
     items
@@ -755,7 +766,7 @@ export function adaptApprovedStoryboardToShortAssetPlan(episode) {
         ? "mixed"
         : "local-only",
       costScope: "external-api-only",
-      externalApiCalls: enhancements.calls,
+      externalApiCalls: externalCalls,
       maximumPaidCostUsd: strategy === SHORT_ASSET_PLAN_STRATEGIES.HYBRID_API_SELECTIVE
         ? usesAihubmixVolcengine ? normalizedMaximumPaidCostUsd : 1
         : 0,
