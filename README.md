@@ -1,18 +1,55 @@
 # AI Concept Studio
 
-面向 AI 产品经理的 AI 技术概念视频生产系统。目标产品服务 8～12 分钟长视频；当前
-`golden-001` M1 是一条 36 秒本地内部技术样片，用来先验证生产与审批闭环，不等于长视频交付。
+AI Concept Studio is a reviewable production system that turns emerging AI
+technical concepts into accurate, evidence-backed videos designed to support
+product decisions.
 
-项目目标不是自动搬运资讯，而是把新出现或正在快速发展的 AI 技术概念，转化为准确、可验证、具有产品决策价值的 8～12 分钟视频。
+Target videos run 8–12 minutes. The current `golden-001`
+M1 is a 36-second local, internal technical sample used to validate the
+production and approval loop; it is not a long-form delivery.
 
-当前准确状态以 [`docs/STATUS.md`](./docs/STATUS.md) 为唯一来源。当前是受控本地
-Agent 原型与整改阶段，不代表 `assisted`、`active` 或正式发布完成。
+> [`docs/STATUS.md`](./docs/STATUS.md) is the only source of truth for current
+> implementation, verification, approval, merge, and release status. This
+> README explains the system but does not constitute acceptance evidence.
 
-可运行系统位于 [`studio/`](./studio/)。Windows 双击 [`studio/启动AI视频系统.cmd`](./studio/启动AI视频系统.cmd)，macOS 双击 [`studio/启动AI视频系统.command`](./studio/启动AI视频系统.command)，即可打开本地控制台。代码已经具备从结构化分镜合成本地竖屏 MP4 和执行技术 QA 的能力；当前 `golden-001` 是否已有可验收成片，只能以 Episode 与 [`docs/STATUS.md`](./docs/STATUS.md) 的实时记录为准。
+## What the System Does
 
-## 本地安装与验证
+The project is designed to:
 
-项目锁定 Node.js `24.19.0` 和 pnpm `11.19.0`。在 `studio/` 目录执行：
+- identify emerging or rapidly developing AI technical concepts;
+- separate market signals from factual evidence;
+- build research, scripts, storyboards, assets, voice, and final-video
+  candidates as versioned artifacts;
+- keep five human approval gates in the production workflow;
+- render local video candidates and run technical QA;
+- preserve evidence, audit history, rollback paths, and fixed fallback
+  behavior.
+
+It is not an automated news-reposting system, an autonomous publisher, or a
+mechanism for models to approve their own output.
+
+## Current Maturity and Safety Boundary
+
+The repository contains a controlled local AI-agent prototype with completed core
+security, recovery, asset-rights, CI, and governance remediation. This does not
+mean that `assisted` or `active` mode has been approved for use, that a business
+gate has been approved, or that a product or open-source release has occurred.
+
+Models and agents may propose bounded actions. They may not approve a human
+gate, rewrite history, bypass evidence, enlarge their own capabilities or
+budget, or publish automatically.
+
+The runnable system is located in [`studio/`](./studio/). It can produce a
+local MP4 from a structured storyboard and run technical QA. Whether
+`golden-001` currently has an acceptable final video must be determined from
+its Episode state and [`docs/STATUS.md`](./docs/STATUS.md), never from the
+presence of an output file alone.
+
+## Local Setup and Verification
+
+The project pins Node.js `24.19.0` and pnpm `11.19.0`.
+
+From [`studio/`](./studio/), run:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -20,78 +57,152 @@ pnpm verify
 pnpm audit --prod --audit-level high
 ```
 
-`pnpm verify` 只使用仓库固定输入和临时数据根，覆盖秘密扫描、JS/JSX/TS/TSX、动效库、
-全量测试、回滚演练和固定本地渲染；它不调用真实模型、付费 Provider，也不推进任何人工 Gate。
+`pnpm verify` uses tracked fixtures and injected temporary data roots. It
+covers secret scanning, JS/JSX/TS/TSX syntax, the motion library, the full test
+suite, rollback rehearsal, and a fixed local render smoke test.
 
-## 当前基准文件
+The verification command does not call a real model or paid provider, read or
+write the live Episode, or advance a human gate.
 
-- `docs/01-content-contract.md`：账号定位、受众、内容深度和表达标准
-- `docs/02-quality-rubric.md`：选题、脚本和成片的统一质量评分
-- `docs/03-topic-selection-rules.md`：黄金样例及日常选题准入规则
-- `docs/04-golden-sample-process.md`：第一条黄金样例的人工编排流程
-- `docs/05-visual-system.md`：16:9 桌面窗口母版、9:16 重构、安全区、字幕、概念图、转场与可复用组件规范
-- `docs/06-agent-architecture-v2.md`：混合式 Main Agent、模型路由、审核协调 Agent、迁移阶段和文件级改造清单
-- `docs/07-motion-library.md`：筛选后的横版视频动效组件库、逐项 GIF 和 Remotion 调用方式
-- `docs/08-development-governance.md`：仓库采用的 Agent 开发、验证、评测与交付规范
-- `docs/STATUS.md`：项目当前状态、验证结果、阻断项和下一准入门槛的唯一真源
-- `research/2026-07-30-golden-topic-candidates.md`：已撤回的技术新颖性优先候选，仅保留审计记录
-- `research/2026-07-30-creator-heat-audit.md`：热门创作者近期内容与事件信号审计
-- `research/2026-07-31-hot-concept-candidates.md`：从热点信号中抽取的纯概念候选，当前正式选题依据
-- `research/2026-07-31-agentic-coding-evidence-pack.md`：黄金样例 001 的一手证据底稿
-- `episodes/golden-001/`：Agentic Coding 黄金样例；历史上选择过视觉方向 B「真实产品纪录片」，
-  但该选择不等于当前 Research / Script / Storyboard Gate 已批准，当前有效门禁只看 `STATUS.md`
-- `demo/agentic-coding-saas/`：用于黄金样例的本地可复现 SaaS 任务；全部为虚构数据，用于真实记录红测、修复、Diff 与浏览器验收
+## Run the Local Console
 
-## 核心流程
+From [`studio/`](./studio/), run:
 
-```text
-趋势发现
-→ 选题规划
-→ 研究与证据核验
-→ 人工研究审批
-→ 大纲与脚本
-→ 人工脚本审批
-→ 分镜
-→ 人工分镜审批
-→ 素材与旁白
-→ 人工素材审批
-→ 视频合成与 QA
-→ 人工成片审批
-→ 发布复盘
+```bash
+pnpm start:open
 ```
 
-## 当前原则
+Platform launchers are also available:
 
-1. 竞品内容只作为市场信号，不作为事实来源。
-2. 关键技术主张必须回链到官方公告、文档、论文、模型卡或官方仓库。
-3. Agent 负责提效，人负责选题及研究、脚本、分镜、素材、成片五道审批；系统不自动发布。
-4. 黄金样例作为所有新 Agent 和视频模板改动的回归标准；一次只增加一个可验证模块。
-5. 第一版不自动发布，也不未经授权批量抓取平台创作者内容。
+- [Windows launcher](./studio/%E5%90%AF%E5%8A%A8AI%E8%A7%86%E9%A2%91%E7%B3%BB%E7%BB%9F.cmd)
+- [macOS launcher](./studio/%E5%90%AF%E5%8A%A8AI%E8%A7%86%E9%A2%91%E7%B3%BB%E7%BB%9F.command)
 
-## 黄金样例当前进度
+## Repository Map
 
-- 旧 `trusted-fixture` 审批已失效；Research v1 与 Script v1 已由 Zhengjiazhi 按当前版本、
-  内容哈希和机器报告重新批准，当前停在 Storyboard v1 人工 Gate；
-- 长版 `07-script.md` / `08-storyboard.md` 只作参考，不能代表当前 36 秒六段短脚本和六镜结构；
-- 四张虚构数据的真实产品截图已经登记并带 bytes / SHA-256；
-- 本地控制台、Workflow Kernel、五道 Gate、机器审核、中断恢复和版本化渲染代码已经存在；
-- 本轮只允许用本地离线旁白和固定输入完成 M1，不调用付费媒体 API；Storyboard 批准前，
-  不生成可供素材/声音 Gate 使用的新旁白；
-- 之前生成的 `v001` 旁白与 dossier 早于当前强绑定检查，已作废，只保留为历史文件，
-  不能用于审批、渲染或发布；当前没有有效旁白候选和当前成片；
-- 历史提交和其他工作树曾生成的视觉验证视频只作为历史证据，不能冒充当前 Episode 成片；
-- 未经素材/声音 Gate 批准，不得渲染；未经当前 MP4 的 QA 和最终 Gate，不得声明业务验收或发布完成。
+- [`docs/01-content-contract.md`](./docs/01-content-contract.md): channel
+  positioning, audience, content depth, and communication standards
+- [`docs/02-quality-rubric.md`](./docs/02-quality-rubric.md): shared quality
+  rubric for topics, scripts, and final videos
+- [`docs/03-topic-selection-rules.md`](./docs/03-topic-selection-rules.md):
+  admission rules for the golden sample and routine topic selection
+- [`docs/04-golden-sample-process.md`](./docs/04-golden-sample-process.md):
+  human-orchestrated process for the first golden sample
+- [`docs/05-visual-system.md`](./docs/05-visual-system.md): 16:9 desktop
+  master, 9:16 adaptation, safe areas, captions, diagrams, transitions, and
+  reusable components
+- [`docs/06-agent-architecture-v2.md`](./docs/06-agent-architecture-v2.md):
+  hybrid Main Agent, model routing, review coordination, migration stages, and
+  file-level implementation map
+- [`docs/07-motion-library.md`](./docs/07-motion-library.md): curated
+  landscape-video motion library, GIF previews, and Remotion usage
+- [`docs/08-development-governance.md`](./docs/08-development-governance.md):
+  adopted development, verification, evaluation, and delivery process
+- [`docs/STATUS.md`](./docs/STATUS.md): the only current-state source for
+  verification, blockers, approvals, merge state, and the next admission gate
+- [`research/2026-07-30-golden-topic-candidates.md`](./research/2026-07-30-golden-topic-candidates.md):
+  withdrawn novelty-first candidates retained for audit history
+- [`research/2026-07-30-creator-heat-audit.md`](./research/2026-07-30-creator-heat-audit.md):
+  recent creator and event signal audit
+- [`research/2026-07-31-hot-concept-candidates.md`](./research/2026-07-31-hot-concept-candidates.md):
+  concept candidates derived from market signals and the current basis for
+  topic selection
+- [`research/2026-07-31-agentic-coding-evidence-pack.md`](./research/2026-07-31-agentic-coding-evidence-pack.md):
+  primary-source evidence pack for golden sample 001
+- [`episodes/golden-001/`](./episodes/golden-001/): the Agentic Coding golden
+  sample; historical creative directions are not current approval evidence
+- [`demo/agentic-coding-saas/`](./demo/agentic-coding-saas/): locally
+  reproducible SaaS task with synthetic data for recording failing tests,
+  fixes, diffs, and browser acceptance
 
-本地 M1 的产品要求、范围和执行顺序分别见 [`docs/PRD.md`](./docs/PRD.md)、
-[`docs/scope.md`](./docs/scope.md) 和 [`docs/m1-roadmap.md`](./docs/m1-roadmap.md)。
+## Production Workflow
 
-## 可选备份
+```text
+Trend discovery
+→ Topic planning
+→ Research and evidence verification
+→ Human research approval
+→ Outline and script
+→ Human script approval
+→ Storyboard
+→ Human storyboard approval
+→ Assets and voice
+→ Human assets and voice approval
+→ Video composition and QA
+→ Human final-video approval
+→ Publishing review and retrospective
+```
 
-仓库提供 Git 与 OneDrive 分层备份能力，但“提供能力”不等于已经配置或成功备份。是否已
-连接 OneDrive、最近一次成功时间和覆盖范围，必须以控制台或 `docs/STATUS.md` 的实时证据为准；
-当前 M1 不依赖 OneDrive。整改分支未 push 前，也不能说代码已经进入 GitHub。
+## Operating Principles
 
-需要启用时，根据系统选择 `studio/config/cloud-backup.example.json`（Windows）或
-`studio/config/cloud-backup.macos.example.json`（macOS），复制为不会进入 Git 的
-`studio/config/cloud-backup.local.json`，配置 `mediaRoot` 后先运行 `pnpm cloud:status`，
-再由操作员明确执行 `pnpm cloud:backup`。API Key、Cookie、依赖和临时文件不得上传。
+1. Competitor content is a market signal, not a factual source.
+2. Important technical claims must trace back to official announcements,
+   documentation, papers, model cards, or official repositories.
+3. Agents accelerate work; humans retain topic selection and the five
+   production approvals: research, script, storyboard, assets and voice, and
+   final video.
+4. The golden sample is the regression standard for new agents and video
+   templates. Add one verifiable module at a time.
+5. The initial version will not publish automatically or scrape creator content
+   in bulk without authorization.
+6. Network, model, filesystem, and paid side effects require explicit,
+   server-issued capabilities and fail closed when authorization is missing.
+7. Interrupted provider calls remain ambiguous until reconciled; they are
+   never silently treated as zero-use or retried automatically.
+
+## Golden Sample and Local M1
+
+The local M1 validates the production contract before long-form delivery:
+
+- `golden-001` is a 36-second, six-section internal technical sample;
+- the long-form `07-script.md` and `08-storyboard.md` are reference material,
+  not proof of the current M1 artifact or gate state;
+- four synthetic-data product screenshots are registered with byte counts and
+  SHA-256 digests;
+- the local console, Workflow Kernel, five human gates, machine review,
+  interruption recovery, and versioned rendering code are implemented;
+- M1 media work is restricted to local offline capability and fixed inputs
+  unless a paid call is separately authorized;
+- earlier `v001` voice and dossier artifacts predate the current binding
+  checks and are historical only;
+- videos produced by historical commits or other worktrees cannot be presented
+  as the current Episode result;
+- rendering requires approval at the current Assets/Voice gate, and release
+  claims require QA of the current MP4 plus the final human gate.
+
+Current gate state, valid bindings, and available artifacts must always be read
+from the Episode and [`docs/STATUS.md`](./docs/STATUS.md).
+
+The product requirements, scope, and delivery sequence are documented in
+[`docs/PRD.md`](./docs/PRD.md), [`docs/scope.md`](./docs/scope.md), and
+[`docs/m1-roadmap.md`](./docs/m1-roadmap.md).
+
+## License and Release Status
+
+No project-level open-source license has been granted yet. Do not infer a
+license from the repository being publicly accessible. See
+[`docs/licensing.md`](./docs/licensing.md) for asset and dependency licensing
+rules, and [`docs/STATUS.md`](./docs/STATUS.md) for current release blockers.
+
+## Optional Backup
+
+The repository supports layered Git and OneDrive backup, but support does not
+prove that backup is configured or current. Connection state, last successful
+backup time, and coverage must be verified in the local console or
+[`docs/STATUS.md`](./docs/STATUS.md). The local M1 does not depend on
+OneDrive.
+
+To enable media backup, copy the platform-appropriate example configuration:
+
+- Windows: `studio/config/cloud-backup.example.json`
+- macOS: `studio/config/cloud-backup.macos.example.json`
+
+Save it as the untracked file `studio/config/cloud-backup.local.json`, set
+`mediaRoot`, then run:
+
+```bash
+pnpm cloud:status
+pnpm cloud:backup
+```
+
+The operator must explicitly start a backup. API keys, cookies, dependencies,
+and temporary files must never be uploaded.
