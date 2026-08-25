@@ -1,13 +1,14 @@
 # AI Concept Studio
 
-面向 AI 产品经理的 AI 技术概念长视频生产系统。
+面向 AI 产品经理的 AI 技术概念视频生产系统。目标产品服务 8～12 分钟长视频；当前
+`golden-001` M1 是一条 36 秒本地内部技术样片，用来先验证生产与审批闭环，不等于长视频交付。
 
 项目目标不是自动搬运资讯，而是把新出现或正在快速发展的 AI 技术概念，转化为准确、可验证、具有产品决策价值的 8～12 分钟视频。
 
 当前准确状态以 [`docs/STATUS.md`](./docs/STATUS.md) 为唯一来源。当前是受控本地
 Agent 原型与整改阶段，不代表 `assisted`、`active` 或正式发布完成。
 
-可运行系统位于 [`studio/`](./studio/)。Windows 双击 [`studio/启动AI视频系统.cmd`](./studio/启动AI视频系统.cmd)，macOS 双击 [`studio/启动AI视频系统.command`](./studio/启动AI视频系统.command)，即可打开本地控制台。当前已经能从结构化分镜和真实产品截图生成竖屏 MP4，并执行自动技术 QA。
+可运行系统位于 [`studio/`](./studio/)。Windows 双击 [`studio/启动AI视频系统.cmd`](./studio/启动AI视频系统.cmd)，macOS 双击 [`studio/启动AI视频系统.command`](./studio/启动AI视频系统.command)，即可打开本地控制台。代码已经具备从结构化分镜合成本地竖屏 MP4 和执行技术 QA 的能力；当前 `golden-001` 是否已有可验收成片，只能以 Episode 与 [`docs/STATUS.md`](./docs/STATUS.md) 的实时记录为准。
 
 ## 当前基准文件
 
@@ -24,7 +25,8 @@ Agent 原型与整改阶段，不代表 `assisted`、`active` 或正式发布完
 - `research/2026-07-30-creator-heat-audit.md`：热门创作者近期内容与事件信号审计
 - `research/2026-07-31-hot-concept-candidates.md`：从热点信号中抽取的纯概念候选，当前正式选题依据
 - `research/2026-07-31-agentic-coding-evidence-pack.md`：黄金样例 001 的一手证据底稿
-- `episodes/golden-001/`：Agentic Coding 黄金样例；视觉方向 B「真实产品纪录片」已确认，分镜和生产清单已切换到 v0.2
+- `episodes/golden-001/`：Agentic Coding 黄金样例；历史上选择过视觉方向 B「真实产品纪录片」，
+  但该选择不等于当前 Research / Script / Storyboard Gate 已批准，当前有效门禁只看 `STATUS.md`
 - `demo/agentic-coding-saas/`：用于黄金样例的本地可复现 SaaS 任务；全部为虚构数据，用于真实记录红测、修复、Diff 与浏览器验收
 
 ## 核心流程
@@ -55,20 +57,28 @@ Agent 原型与整改阶段，不代表 `assisted`、`active` 或正式发布完
 
 ## 黄金样例当前进度
 
-- 脚本已经人工通过；
-- 视觉方向 B 已经人工通过；
-- 本地演示项目 baseline 已固定为 Git 提交 `d3ef196`；
-- baseline `d3ef196` 的验收测试为 5 项中 1 项通过、4 项失败，这是 Agent 开始工作前的真实状态；
-- Coding Agent 第一版实现 `c619b0c` 已达到 5/5 通过，HTTP 验收也已通过；
-- final `e717f5f` 已保存运行记录、限制和可复现证据；
-- Before 失败、普通用户被拒绝、管理员完成导出等 5 张真实浏览器截图已采集；
-- 36 秒无旁白视觉验证版已由渲染 Agent 真实生成，H.264、尺寸、帧率、时长、像素格式和文件完整性 QA 全部通过；
-- 本地控制台、8 个 Agent 接口、五道人工闸门、带意见驳回、中断恢复、版本化渲染和回归测试已落地；
-- 热点采集、热点发现和 Research Agent v0.1 已接入；脚本、分镜和素材清单可基于证据包通过 AiHubMix/OpenAI 双通道生成结构化草稿，并在每个关键阶段等待人工批准；
-- 自动 QA 同时检查视频技术参数和内容质量，包括证据素材、字幕时间轴、阅读速度与旁白状态。
+- 历史研究/脚本/分镜状态来自旧 `trusted-fixture` 白名单，没有当前规则要求的机器报告与
+  真实人工证据，已全部失效；当前必须从研究 Gate 起由 Zhengjiazhi 逐级重新确认；
+- 长版 `07-script.md` / `08-storyboard.md` 只作参考，不能代表当前 36 秒六段短脚本和六镜结构；
+- 四张虚构数据的真实产品截图已经登记并带 bytes / SHA-256；
+- 本地控制台、Workflow Kernel、五道 Gate、机器审核、中断恢复和版本化渲染代码已经存在；
+- 本轮只允许用本地离线旁白和固定输入完成 M1，不调用付费媒体 API；当前研究、短脚本和
+  分镜依次批准前，不生成可供素材/声音 Gate 使用的新旁白；
+- 之前生成的 `v001` 旁白与 dossier 早于当前强绑定检查，已作废，只保留为历史文件，
+  不能用于审批、渲染或发布；当前没有有效旁白候选和当前成片；
+- 历史提交和其他工作树曾生成的视觉验证视频只作为历史证据，不能冒充当前 Episode 成片；
+- 未经素材/声音 Gate 批准，不得渲染；未经当前 MP4 的 QA 和最终 Gate，不得声明业务验收或发布完成。
 
-## 云端备份
+本地 M1 的产品要求、范围和执行顺序分别见 [`docs/PRD.md`](./docs/PRD.md)、
+[`docs/scope.md`](./docs/scope.md) 和 [`docs/m1-roadmap.md`](./docs/m1-roadmap.md)。
 
-系统采用分层备份：代码、配置、文档和可复用的小型素材进入 GitHub 仓库；成片、音频、运行数据和生产素材复制到 OneDrive；API Key、Cookie、依赖和临时文件不上传。控制台顶部会显示当前保护状态。
+## 可选备份
 
-OneDrive 登录后，根据系统选择 `studio/config/cloud-backup.example.json`（Windows）或 `studio/config/cloud-backup.macos.example.json`（macOS），复制为不会进入 Git 的 `studio/config/cloud-backup.local.json`，并把 `mediaRoot` 改为 OneDrive 内的真实素材目录。随后在 `studio` 目录运行 `pnpm cloud:backup` 完成首次全量复制。之后每次渲染完成，系统会自动复制新成片；也可以随时运行 `pnpm cloud:status` 检查状态。
+仓库提供 Git 与 OneDrive 分层备份能力，但“提供能力”不等于已经配置或成功备份。是否已
+连接 OneDrive、最近一次成功时间和覆盖范围，必须以控制台或 `docs/STATUS.md` 的实时证据为准；
+当前 M1 不依赖 OneDrive。整改分支未 push 前，也不能说代码已经进入 GitHub。
+
+需要启用时，根据系统选择 `studio/config/cloud-backup.example.json`（Windows）或
+`studio/config/cloud-backup.macos.example.json`（macOS），复制为不会进入 Git 的
+`studio/config/cloud-backup.local.json`，配置 `mediaRoot` 后先运行 `pnpm cloud:status`，
+再由操作员明确执行 `pnpm cloud:backup`。API Key、Cookie、依赖和临时文件不得上传。

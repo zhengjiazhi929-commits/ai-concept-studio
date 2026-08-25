@@ -1,120 +1,121 @@
 # AI Concept Studio 当前状态
 
-更新时间：2026-08-24
+更新时间：2026-08-25 13:00（Asia/Shanghai）
 
-状态真源版本：2
-
-审计基线：`b29ebe911e2256bdf14fa4fa25aaa04bfeac075c`
+状态真源版本：3
 
 整改分支：`codex/agent-v2-remediation-20260824`
 
+实现验证基线：`38d4206b4f3c0ce514a9fee4de6f62a40eae399f`
+
 ## 当前准确结论
 
-本批阻断整改已经完成代码实现，并在当前工作树和移除运行数据后的隔离副本中通过
-自动化验证。它证明核心安全边界和测试可复现性有了可审查的实现，不代表整个产品
-已经技术完成、通过业务验收、可进入 `assisted` / `active`，也不代表已经合并或发布。
+安全、恢复、CI、Prompt、评测绑定和文档整改已经完成本地实现；最终冻结代码通过全量
+538/538 测试，独立攻击复核没有发现剩余 P0/P1。这个结论只代表整改代码与本地工程证据，
+不代表 `golden-001` 已完成业务验收、可进入 `assisted` / `active`、已合并或已发布。
 
-当前真实 `golden-001` 仍处于 `in_production`：素材与最终 Gate 为 `pending`，旁白为
-`unconfigured`，渲染和 QA 为 `pending`，没有当前成片输出。因此 M1 真实生产闭环尚未完成。
+真实 `golden-001` 当前停在 **Research Gate**：研究机器审核已通过，等待 Zhengjiazhi
+对当前 v1、内容哈希和机器报告作人工批准或驳回。Script、Storyboard、Assets/Voice、Final
+四道后续 Gate 均未批准；没有当前有效旁白、MP4 或 QA 结论。因此“本地离线真实成片”
+尚未完成，系统按约定停在第一道人审，而不是绕过人审继续生成。
 
-## 当前运行边界
+## 真实业务路径
 
-- 控制模式：只允许 `shadow`；`assisted` 与 `active` 的准备、确认、同模式继续运行均硬锁定。
-- 旧状态保护：即使磁盘中已持久化 `assisted` / `active`，也不会继续规划或运行 Worker；
-  只允许显式降级到 `shadow`。
-- Fixed fallback：保持启用。
-- 人工 Gate：研究、脚本、分镜、素材/声音、最终成片五道，全部保留。
-- 写操作：localhost 操作员必须先用一次性解锁码换取短期 session，并通过 CSRF 校验。
-- 网络、模型、文件写入与付费行为：必须持有服务端签发、限定 Episode / 操作 / scope /
-  次数 / 费用 / 有效期的一次性 Capability；缺少授权时 fail closed。
-- 外部调用：本轮没有调用真实模型、语音、图片、视频、发布或其他计费 API。
+| Gate / 产物 | 当前状态 | 业务含义 |
+|---|---|---|
+| Research | 机器 `pass`，人工 `pending`，流程 `waiting_approval` | 现在唯一需要 Zhengjiazhi 决定的 Gate |
+| Script | `pending` | Research 批准后才准备当前 36 秒六段脚本审批单 |
+| Storyboard | `pending` | Script 批准后才准备当前六镜分镜审批单 |
+| Assets / Voice | `pending`；voice=`unconfigured` | 上游三 Gate 批准后才生成本地 Kokoro 候选并等待试听审批 |
+| Final | `pending`；render=`stale`，outputPath=`null`；qa=`stale` | 素材/声音 Gate 批准前禁止渲染；当前无有效成片 |
 
-## 2026-08-24 验证结果
+当前 Research 精确绑定：
 
-验证环境：Node `v24.19.0`，pnpm `11.19.0`（Codex bundled runtime）。
+- artifact version：`1`
+- artifact SHA-256：`529027d2fc7abb782a2c7096a72cd02f29cb4bfe583cfbec388c9544aa0b03a9`
+- machine report：`review-research-v1-3-2026-08-25T04-58-59-654Z`
+- review rules：`review-rubrics-v10 / research-v2`
+- 内容：6 项成片结论、12 个一手来源、7 份本地登记证据；当前字节完整性复核通过
+- 人工资料包：`outputs/studio/golden-001/upstream-research-gate-dossier-v002.md`
+- 资料包 SHA-256：`e094ce0ab5c48fd930eced6ced15ced20ef2f2b24e5ba8b11b98192d20e38952`
 
-| 项目 | 结果 |
+`v001` 资料包使用旧 Research Rubric，只保留为历史证据；当前审批只能使用 `v002`。
+
+## 已关闭的整改风险
+
+1. **网络与文件边界**：SSRF、DNS rebinding、redirect SSRF、stream 上限、realpath/symlink、
+   静态目录和上传边界均 fail closed。
+2. **身份、权限与费用**：localhost 写操作使用短期 operator session + CSRF；网络、模型、
+   文件和付费副作用必须经过服务端窄 Capability；Worker 不能自扩权。
+3. **中断与恢复**：Provider 结算不明保持冻结并走鉴权人工裁决；上传使用私有 staging、
+   marker、锁、CAS 和重启隔离；Importer 审计 outbox 可幂等恢复。
+4. **审批完整性**：人工 Gate 绑定版本、内容哈希和当前机器报告；批准前和提交前双重重读；
+   Research 来源为空、重复、别名、字段空壳或 claim 引用不闭合时均阻断。
+5. **评测与治理**：Prompt、Rubric、Router、模型配置和实现代码进入版本化哈希闭包；
+   Ed25519 与 append-only evidence 基础设施已实现，但准入仍保持关闭。
+6. **工程门禁**：精确 Node/pnpm、offline frozen install、秘密扫描、依赖审计、语法、全量测试、
+   render smoke 和回滚演练已经定义并在本地执行。
+7. **文档闭环**：PRD、范围、现状架构、目标架构、差距、威胁、来源、许可证、ADR、回滚、
+   文件处置和五 Gate 流程已经补齐；本文件仍是唯一当前状态真源。
+
+## 2026-08-25 最终本地验证
+
+环境：Node `v24.19.0`，pnpm `11.19.0`，Python `3.12.13`（本地 Kokoro 锁定环境）。
+
+| 检查 | 结果 |
 |---|---|
-| 关键控制、Fixture、热点与审核链路 | 52/52 通过 |
-| `pnpm check` | 通过 |
-| `pnpm test` | 439/439 通过 |
-| 运行数据隔离副本 | 439/439 通过 |
+| `pnpm install --offline --frozen-lockfile` | 通过，依赖已锁定 |
+| tracked + untracked 非忽略文件秘密扫描 | 677 个候选文件，0 命中 |
+| `pnpm audit --prod --audit-level high` | 0 个已知漏洞；`nanoid` 仅 3.3.18 |
+| `pnpm check` | 178 个 JavaScript / MJS 文件语法通过 |
+| `pnpm test` | 538/538 通过，0 失败 |
+| Eval / Governance / Research / Golden 专项 | 73/73 通过 |
+| `pnpm ci:render-smoke` | 19,776 bytes；externalCalls=0；liveEpisodesRead=0 |
+| `pnpm rehearse:rollback` | 7/7 本地 fixture 场景通过；external/paid/live read/write 均为 0 |
+| 本地 TTS runtime lock | Python、全部 distribution 与直接模块哈希匹配 |
+| Research 当前来源重读 | 7/7 文件 bytes 与 SHA-256 匹配 |
 | `git diff --check` | 通过 |
-| Implementation hash | `c88416b9d435501687652a32ea42d12ebac33ef349fdf2119c09f16b6e1d67b4` |
-| Suite hash | `7053e9315f67da5b9fbfe6f6559a40d69858b68f0f320226111bc57b480ad7e4` |
-| Runtime binding hash | `8f03036d0ba74f48b0bb899780c0b5f2f93af122c2f6fe0ba8479511084583f4` |
-| 评测绑定 | `runtimeVerified=true`；91/91 个本地实现路径；6 个固定离线用例 |
-| 评测准入 | `eligible=false`；仅为 `offline-reference-only`，不能解锁高权限模式 |
-| 真实外部 / Provider 调用 | 0 |
+| 已提交归档隔离复现 | 待包含本状态与 Episode 的提交形成后执行并回填 |
 
-隔离复现从已提交的测试变更 `f08a786` 做 `git archive`，再明确排除了：
+评测绑定：
 
-- `studio/data/{episodes,collector,research,trends,production,logs,provider-health}`；
-- `studio/public/episodes`、`studio/outputs`、仓库根运行期 `episodes` / `research` / `outputs`；
-- `.env`、`.env.local` 与本地配置。
+- Review Rubric hash：`338a0d5f69afeb08be7dbcce83aa8bff55f3e8f83d3c1a85d5051b36b5e361c4`
+- Implementation hash：`a1c089bb2460e306e78ba777c06573ef5ec68df38b8282e75bd23e14e17ac2b7`
+- Suite hash：`80ae67c932dcf12d0ca887f215b05c6542b64ea9ae93951105f363edacbd8fbe`
+- Runtime binding hash：`723538c52c25496bf34e6b74ccfc89e4810ac3aec278f258d2767d424e3731c9`
+- `runtimeVerified=true`；`admission.eligible=false`；evidence class=`offline-reference-only`
 
-依赖目录复用了当前已安装的 `node_modules` 符号链接。因此本结果同时证明测试所需
-源码与 Fixture 已进入 Git，并且测试不依赖运行数据；它仍不等价于 clean install、
-跨平台或依赖供应链验证。
+CI 边界：`.github/workflows/verify.yml` 已进入本地分支历史，本地等价门禁通过；分支尚未
+push，因此没有 hosted GitHub Actions 运行结果。不能把本地门禁写成“云端 CI 已通过”。
 
-## 本批已经实现的业务保护
+## 仍然存在的门禁与 P2 边界
 
-1. **测试不再借用生产历史**：Episode、素材计划、热点信号、审核素材和 Markdown
-   脚本均改用已跟踪不可变 Fixture 或逐测试临时数据根。
-2. **AI 不能自己证明自己可上线**：固定 Runner 与 Judge 只能产出离线参考证据；在
-   缺少可信 attestation 和 append-only 证据存储前，高权限模式不可解锁。
-3. **不确定费用不会被当作零费用**：请求发出后如连接中断、超时或响应丢失，预算
-   预留会冻结，禁止自动重试或切换 Provider。
-4. **Worker 不能给自己扩权**：授权签发能力只在服务端；Worker 和嵌套 Agent 只能
-   接收已经收窄的 grant，付费 POST 在发出前逐次消费次数与费用。
-5. **人工审批有真实操作员身份**：客户端不能伪造 actor；敏感 API 在认证、CSRF 或
-   Capability 缺失时零读取、零写入。
-6. **离线语音与测试夹具可复现**：生产 wrapper 与测试 harness 分离，测试不读取 live
-   Episode、outputs 或 production 文件。
+### 业务 / 发布门禁
 
-## 仍未完成的阻断项
+1. 依次完成 Research、Script、Storyboard、Assets/Voice、Final 五道人审；当前只到第一道。
+2. 素材/声音 Gate 通过后才能生成真实本地 MP4；随后还要媒体 QA、抽帧/转场检查和一次
+   不中断 1× 人工观看，最后停在 Final Gate。
+3. Kokoro 音色包许可证尚未独立核实；候选只可本地内部评审，不能据此公开或商业发布。
+4. 可信 Runner attestation、外部可信 evidence 锚和限额真实 shadow 尚未完成；因此
+   `assisted` / `active` 继续硬锁，fixed fallback 保持启用。
 
-### P1：进入真实生产或合并发布前必须处理
+### 非阻断 P2 技术债
 
-1. **M1 真实闭环**：用合法固定输入完成真实本地旁白、真实 Remotion 小样、媒体 QA、
-   素材 Gate 和最终 Gate；当前自动化中的 renderer / QA 是 fake，不能冒充成片验收。
-2. **可信评测准入**：建立受信 Runner attestation、append-only 证据存储、限额真实
-   shadow 和独立语义 / 视觉 Reviewer；完成前维持高权限模式硬锁。
-3. **Provider 成功但本地提交不明的恢复**：`provider_result_commit_unknown` 目前会安全
-   冻结，但还没有经鉴权的人工裁决 / 恢复 API，只能视为未闭环。
-4. **安全第二批**：研究抓取 SSRF 与重定向 SSRF、素材 / 旁白审批 TOCTOU、字段名秘密
-   脱敏、审计链读取验证、静态目录 symlink、上传版本竞争仍需修复。
-5. **工程门禁**：建立 CI，精确固定 Node / pnpm，加入 frozen install、bundle / render、
-   秘密和依赖门禁；处理已知传递依赖 high advisory。
-6. **生产提示词与回滚**：为 Script / Storyboard / Asset Worker 提示词建立版本和哈希；
-   完成真实回滚演练。当前生产 Capability 只授权一次调用，而 AI 配置允许重试，行为
-   偏保守但不一致，需在费用策略中明确。
-
-### P2：SOP 阶段与文档闭环
-
-以下阶段 0 / 治理产物仍缺失，不能用本文件替代：
-
-- `docs/prototype-audit.md`
-- `docs/current-architecture.md`
-- `docs/gap-analysis.md`
-- `docs/m1-roadmap.md`
-- `docs/decisions/` 与 Node / Remotion 技术栈 ADR
-- `docs/threat-model.md`、`docs/data-sources.md`、`docs/licensing.md`
-- 仓库级“保留 / 封装 / 重构 / 删除候选”清单
-
-`docs/04-golden-sample-process.md` 仍写四个审批点，与系统五 Gate 合同不一致，也需要
-修订。开源材料、PR 模板和发布标签属于后续发布阶段，不应误报为当前运行 Bug。
+- pending Importer audit outbox 目前由再次 import 触发恢复，不是启动时主动扫描。
+- ffprobe/ffmpeg 有大小、格式、资源和超时限制，但没有 OS 级进程/系统调用沙箱。
+- 本地 audit hash-chain 可发现普通篡改，但没有外部可信锚，不能抵御整本账本重写。
+- 上传锁在 PID 极端复用时可能保守阻塞，需要操作员检查隔离区。
+- Python socket API 拒绝是应用层保护，不是 OS 级断网或全机流量取证。
+- hosted GitHub Actions、跨平台 clean clone 和公开发布许可证验收仍待后续授权环境完成。
 
 ## Git 与发布状态
 
-当前整改分支已形成两笔可移植实现提交：
+- 本地 `main`：`c1cd165fc17a2b5572c52c8ac8b44571436d500f`
+- 整改代码提交：`cec7b54`、`f08a786`、`71e3dae`、`9906cde`、`38d4206`
+- 当前分支未 push、未创建 PR、未合并 `main`、未部署、未发布、未建立版本标签。
+- 本轮只允许在整改分支提交；是否合并 `main` 由 Zhengjiazhi 在后续业务验收后另行决定。
 
-- `cec7b54` — 运行时安全边界；
-- `f08a786` — 不可变 Fixture 与运行数据隔离测试。
-
-治理与状态文档单独提交。当前没有 push、没有合并到 `main`、没有部署、没有业务验收。
-
-- `machine_status`: remediation_batch_checks_passed
-- `technical_status`: incomplete
-- `business_acceptance_status`: pending
-- `release_status`: not_released
+- `machine_status`: local_verification_passed
+- `technical_status`: remediation_complete_m1_blocked_at_research_gate
+- `business_acceptance_status`: pending_at_research_gate
+- `release_status`: committed_on_remediation_branch_not_merged_not_released
