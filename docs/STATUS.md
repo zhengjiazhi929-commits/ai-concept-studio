@@ -1,10 +1,13 @@
 # AI Concept Studio 当前状态
 
-更新时间：2026-08-25 16:58（Asia/Shanghai）
+更新时间：2026-08-25 17:03（Asia/Shanghai）
 
-状态真源版本：8
+状态真源版本：9
 
-当前主线：`main@4408ea52ce8987a6c7a7646c43d2a13179ce07cc`。
+核心整改合并提交：`4408ea52ce8987a6c7a7646c43d2a13179ce07cc`。
+
+首次状态同步合并提交：`59fc520badc82e52a39b58732efe4239aafa363f`。本文件不把自己的
+提交 SHA 写成“当前 main”，避免状态提交合并后立即产生自指漂移。
 
 ## 当前准确结论
 
@@ -46,7 +49,8 @@
 | 回滚与固定渲染 | 7/7；19,776 bytes；external/paid/live read/write 均为 0 |
 | Hosted push CI | `Verify` run `32829050878` 通过；固定 Actions 已使用 Node 24 runtime |
 | PR merge-ref CI | `Verify` run `32829179335` 通过 |
-| main 合并后 CI | `Verify` run `32829318265` 通过；合并提交 `4408ea5` |
+| 核心整改 main CI | `Verify` run `32829318265` 通过；合并提交 `4408ea5` |
+| 状态同步 main CI | `Verify` run `32829734090` 通过；合并提交 `59fc520` |
 | 技术完成 | 核心仓库整改已完成并合并 |
 | 业务验收 | 不在本分支范围；没有新增人工批准 |
 | Git 状态 | PR #2 已合并到 `main` |
