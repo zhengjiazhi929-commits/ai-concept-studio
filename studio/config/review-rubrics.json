@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "version": "review-rubrics-v9",
+  "version": "review-rubrics-v10",
   "maxAutomaticRevisionRounds": 2,
   "lowConfidenceThreshold": 0.7,
   "stages": {
     "research": {
-      "version": "research-v1",
+      "version": "research-v2",
       "semanticReview": false,
       "automaticRevision": true,
       "requiredChecks": ["artifact-version", "episode-contract", "research-ready", "research-sources"],

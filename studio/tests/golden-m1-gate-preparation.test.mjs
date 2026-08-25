@@ -4,6 +4,8 @@ import test from "node:test";
 import { currentGateArtifactHash } from "../src/shared/workflow.mjs";
 import { prepareGoldenM1UpstreamGate } from
   "../src/server/production/golden-m1-gate-preparation.mjs";
+import { buildGoldenM1ResearchCandidate } from
+  "../src/server/production/golden-m1-structure.mjs";
 import { readFixtureEpisode } from "./episode-fixture.mjs";
 
 async function legacyGolden() {
@@ -78,6 +80,28 @@ test("已准备的 research Gate 重跑不删除机器报告或追加失效历�
   assert.equal(second.episode.history.length, historyLength);
 });
 
+test("只允许精确匹配的旧版确定性研究候选升级", async () => {
+  const source = await legacyGolden();
+  source.research = buildGoldenM1ResearchCandidate(source.sourceDocs);
+  delete source.research.content;
+  source.research.readiness.supportedClaimCount = 10;
+  source.approvals.research = {
+    ...source.approvals.research,
+    status: "pending",
+    provenance: null,
+    reviewReportId: null,
+    artifactHash: null
+  };
+  source.approvals.research.at = null;
+  source.approvals.research.note = "";
+  source.approvals.research.feedback = "";
+  source.approvals.research.history = [];
+  source.approvalHistory = source.approvalHistory.filter((entry) => entry.gate !== "research");
+  const result = prepareGoldenM1UpstreamGate(source);
+  assert.equal(result.episode.research.content.claims.length, 6);
+  assert.equal(result.episode.research.readiness.supportedClaimCount, 6);
+});
+
 test("非 legacy 候选不被准备脚本静默覆盖", async () => {
   const source = await legacyGolden();
   source.production.scriptDraft = {
@@ -88,5 +112,98 @@ test("非 legacy 候选不被准备脚本静默覆盖", async () => {
   assert.throws(
     () => prepareGoldenM1UpstreamGate(source),
     (error) => error.code === "golden_m1_existing_candidate_conflict"
+  );
+});
+
+test("同名 generationKind 的已编辑研究正文也不被升级流程静默覆盖", async () => {
+  const source = await legacyGolden();
+  source.research = buildGoldenM1ResearchCandidate(source.sourceDocs);
+  delete source.research.content;
+  source.research.readiness.supportedClaimCount = 10;
+  source.approvals.research.status = "pending";
+  source.research.needsRevision = true;
+  source.research.versions = [{ version: 1, provenance: "human-snapshot" }];
+  source.research.humanNote = "请保留这条人工修订";
+  assert.throws(
+    () => prepareGoldenM1UpstreamGate(source),
+    (error) => error.code === "golden_m1_existing_research_conflict"
+  );
+});
+
+test("被人工驳回或留过反馈的旧研究候选禁止自动升级", async () => {
+  const source = await legacyGolden();
+  source.research = buildGoldenM1ResearchCandidate(source.sourceDocs);
+  delete source.research.content;
+  source.research.readiness.supportedClaimCount = 10;
+  source.approvals.research = {
+    ...source.approvals.research,
+    status: "rejected",
+    at: "2026-08-25T15:00:00.000Z",
+    note: "请保留人工决定",
+    feedback: "来源需要调整",
+    currentVersion: 1,
+    provenance: "human",
+    reviewReportId: "review-research-human",
+    artifactHash: "a".repeat(64),
+    history: [{ decision: "rejected", at: "2026-08-25T15:00:00.000Z" }]
+  };
+  source.production.feedback.research = { version: 1, text: "来源需要调整" };
+  assert.throws(
+    () => prepareGoldenM1UpstreamGate(source),
+    (error) => error.code === "golden_m1_existing_research_conflict"
+  );
+});
+
+test("表面 pending 但带人工备注或历史的旧研究候选禁止自动升级", async () => {
+  const source = await legacyGolden();
+  source.research = buildGoldenM1ResearchCandidate(source.sourceDocs);
+  delete source.research.content;
+  source.research.readiness.supportedClaimCount = 10;
+  source.approvals.research = {
+    ...source.approvals.research,
+    status: "pending",
+    at: null,
+    note: "不要自动覆盖",
+    feedback: "",
+    currentVersion: 1,
+    provenance: null,
+    reviewReportId: null,
+    artifactHash: null,
+    history: []
+  };
+  assert.throws(
+    () => prepareGoldenM1UpstreamGate(source),
+    (error) => error.code === "golden_m1_existing_research_conflict"
+  );
+});
+
+test("表面纯净但含未知人工字段或 rejection 事件的旧研究候选禁止自动升级", async () => {
+  const source = await legacyGolden();
+  source.research = buildGoldenM1ResearchCandidate(source.sourceDocs);
+  delete source.research.content;
+  source.research.readiness.supportedClaimCount = 10;
+  source.approvals.research = {
+    status: "pending",
+    at: null,
+    note: "",
+    feedback: "",
+    currentVersion: 1,
+    history: [],
+    provenance: null,
+    reviewReportId: null,
+    artifactHash: null,
+    humanNote: "不要迁移",
+    decidedBy: "human:zhengjiazhi"
+  };
+  source.approvalHistory = source.approvalHistory.filter((entry) => entry.gate !== "research");
+  source.history.push({
+    at: "2026-08-25T15:30:00.000Z",
+    type: "rejection",
+    gate: "research",
+    actor: "human:zhengjiazhi"
+  });
+  assert.throws(
+    () => prepareGoldenM1UpstreamGate(source),
+    (error) => error.code === "golden_m1_existing_research_conflict"
   );
 });

@@ -223,8 +223,8 @@ test("正式评测只能由 runner 根据固定 Fixture 和独立规则生成结
 test("正式评测证据强绑定 Rubric、Prompt、Router、模型配置与控制实现", async () => {
   const suite = await readEvaluationSuiteConfig();
   assert.equal(suite.runtimeVerified, true);
-  assert.equal(suite.reviewVersion, "review-rubrics-v9");
-  assert.equal(suite.runtimeBindings.reviewRubrics.version, "review-rubrics-v9");
+  assert.equal(suite.reviewVersion, "review-rubrics-v10");
+  assert.equal(suite.runtimeBindings.reviewRubrics.version, "review-rubrics-v10");
   assert.match(suite.suiteHash, /^[a-f0-9]{64}$/u);
 
   const fieldByBinding = {
@@ -294,6 +294,7 @@ test("implementation 指纹覆盖控制链路的最小安全依赖闭包", async
     "src/server/reviews/validators/assets.mjs",
     "src/server/reviews/validators/media.mjs",
     "src/server/production/quality.mjs",
+    "src/server/production/golden-m1-gate-preparation.mjs",
     "src/server/production/local-offline-voice-core.mjs",
     "src/server/production/local-offline-voice.mjs"
   ];

@@ -3,7 +3,7 @@
   "id": "main-agent-control-reference-v5",
   "version": "5.0.0",
   "policyVersion": "routing-policy-v1",
-  "reviewVersion": "review-rubrics-v9",
+  "reviewVersion": "review-rubrics-v10",
   "runner": {
     "id": "main-agent-offline-reference-runner",
     "version": "2.0.0"
@@ -19,8 +19,8 @@
   },
   "runtimeBindings": {
     "reviewRubrics": {
-      "version": "review-rubrics-v9",
-      "hash": "e7f18605dc17f16bd058d501d22d99cc654d8cffd0912f746f7b6ef8839e5fbe"
+      "version": "review-rubrics-v10",
+      "hash": "338a0d5f69afeb08be7dbcce83aa8bff55f3e8f83d3c1a85d5051b36b5e361c4"
     },
     "mainAgentPrompt": {
       "version": "main-agent-planner-prompt-v1",
@@ -48,7 +48,7 @@
     },
     "implementation": {
       "version": "agent-control-release-v3",
-      "hash": "2fd6277a9ca168aa826412e8a2cca92a3e8c448c75ba1dc668ed35deedc7844e"
+      "hash": "a1c089bb2460e306e78ba777c06573ef5ec68df38b8282e75bd23e14e17ac2b7"
     }
   },
   "requiredCases": [

@@ -15,7 +15,7 @@ import { historicalApprovedStoryboardV3Episode } from
 
 test("五个阶段加载独立且版本化的审核规则", async () => {
   const config = await readReviewConfig();
-  assert.equal(config.version, "review-rubrics-v9");
+  assert.equal(config.version, "review-rubrics-v10");
   assert.deepEqual(Object.keys(config.stages), [
     "research",
     "script",
@@ -28,6 +28,7 @@ test("五个阶段加载独立且版本化的审核规则", async () => {
     assert.ok(rule.requiredChecks.includes("artifact-version"));
   }
   assert.equal(config.stages.script.automaticRevision, true);
+  assert.equal(config.stages.research.version, "research-v2");
   assert.equal(config.stages.script.version, "script-v2");
   assert.ok(config.stages.script.requiredChecks.includes("script-narration-density"));
   assert.equal(config.stages.storyboard.version, "storyboard-v3");
@@ -148,6 +149,41 @@ test("不同阶段 Rubric 运行不同的必过项", async () => {
   assert.ok(storyboardCodes.includes("storyboard-script-coverage"));
   assert.ok(storyboardCodes.includes("subtitle-boundaries"));
   assert.equal(researchCodes.includes("script-draft"), false);
+});
+
+test("研究 Rubric 对空来源、重复登记和未知 claim 引用 fail closed", async () => {
+  const empty = await readFixtureEpisode();
+  empty.sourceDocs = [];
+  const emptyCheck = runStageRubric("research", empty).find(
+    (check) => check.code === "research-sources"
+  );
+  assert.equal(emptyCheck.passed, false);
+  assert.equal(
+    emptyCheck.actual.issues.some(
+      (issue) => issue.code === "research-source-documents-insufficient"
+    ),
+    true
+  );
+
+  const malformed = await readFixtureEpisode();
+  malformed.sourceDocs[1].path = malformed.sourceDocs[0].path;
+  malformed.research.content.claims[0].sourceIds = ["S-UNKNOWN"];
+  const malformedCheck = runStageRubric("research", malformed).find(
+    (check) => check.code === "research-sources"
+  );
+  assert.equal(malformedCheck.passed, false);
+  assert.equal(
+    malformedCheck.actual.issues.some(
+      (issue) => issue.code === "research-source-document-duplicate"
+    ),
+    true
+  );
+  assert.equal(
+    malformedCheck.actual.issues.some(
+      (issue) => issue.code === "research-claim-source-unknown"
+    ),
+    true
+  );
 });
 
 test("时间轴问题带稳定定位，成片检查覆盖渲染和 QA", async () => {

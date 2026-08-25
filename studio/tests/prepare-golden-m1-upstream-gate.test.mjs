@@ -6,6 +6,8 @@ import test from "node:test";
 
 import { prepareAndWriteGoldenM1UpstreamGate } from
   "../scripts/prepare-golden-m1-upstream-gate.mjs";
+import { prepareGoldenM1UpstreamGate } from
+  "../src/server/production/golden-m1-gate-preparation.mjs";
 import { currentGateArtifactHash } from "../src/shared/workflow.mjs";
 import { readFixtureEpisode } from "./episode-fixture.mjs";
 
@@ -64,6 +66,8 @@ test("准备脚本只产出机器审核 dossier，保持人工批准 pending", a
             decision: "pass",
             artifactVersion: 1,
             artifactHash: hash,
+            reviewConfigVersion: "review-rubrics-v10",
+            rubricVersion: "research-v2",
             checks: [],
             blockingIssues: []
           }]
@@ -98,10 +102,78 @@ test("准备脚本只产出机器审核 dossier，保持人工批准 pending", a
       "upstream-research-gate-dossier-v001.json"), "utf8"));
     assert.equal(dossier.status, "ready-for-human-approval");
     assert.equal(dossier.content.sourceDocs.length, 7);
-    assert.match(
-      await readFile(resolve(outputDirectory, "upstream-research-gate-dossier-v001.md"), "utf8"),
-      /这不是人工批准/u
+    const markdown = await readFile(
+      resolve(outputDirectory, "upstream-research-gate-dossier-v001.md"),
+      "utf8"
     );
+    assert.match(markdown, /这不是人工批准/u);
+    assert.match(markdown, /本片将使用的六项结论/u);
+    assert.match(markdown, /测试通过是重要反馈/u);
+    assert.match(markdown, /结论引用的一手来源/u);
+    assert.match(markdown, /Introducing Codex/u);
+  } finally {
+    await rm(outputDirectory, { recursive: true, force: true });
+  }
+});
+
+test("Rubric 版本变化时旧 pass 报告必须重审后才能生成 dossier", async () => {
+  const outputDirectory = await mkdtemp(resolve(tmpdir(), "golden-upstream-rubric-test-"));
+  let stored = prepareGoldenM1UpstreamGate(await legacyGolden()).episode;
+  const hash = currentGateArtifactHash(stored, "research");
+  stored.reviews.research = {
+    status: "passed",
+    artifactVersion: 1,
+    artifactHash: hash,
+    latestReportId: "review-research-stale",
+    reports: [{
+      id: "review-research-stale",
+      decision: "pass",
+      artifactVersion: 1,
+      artifactHash: hash,
+      reviewConfigVersion: "review-rubrics-v9",
+      rubricVersion: "research-v1"
+    }]
+  };
+  let rechecks = 0;
+  try {
+    const result = await prepareAndWriteGoldenM1UpstreamGate({
+      outputDirectory,
+      readEpisode: async () => structuredClone(stored),
+      writeEpisode: async (episode) => {
+        stored = structuredClone(episode);
+      },
+      appendEvent: async () => undefined,
+      recheckGateReview: async () => {
+        rechecks += 1;
+        stored.reviews.research = {
+          ...stored.reviews.research,
+          latestReportId: "review-research-current",
+          reports: [...stored.reviews.research.reports, {
+            id: "review-research-current",
+            decision: "pass",
+            artifactVersion: 1,
+            artifactHash: hash,
+            reviewConfigVersion: "review-rubrics-v10",
+            rubricVersion: "research-v2",
+            checks: [],
+            blockingIssues: []
+          }]
+        };
+        return { episode: structuredClone(stored) };
+      },
+      getHumanApprovalView: async () => ({
+        status: { readyForHumanApproval: true },
+        binding: {
+          artifactVersion: 1,
+          artifactHash: hash,
+          reviewReportId: "review-research-current"
+        },
+        machineReview: { decision: "pass", checks: [], blockingIssues: [] }
+      })
+    });
+    assert.equal(rechecks, 1);
+    assert.equal(result.reviewReportId, "review-research-current");
+    assert.equal(stored.approvals.research.status, "pending");
   } finally {
     await rm(outputDirectory, { recursive: true, force: true });
   }

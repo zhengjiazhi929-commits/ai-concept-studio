@@ -8,6 +8,7 @@ import { prepareGoldenM1UpstreamGate } from
   "../src/server/production/golden-m1-gate-preparation.mjs";
 import { getHumanApprovalView } from
   "../src/server/reviews/human-approval-view.mjs";
+import { readReviewConfig } from "../src/server/reviews/coordinator.mjs";
 import { recheckGateReview } from "../src/server/orchestrator.mjs";
 import {
   episodeOutputDirectory,
@@ -21,6 +22,10 @@ function nextVersion(files, gate) {
     const match = pattern.exec(file);
     return Math.max(highest, match ? Number(match[1]) : 0);
   }, 0) + 1;
+}
+
+function markdownCell(value) {
+  return String(value ?? "—").replaceAll("|", "\\|").replaceAll("\n", "<br>");
 }
 
 function markdownFor(dossier) {
@@ -47,6 +52,8 @@ function markdownFor(dossier) {
     ""
   ];
   if (dossier.gate === "research") {
+    const claims = dossier.content.research.content?.claims ?? [];
+    const sources = dossier.content.research.content?.sources ?? [];
     lines.push(
       "## 固定研究证据",
       "",
@@ -58,6 +65,22 @@ function markdownFor(dossier) {
       "|---|---:|---|",
       ...dossier.content.sourceDocs.map((source) =>
         `| ${source.path} | ${source.bytes ?? "—"} | ${source.sha256 ?? "—"} |`
+      ),
+      "",
+      "## 本片将使用的六项结论",
+      "",
+      "| ID | 结论 | 使用边界 | 支持来源 |",
+      "|---|---|---|---|",
+      ...claims.map((claim) =>
+        `| ${markdownCell(claim.id)} | ${markdownCell(claim.text)} | ${markdownCell(claim.boundary)} | ${markdownCell((claim.sourceIds ?? []).join("、"))} |`
+      ),
+      "",
+      "## 结论引用的一手来源",
+      "",
+      "| ID | 来源 | 发布方 | 链接 |",
+      "|---|---|---|---|",
+      ...sources.map((source) =>
+        `| ${markdownCell(source.id)} | ${markdownCell(source.label)} | ${markdownCell(source.publisher)} | ${markdownCell(source.url)} |`
       ),
       ""
     );
@@ -101,6 +124,7 @@ export async function prepareAndWriteGoldenM1UpstreamGate(options = {}) {
   const recordEvent = options.appendEvent ?? appendEvent;
   const recheck = options.recheckGateReview ?? recheckGateReview;
   const buildView = options.getHumanApprovalView ?? getHumanApprovalView;
+  const readReviewRules = options.readReviewConfig ?? readReviewConfig;
   const source = await readState("golden-001");
   const prepared = prepareGoldenM1UpstreamGate(source, { now: options.now });
   if (!prepared.nextGate) {
@@ -120,7 +144,15 @@ export async function prepareAndWriteGoldenM1UpstreamGate(options = {}) {
   }
 
   let episode = await readState("golden-001");
-  if (!reviewPassedForGate(episode, prepared.nextGate)) {
+  const reviewConfig = await readReviewRules(options.reviewOptions ?? {});
+  const reviewState = episode.reviews?.[prepared.nextGate] ?? {};
+  const currentReport = reviewState.reports?.find(
+    (report) => report.id === reviewState.latestReportId
+  ) ?? null;
+  const reviewMatchesCurrentRules = reviewPassedForGate(episode, prepared.nextGate)
+    && currentReport?.reviewConfigVersion === reviewConfig.version
+    && currentReport?.rubricVersion === reviewConfig.stages?.[prepared.nextGate]?.version;
+  if (!reviewMatchesCurrentRules) {
     const result = await recheck("golden-001", prepared.nextGate, options.recheckOptions ?? {});
     episode = result.episode;
   }

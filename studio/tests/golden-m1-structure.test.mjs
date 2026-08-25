@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   bindGoldenM1LogicalEvidence,
+  buildGoldenM1ResearchCandidate,
   buildGoldenM1ScriptContent,
   buildGoldenM1ScriptDraft,
   buildGoldenM1StoryboardDraft,
@@ -46,6 +47,21 @@ test("golden M1 短脚本逐段绑定时间轴、研究 claim 与逻辑证据", 
     id: "m1-golden-36s-v1",
     targetDurationSeconds: 36
   });
+});
+
+test("golden M1 研究候选内嵌六项成片主张并保留完整来源边界", () => {
+  const research = buildGoldenM1ResearchCandidate([
+    { path: "source-a.md" },
+    { path: "source-b.md" }
+  ]);
+  assert.equal(research.readiness.readyForFactApproval, true);
+  assert.equal(research.readiness.supportedClaimCount, 6);
+  assert.deepEqual(
+    research.content.claims.map((claim) => claim.id),
+    ["C01", "C03", "C05", "C06", "C09", "C10"]
+  );
+  assert.equal(research.content.sources.length, 12);
+  assert.equal(research.content.claims.every((claim) => claim.boundary), true);
 });
 
 test("golden M1 短脚本拒绝场景与旁白时间错位", () => {

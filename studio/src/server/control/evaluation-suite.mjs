@@ -58,6 +58,7 @@ export const AGENT_CONTROL_IMPLEMENTATION_PATHS = Object.freeze([
   "src/server/production/assets.mjs",
   "src/server/production/external-assets.mjs",
   "src/server/production/generator.mjs",
+  "src/server/production/golden-m1-gate-preparation.mjs",
   "src/server/production/golden-m1-structure.mjs",
   "src/server/production/local-code-assets.mjs",
   "src/server/production/local-code-implementation.mjs",
@@ -146,7 +147,7 @@ export const DEFAULT_EVALUATION_SUITE = Object.freeze({
   id: "main-agent-control-reference-v5",
   version: "5.0.0",
   policyVersion: "routing-policy-v1",
-  reviewVersion: "review-rubrics-v9",
+  reviewVersion: "review-rubrics-v10",
   runner: {
     id: FORMAL_EVALUATION_RUNNER_ID,
     version: FORMAL_EVALUATION_RUNNER_VERSION

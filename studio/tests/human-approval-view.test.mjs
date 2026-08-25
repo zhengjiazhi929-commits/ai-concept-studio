@@ -447,6 +447,44 @@ test("读取研究审批单可完全注入内存，不接触 live Episode 或文
   assert.equal(view.status.completeForHumanReview, true);
 });
 
+test("内嵌研究正文无需独立 pack 文件也能形成完整人工审批单", async () => {
+  const episode = fixtureEpisode();
+  episode.research.packPath = null;
+  episode.research.content = researchPack();
+  episode.research.content.sources.push({
+    id: "source-secondary",
+    label: "第二份官方规范",
+    url: "https://example.test/secondary",
+    publisher: "Example",
+    sourceType: "official-doc"
+  });
+  episode.sourceDocs.push({
+    path: "research-source-register.json",
+    bytes: 64,
+    sha256: "a".repeat(64)
+  });
+  episode.research.readiness.verifiedSourceCount = 2;
+  episode.research.readiness.supportedClaimCount = 1;
+  const artifactHash = currentGateArtifactHash(episode, "research");
+  episode.reviews.research.artifactHash = artifactHash;
+  episode.reviews.research.reports.find(
+    (item) => item.id === episode.reviews.research.latestReportId
+  ).artifactHash = artifactHash;
+  const reads = [];
+  const view = await getHumanApprovalView(episode.id, "research", {
+    readEpisode: async () => structuredClone(episode),
+    readApprovalArtifact: async (path) => {
+      reads.push(path);
+      throw new Error("内嵌研究正文不应读取独立 pack 文件");
+    }
+  });
+  assert.deepEqual(reads, []);
+  assert.equal(view.content.conclusions.length, 1);
+  assert.equal(view.content.artifactReadable, true);
+  assert.equal(view.status.completeForHumanReview, true);
+  assert.equal(view.status.readyForHumanApproval, true);
+});
+
 test("完整待审批产物读取失败时只禁止批准，仍允许精确绑定退回", async () => {
   const episode = fixtureEpisode();
   const view = await getHumanApprovalView(episode.id, "research", {
@@ -769,6 +807,60 @@ test("人工 Gate 在正文完整性重读失败时零写入", async () => {
     (error) => error.code === "script_approval_artifact_integrity_mismatch"
   );
   assert.equal(store.episode.approvals.script.status, "pending");
+  assert.equal(store.events.length, 0);
+});
+
+test("研究来源被清空后即使报告哈希同步也不能人工批准", async () => {
+  const source = fixtureEpisode();
+  source.control.reviewEnabled = false;
+  source.research.packPath = null;
+  source.research.content = researchPack();
+  source.sourceDocs = [];
+  source.research.readiness.verifiedSourceCount = 0;
+  source.research.readiness.supportedClaimCount = 1;
+  const artifactHash = currentGateArtifactHash(source, "research");
+  source.reviews.research.artifactHash = artifactHash;
+  source.reviews.research.reports.find(
+    (item) => item.id === source.reviews.research.latestReportId
+  ).artifactHash = artifactHash;
+  const store = memoryStore(source);
+  await assert.rejects(
+    approveGate(source.id, "research", exactApprovalBinding(source, "research"), store),
+    (error) => error.code === "research_approval_evidence_registry_invalid"
+  );
+  assert.equal(store.episode.approvals.research.status, "pending");
+  assert.equal(store.events.length, 0);
+});
+
+test("研究来源与结论只有 ID、正文为空时人工批准零写入", async () => {
+  const source = fixtureEpisode();
+  source.control.reviewEnabled = false;
+  source.research.packPath = null;
+  source.research.content = {
+    sources: [{ id: "SRC-A" }, { id: "SRC-B" }],
+    claims: [{ id: "C-EMPTY", sourceIds: ["SRC-A", "SRC-B"] }]
+  };
+  source.sourceDocs.push({
+    path: "research-second-source.json",
+    bytes: 64,
+    sha256: "a".repeat(64)
+  });
+  source.research.readiness.verifiedSourceCount = 2;
+  source.research.readiness.supportedClaimCount = 1;
+  const artifactHash = currentGateArtifactHash(source, "research");
+  source.reviews.research.artifactHash = artifactHash;
+  source.reviews.research.reports.find(
+    (item) => item.id === source.reviews.research.latestReportId
+  ).artifactHash = artifactHash;
+  const view = buildHumanApprovalView(source, "research");
+  assert.equal(view.content.artifactReadable, false);
+  assert.equal(view.status.readyForHumanApproval, false);
+  const store = memoryStore(source);
+  await assert.rejects(
+    approveGate(source.id, "research", exactApprovalBinding(source, "research"), store),
+    (error) => error.code === "research_approval_evidence_registry_invalid"
+  );
+  assert.equal(store.episode.approvals.research.status, "pending");
   assert.equal(store.events.length, 0);
 });
 

@@ -21,6 +21,7 @@ import { readEpisode } from "../../shared/store.mjs";
 import { reviewPassedForGate } from "../control/policy-engine.mjs";
 import { assetExecutionCheckpointState } from "./asset-execution-checkpoint.mjs";
 import { inspectVisualProofCandidate } from "./visual-proof-checkpoint.mjs";
+import { inspectInlineResearchEvidence } from "./approval-artifact-integrity.mjs";
 
 export const HUMAN_APPROVAL_VIEW_VERSION = "human-approval-view-v1";
 
@@ -220,7 +221,9 @@ function currentDraft(draft = {}) {
 
 function researchContent(episode, artifact) {
   const research = episode.research ?? {};
-  const pack = artifact && typeof artifact === "object" ? artifact : null;
+  const sourceIntegrity = inspectInlineResearchEvidence(episode);
+  const candidate = artifact ?? research.content ?? null;
+  const pack = candidate && typeof candidate === "object" ? candidate : null;
   const claims = (pack?.claims ?? []).map((claim) => ({
     id: claim.id ?? null,
     text: claim.text ?? null,
@@ -267,7 +270,8 @@ function researchContent(episode, artifact) {
     marketContext: safeNestedValue(pack?.marketContext ?? null),
     productDecisions: safeNestedValue(pack?.productDecisions ?? []),
     sourceDocuments: (episode.sourceDocs ?? []).map(artifactRecord),
-    artifactReadable: Boolean(pack)
+    sourceIntegrity: safeNestedValue(sourceIntegrity),
+    artifactReadable: Boolean(pack) && sourceIntegrity.passed
   };
 }
 
@@ -644,6 +648,9 @@ function formalRisks(gate, content, report) {
     }
     if (!content.artifactReadable) {
       risks.push({ level: "blocking", code: "research-artifact-unreadable", message: "完整研究证据包不可读" });
+    }
+    for (const issue of content.sourceIntegrity?.issues ?? []) {
+      risks.push({ level: "blocking", code: issue.code, message: issue.message });
     }
   }
   if (gate === "script" && !content.artifactReadable) {

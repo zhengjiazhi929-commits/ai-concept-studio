@@ -1,5 +1,6 @@
 import { approvalValidForGate } from "../control/policy-engine.mjs";
 import { currentGateArtifactHash, prepareGateForHumanReview } from "../../shared/workflow.mjs";
+import { isDeepStrictEqual } from "node:util";
 import {
   bindGoldenM1LogicalEvidence,
   buildGoldenM1ResearchCandidate,
@@ -38,6 +39,40 @@ function migrateDraft(current, expected, label) {
   return structuredClone(expected);
 }
 
+function isUpgradeableResearchCandidate(current = {}, expected = {}) {
+  const legacyCandidate = structuredClone(expected);
+  delete legacyCandidate.content;
+  legacyCandidate.readiness.supportedClaimCount = 10;
+  return isDeepStrictEqual(current, legacyCandidate);
+}
+
+function hasPristinePendingResearchApproval(episode, expectedVersion) {
+  const approval = episode.approvals?.research;
+  if (!approval) return false;
+  const expectedApproval = {
+    status: "pending",
+    at: null,
+    note: "",
+    feedback: "",
+    currentVersion: expectedVersion,
+    history: [],
+    provenance: null,
+    reviewReportId: null,
+    artifactHash: null
+  };
+  const allowedSystemHistory = new Set([
+    "approval-binding-invalidated",
+    "review-recheck"
+  ]);
+  const hasNonSystemResearchHistory = (episode.history ?? []).some(
+    (entry) => entry.gate === "research" && !allowedSystemHistory.has(entry.type)
+  );
+  return isDeepStrictEqual(approval, expectedApproval)
+    && episode.production?.feedback?.research == null
+    && !(episode.approvalHistory ?? []).some((entry) => entry.gate === "research")
+    && !hasNonSystemResearchHistory;
+}
+
 export function prepareGoldenM1UpstreamGate(sourceEpisode, options = {}) {
   if (sourceEpisode?.id !== GOLDEN_M1_EPISODE_ID) {
     fail(`只允许处理 ${GOLDEN_M1_EPISODE_ID}`);
@@ -59,12 +94,16 @@ export function prepareGoldenM1UpstreamGate(sourceEpisode, options = {}) {
   if (!episode.research || Object.keys(episode.research).length === 0) {
     episode.research = researchCandidate;
   } else if (!same(episode.research, researchCandidate)) {
-    if (episode.research.generationKind !== researchCandidate.generationKind) {
+    if (
+      !isUpgradeableResearchCandidate(episode.research, researchCandidate)
+      || !hasPristinePendingResearchApproval(episode, researchCandidate.version)
+    ) {
       fail(
-        "研究候选已不是可自动迁移的 legacy import，拒绝覆盖当前候选",
+        "研究候选已不是可自动迁移的旧版确定性候选，拒绝覆盖当前候选",
         "golden_m1_existing_research_conflict"
       );
     }
+    episode.research = researchCandidate;
   }
   episode.production = {
     ...(episode.production ?? {}),
