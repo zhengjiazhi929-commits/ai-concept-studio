@@ -147,11 +147,11 @@ test("CI 与本地 package 共享精确 Node 和 pnpm 版本", async () => {
   assert.match(workflow, /permissions:\n  contents: read/u);
   assert.match(
     workflow,
-    /actions\/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4\.4\.0/u
+    /actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7\.0\.1/u
   );
   assert.match(
     workflow,
-    /actions\/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4\.4\.0/u
+    /actions\/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7\.0\.0/u
   );
   assert.doesNotMatch(workflow, /uses: actions\/(?:checkout|setup-node)@v\d/u);
   assert.match(workflow, /node scripts\/scan-tracked-secrets\.mjs/u);
