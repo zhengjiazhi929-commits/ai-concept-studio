@@ -1,6 +1,6 @@
 # AI Concept Studio 当前状态
 
-更新时间：2026-08-25 16:49（Asia/Shanghai）
+更新时间：2026-08-25 16:53（Asia/Shanghai）
 
 状态真源版本：7
 
@@ -16,7 +16,9 @@
 
 重新组装后的代码树 `7da032447098e6d8877ab01eb3e6fb1d6d4ef3ba` 已完成本地离线
 `pnpm verify`：`597/597` 测试通过，P0=0、P1=0 的攻击回归仍通过。当前只剩 push、
-PR merge-ref hosted CI 和合并后的 `main` CI；在这些结果出现前不宣称已经合并或发布。
+最新 push hosted CI 已通过，包括 frozen install、`pnpm audit --prod --audit-level high`
+和完整 `pnpm verify`。当前只剩 PR merge-ref CI 和合并后的 `main` CI；在这些结果出现前
+不宣称已经合并或发布。
 
 ## 本分支整改范围
 
@@ -47,16 +49,17 @@ PR merge-ref hosted CI 和合并后的 `main` CI；在这些结果出现前不�
 | 最新 main 重组后的聚焦检查 | v004 冲突点与安全/恢复回归 `102/102` 通过 |
 | 最新 main 重组后的全量检查 | `597/597`；256 个源码文件；35/35 动效；0 失败 |
 | 回滚与固定渲染 | 7/7；19,776 bytes；external/paid/live read/write 均为 0 |
-| 技术完成 | 本地完成；待 hosted push CI 与 PR merge-ref CI |
+| Hosted push CI | `Verify` run `32828897874` 通过；固定 Actions 已使用 Node 24 runtime |
+| 技术完成 | 本地与 hosted push CI 完成；待 PR merge-ref CI |
 | 业务验收 | 不在本分支范围；没有新增人工批准 |
-| Git 状态 | 本地候选已验证，未 push、未建 PR、未合并 |
+| Git 状态 | 分支已 push；尚未建 PR、未合并 |
 | 发布 | 未发布 |
 
 GitHub 当前没有分支保护，也没有既有 hosted CI 运行记录。因此本次流程自行执行以下
 硬门禁：基于最新 `main` → 本地全量验证 → push → PR merge-ref CI 全绿 → 再合并；
 任一环节失败都停在 `main` 合并之前。
 
-- `machine_status`: rebased_candidate_local_verification_passed
-- `technical_status`: core_remediation_local_complete_hosted_ci_pending
+- `machine_status`: local_and_hosted_push_verification_passed
+- `technical_status`: core_remediation_hosted_push_ci_passed_pr_pending
 - `business_acceptance_status`: unchanged_out_of_scope
-- `release_status`: local_only_not_pushed_not_merged_not_released
+- `release_status`: branch_pushed_not_merged_not_released
