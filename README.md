@@ -10,6 +10,19 @@ Agent 原型与整改阶段，不代表 `assisted`、`active` 或正式发布完
 
 可运行系统位于 [`studio/`](./studio/)。Windows 双击 [`studio/启动AI视频系统.cmd`](./studio/启动AI视频系统.cmd)，macOS 双击 [`studio/启动AI视频系统.command`](./studio/启动AI视频系统.command)，即可打开本地控制台。代码已经具备从结构化分镜合成本地竖屏 MP4 和执行技术 QA 的能力；当前 `golden-001` 是否已有可验收成片，只能以 Episode 与 [`docs/STATUS.md`](./docs/STATUS.md) 的实时记录为准。
 
+## 本地安装与验证
+
+项目锁定 Node.js `24.19.0` 和 pnpm `11.19.0`。在 `studio/` 目录执行：
+
+```bash
+pnpm install --frozen-lockfile
+pnpm verify
+pnpm audit --prod --audit-level high
+```
+
+`pnpm verify` 只使用仓库固定输入和临时数据根，覆盖秘密扫描、JS/JSX/TS/TSX、动效库、
+全量测试、回滚演练和固定本地渲染；它不调用真实模型、付费 Provider，也不推进任何人工 Gate。
+
 ## 当前基准文件
 
 - `docs/01-content-contract.md`：账号定位、受众、内容深度和表达标准
@@ -57,13 +70,13 @@ Agent 原型与整改阶段，不代表 `assisted`、`active` 或正式发布完
 
 ## 黄金样例当前进度
 
-- 历史研究/脚本/分镜状态来自旧 `trusted-fixture` 白名单，没有当前规则要求的机器报告与
-  真实人工证据，已全部失效；当前必须从研究 Gate 起由 Zhengjiazhi 逐级重新确认；
+- 旧 `trusted-fixture` 审批已失效；Research v1 与 Script v1 已由 Zhengjiazhi 按当前版本、
+  内容哈希和机器报告重新批准，当前停在 Storyboard v1 人工 Gate；
 - 长版 `07-script.md` / `08-storyboard.md` 只作参考，不能代表当前 36 秒六段短脚本和六镜结构；
 - 四张虚构数据的真实产品截图已经登记并带 bytes / SHA-256；
 - 本地控制台、Workflow Kernel、五道 Gate、机器审核、中断恢复和版本化渲染代码已经存在；
-- 本轮只允许用本地离线旁白和固定输入完成 M1，不调用付费媒体 API；当前研究、短脚本和
-  分镜依次批准前，不生成可供素材/声音 Gate 使用的新旁白；
+- 本轮只允许用本地离线旁白和固定输入完成 M1，不调用付费媒体 API；Storyboard 批准前，
+  不生成可供素材/声音 Gate 使用的新旁白；
 - 之前生成的 `v001` 旁白与 dossier 早于当前强绑定检查，已作废，只保留为历史文件，
   不能用于审批、渲染或发布；当前没有有效旁白候选和当前成片；
 - 历史提交和其他工作树曾生成的视觉验证视频只作为历史证据，不能冒充当前 Episode 成片；

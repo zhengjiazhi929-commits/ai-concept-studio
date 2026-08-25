@@ -49,6 +49,20 @@ and the only current-state source is [`docs/STATUS.md`](docs/STATUS.md).
 - Never write secrets to tracked files, logs, review context, fixtures, or
   error responses. Use synthetic placeholders in tests.
 
+## Local commands and source conventions
+
+- Use the exact Node and pnpm versions in `.node-version` and
+  `studio/package.json`; install from `studio/` with
+  `pnpm install --frozen-lockfile`.
+- Run a focused `node --test tests/<name>.test.mjs` first, then use
+  `pnpm verify` for the repository's secret, JS/JSX/TS/TSX, motion, full-test,
+  rollback, fixed-render, and diff gates. Dependency advisories remain the
+  separate `pnpm audit --prod --audit-level high` gate.
+- Keep production modules as ESM, prefer small pure helpers and injected
+  side-effect dependencies, and preserve the existing two-space formatting.
+- Do not run render or QA commands for a live Episode until the corresponding
+  upstream Gate state in `episode.json` permits that action.
+
 ## Verification and status language
 
 - Run focused tests for the changed behavior, then the repository checks

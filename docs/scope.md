@@ -35,7 +35,7 @@
 每项变更必须使用 tracked fixture 或临时目录验证。真实 golden-001 只在获得对应人工
 决定后进入下一个生产阶段；测试不能读取或修改它来制造通过结果。
 
-当前分支只承载整改，最终是否合并 main 由 Zhengjiazhi 在业务验收后另行决定。
+当前分支历史还包含较早的 motion library 基线，不能作为单一整改 PR 直接合并。整改完成后必须把动效库、核心安全/恢复、CI/文档和 Episode Gate 状态整理为可独立审查与回滚的变更组；最终是否合并 main 由 Zhengjiazhi 另行决定。
 
 CI 边界：workflow 与本地等价命令已在当前分支定义并完成本地验证；截至本状态记录，分支
 尚未 push，因此没有 hosted GitHub Actions 运行结果。“本地门禁通过”不等于“云端 CI 已通过”。
