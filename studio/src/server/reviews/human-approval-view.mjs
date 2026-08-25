@@ -10,7 +10,8 @@ import { integrityHash } from "../../shared/integrity.mjs";
 import { APPROVAL_GATES, APPROVAL_GATE_IDS } from "../../shared/schema.mjs";
 import {
   currentGateArtifactHash,
-  currentGateVersion
+  currentGateVersion,
+  storyboardGateScenes
 } from "../../shared/workflow.mjs";
 import {
   ensureInside,
@@ -286,7 +287,9 @@ function storyboardContent(episode) {
   const draft = episode.production?.storyboardDraft ?? {};
   return {
     draft: currentDraft(draft),
-    scenes: safeNestedValue(episode.scenes ?? []),
+    // Show exactly the logical storyboard fields covered by Gate 3. Physical
+    // asset/audio paths are intentionally reviewed later in the assets Gate.
+    scenes: safeNestedValue(storyboardGateScenes(episode.scenes ?? [])),
     subtitles: safeNestedValue(episode.subtitles ?? []),
     renderSpecification: {
       width: episode.render?.width ?? null,

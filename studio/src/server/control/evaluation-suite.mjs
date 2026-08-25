@@ -15,6 +15,7 @@ import {
   MAIN_AGENT_PROMPT_TEMPLATE,
   MAIN_AGENT_PROMPT_VERSION
 } from "./main-agent-prompt.mjs";
+import { readWorkerPromptSetBinding } from "../production/worker-prompts.mjs";
 import { validateMainAgentPlan } from "../../shared/agent-contracts.mjs";
 
 export const EVALUATION_VERDICT_RULE = "closed-main-agent-plan-rubric-v2";
@@ -22,7 +23,7 @@ export const FORMAL_EVALUATION_RUNNER_ID = "main-agent-offline-reference-runner"
 export const FORMAL_EVALUATION_RUNNER_VERSION = "2.0.0";
 export const INDEPENDENT_JUDGE_ID = "deterministic-action-rubric-judge";
 export const INDEPENDENT_JUDGE_VERSION = "2.0.0";
-export const AGENT_CONTROL_IMPLEMENTATION_VERSION = "agent-control-release-v2";
+export const AGENT_CONTROL_IMPLEMENTATION_VERSION = "agent-control-release-v3";
 export const EFFECTIVE_AI_ROUTING_VERSION = "effective-ai-routing-v1";
 
 export const AGENT_CONTROL_IMPLEMENTATION_PATHS = Object.freeze([
@@ -39,6 +40,7 @@ export const AGENT_CONTROL_IMPLEMENTATION_PATHS = Object.freeze([
   "src/server/control/context-builder.mjs",
   "src/server/control/controlled-dispatch.mjs",
   "src/server/control/episode-operation-lock.mjs",
+  "src/server/control/evaluation-evidence-store.mjs",
   "src/server/control/evaluation-suite.mjs",
   "src/server/control/main-agent-evaluator.mjs",
   "src/server/control/main-agent-prompt.mjs",
@@ -46,23 +48,30 @@ export const AGENT_CONTROL_IMPLEMENTATION_PATHS = Object.freeze([
   "src/server/control/model-router.mjs",
   "src/server/control/plan-store.mjs",
   "src/server/control/policy-engine.mjs",
+  "src/server/control/provider-result-recovery.mjs",
   "src/server/control/provider-health.mjs",
   "src/server/control/workflow-kernel.mjs",
   "src/server/importer.mjs",
   "src/server/orchestrator.mjs",
   "src/server/production/artifacts.mjs",
+  "src/server/production/asset-bundle-integrity.mjs",
   "src/server/production/assets.mjs",
   "src/server/production/external-assets.mjs",
   "src/server/production/generator.mjs",
+  "src/server/production/golden-m1-structure.mjs",
   "src/server/production/local-code-assets.mjs",
   "src/server/production/local-code-implementation.mjs",
+  "src/server/production/local-media-inspection.mjs",
   "src/server/production/local-offline-voice-core.mjs",
   "src/server/production/local-offline-voice.mjs",
+  "src/server/production/media-signatures.mjs",
   "src/server/production/quality.mjs",
   "src/server/production/short-asset-plan-adapter.mjs",
   "src/server/production/short-script-adapter.mjs",
   "src/server/production/short-storyboard-adapter.mjs",
+  "src/server/production/upload-transaction.mjs",
   "src/server/production/voice.mjs",
+  "src/server/production/worker-prompts.mjs",
   "src/server/qa.mjs",
   "src/server/renderer.mjs",
   "src/server/research/agent.mjs",
@@ -71,6 +80,7 @@ export const AGENT_CONTROL_IMPLEMENTATION_PATHS = Object.freeze([
   "src/server/research/fetcher.mjs",
   "src/server/research/schema.mjs",
   "src/server/research/store.mjs",
+  "src/server/reviews/approval-artifact-integrity.mjs",
   "src/server/reviews/asset-execution-checkpoint.mjs",
   "src/server/reviews/asset-execution-preflight-runner.mjs",
   "src/server/reviews/asset-execution-preflight.mjs",
@@ -116,12 +126,15 @@ export const AGENT_CONTROL_IMPLEMENTATION_PATHS = Object.freeze([
   "src/video/agent-skill-local-tts-plan.mjs",
   "src/video/agent-skill-natural-voice-plan.mjs",
   "src/video/agent-skill-short-local-tts-candidate.mjs",
-  "src/video/agent-skill-short-plan.mjs"
+  "src/video/agent-skill-short-plan.mjs",
+  "src/video/golden-assets-voice-gate-dossier.mjs",
+  "src/video/golden-local-voice-plan.mjs"
 ].sort());
 
 const REQUIRED_RUNTIME_BINDINGS = Object.freeze([
   "reviewRubrics",
   "mainAgentPrompt",
+  "workerPrompts",
   "routingPolicy",
   "modelRegistry",
   "aiConfig",
@@ -130,8 +143,8 @@ const REQUIRED_RUNTIME_BINDINGS = Object.freeze([
 ]);
 
 export const DEFAULT_EVALUATION_SUITE = Object.freeze({
-  id: "main-agent-control-reference-v4",
-  version: "4.0.0",
+  id: "main-agent-control-reference-v5",
+  version: "5.0.0",
   policyVersion: "routing-policy-v1",
   reviewVersion: "review-rubrics-v9",
   runner: {
@@ -390,6 +403,7 @@ export async function readCurrentEvaluationRuntimeBindings(options = {}) {
     modelRegistry,
     aiConfig,
     effectiveAiConfig,
+    workerPrompts,
     implementation
   ] = await Promise.all([
     options.reviewConfig ?? readJson(reviewRubricsConfigPath),
@@ -397,6 +411,7 @@ export async function readCurrentEvaluationRuntimeBindings(options = {}) {
     options.modelRegistry ?? readJson(modelRegistryConfigPath),
     options.aiConfig ?? readJson(aiConfigPath),
     options.effectiveAiConfig ?? readAiConfig(),
+    options.workerPromptBinding ?? readWorkerPromptSetBinding(),
     currentImplementationBinding(options)
   ]);
   const prompt = options.promptBinding ?? {
@@ -410,6 +425,7 @@ export async function readCurrentEvaluationRuntimeBindings(options = {}) {
   return {
     reviewRubrics: configBinding("review-rubrics", reviewConfig),
     mainAgentPrompt: structuredClone(prompt),
+    workerPrompts: structuredClone(workerPrompts),
     routingPolicy: configBinding("routing-policy", routingPolicy),
     modelRegistry: configBinding("model-registry", modelRegistry),
     aiConfig: {
@@ -480,6 +496,7 @@ function evidencePayload(record) {
 function evidenceRuntimeVersions(runtimeBindings) {
   return {
     promptVersion: runtimeBindings?.mainAgentPrompt?.version ?? null,
+    workerPromptVersion: runtimeBindings?.workerPrompts?.version ?? null,
     routerVersion: runtimeBindings?.routingPolicy?.version ?? null,
     modelRegistryVersion: runtimeBindings?.modelRegistry?.version ?? null,
     modelConfigVersion: runtimeBindings?.aiConfig?.version ?? null,
@@ -695,6 +712,7 @@ export async function runFormalEvaluationCase(input, suite = DEFAULT_EVALUATION_
     policyVersion: suite.policyVersion,
     reviewVersion: suite.reviewVersion,
     promptVersion: runtimeVersions.promptVersion,
+    workerPromptVersion: runtimeVersions.workerPromptVersion,
     routerVersion: runtimeVersions.routerVersion,
     modelRegistryVersion: runtimeVersions.modelRegistryVersion,
     modelConfigVersion: runtimeVersions.modelConfigVersion,

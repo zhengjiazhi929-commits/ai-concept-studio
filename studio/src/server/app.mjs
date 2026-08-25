@@ -5,8 +5,8 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  ensureInside,
   publicRoot,
+  resolveExistingPathInside,
   studioOutputRoot,
   webRoot
 } from "../shared/paths.mjs";
@@ -41,6 +41,8 @@ import {
   BudgetReconciliationError,
   reconcileAmbiguousProviderBudget
 } from "./control/budget-ledger.mjs";
+import { adjudicateProviderResultCommit } from
+  "./control/provider-result-recovery.mjs";
 import {
   getCollectorState,
   importAssistedCollectorBatch,
@@ -57,11 +59,10 @@ import {
   runTrendRadarAgent
 } from "./trends/agent.mjs";
 import { saveVoiceUpload } from "./production/voice.mjs";
-import {
-  inspectLocalOfflineTtsCandidate,
-  registerApprovedLocalOfflineTts
-} from "./production/local-offline-voice.mjs";
+import { inspectLocalOfflineTtsCandidate } from "./production/local-offline-voice.mjs";
 import { saveAssetUpload } from "./production/assets.mjs";
+import { recoverPendingUploadTransactions } from
+  "./production/upload-transaction.mjs";
 import { adjudicateAmbiguousExternalAssetReceipt } from
   "./production/external-assets.mjs";
 import { summarizeAgentOperations } from "./control/agent-observability.mjs";
@@ -216,12 +217,24 @@ async function readJsonBody(request, maximumBytes = 1024 * 1024) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
-async function readBinaryBody(request, maximumBytes = 100 * 1024 * 1024) {
+async function readBinaryBody(request, maximumBytes = 64 * 1024 * 1024) {
+  const declaredBytes = Number(request.headers["content-length"] ?? 0);
+  if (Number.isFinite(declaredBytes) && declaredBytes > maximumBytes) {
+    const error = new Error(`上传文件超过 ${Math.floor(maximumBytes / 1024 / 1024)} MB 上限`);
+    error.code = "request_too_large";
+    error.statusCode = 413;
+    throw error;
+  }
   const chunks = [];
   let size = 0;
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > maximumBytes) throw new Error("上传文件超过 100 MB 上限");
+    if (size > maximumBytes) {
+      const error = new Error(`上传文件超过 ${Math.floor(maximumBytes / 1024 / 1024)} MB 上限`);
+      error.code = "request_too_large";
+      error.statusCode = 413;
+      throw error;
+    }
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
@@ -458,7 +471,14 @@ async function routeApi(
   }
 
   if (request.method === "POST" && url.pathname === "/api/import/golden") {
-    const result = await importGoldenSample();
+    const importer = options.importGoldenSample ?? importGoldenSample;
+    const result = await importer({
+      actor: options.actor,
+      readEpisode: options.readEpisode,
+      writeEpisode: options.writeEpisode,
+      appendEvent: options.appendEvent,
+      now: options.now
+    });
     sendJson(response, 201, { episode: result.episode });
     return true;
   }
@@ -764,6 +784,50 @@ async function routeApi(
     return true;
   }
 
+  const providerResultAdjudicationMatch =
+    /^\/api\/episodes\/([a-z0-9-]+)\/control\/provider-results\/adjudicate$/u.exec(
+      url.pathname
+    );
+  if (request.method === "POST" && providerResultAdjudicationMatch) {
+    const body = await readJsonBody(request);
+    assertClientDidNotSupplyActor(body);
+    const allowedFields = new Set([
+      "target",
+      "decision",
+      "confirmation",
+      "expectedStateVersion",
+      "reservationIds",
+      "artifactVersion",
+      "artifactHash",
+      "reviewReportId",
+      "note"
+    ]);
+    const unexpectedFields = Object.keys(body ?? {})
+      .filter((key) => !allowedFields.has(key));
+    if (unexpectedFields.length > 0) {
+      const error = new Error(
+        `Provider 结果裁决包含未授权字段：${unexpectedFields.join("、")}`
+      );
+      error.code = "provider_result_adjudication_input_invalid";
+      error.statusCode = 400;
+      throw error;
+    }
+    const result = await adjudicateProviderResultCommit(
+      providerResultAdjudicationMatch[1],
+      body,
+      {
+        ...options,
+        capabilityOperation: "provider-result:adjudicate"
+      }
+    );
+    sendJson(response, 200, {
+      adjudication: result.adjudication,
+      unchanged: result.unchanged,
+      stateVersion: result.episode.control?.stateVersion ?? null
+    });
+    return true;
+  }
+
   const assistedPrepareMatch = /^\/api\/episodes\/([a-z0-9-]+)\/main-agent\/assisted\/prepare$/u.exec(
     url.pathname
   );
@@ -820,8 +884,8 @@ async function routeApi(
     const result = await saveVoiceUpload(voiceUploadMatch[1], {
       fileName: decodeURIComponent(String(encodedFileName)),
       contentType: request.headers["content-type"] ?? "application/octet-stream",
-      data: await readBinaryBody(request)
-    });
+      data: await readBinaryBody(request, 32 * 1024 * 1024)
+    }, options);
     sendJson(response, 201, { episode: result.episode, bytes: result.bytes });
     return true;
   }
@@ -840,20 +904,12 @@ async function routeApi(
       url.pathname
     );
   if (request.method === "POST" && localOfflineVoiceRegistrationMatch) {
-    const result = await registerApprovedLocalOfflineTts(
-      localOfflineVoiceRegistrationMatch[1],
-      await readJsonBody(request)
+    const error = new Error(
+      "旧版本地 TTS 登记证明口径已冻结；请通过受认证的 voice/upload 登记当前本地 WAV"
     );
-    sendJson(response, result.unchanged ? 200 : 201, {
-      episode: result.episode,
-      candidateId: result.candidateId,
-      candidateHash: result.candidateHash,
-      machineVerificationId: result.machineVerificationId,
-      machineVerificationHash: result.machineVerificationHash,
-      verificationId: result.verificationId ?? null,
-      unchanged: result.unchanged
-    });
-    return true;
+    error.code = "legacy_local_tts_registration_suspended";
+    error.statusCode = 409;
+    throw error;
   }
 
   const assetUploadMatch = /^\/api\/episodes\/([a-z0-9-]+)\/assets\/upload$/u.exec(
@@ -871,7 +927,7 @@ async function routeApi(
       maximumCostUsd: Number(request.headers["x-maximum-cost-usd"] ?? 0),
       contentType: request.headers["content-type"] ?? "application/octet-stream",
       data: await readBinaryBody(request)
-    });
+    }, options);
     sendJson(response, 201, { episode: result.episode, asset: result.asset });
     return true;
   }
@@ -930,11 +986,13 @@ function approvalRouteDependencies(options = {}) {
     "getTrendRadarState",
     "readApprovalArtifact",
     "inspectFileIntegrity",
+    "assertCurrentApprovalArtifactIntegrity",
     "inspectVisualProofCandidate",
     "review",
     "readEvaluationSuite",
     "evaluationSuite",
     "verifyActiveAuthorization",
+    "importGoldenSample",
     "now"
   ];
   return Object.fromEntries(
@@ -946,6 +1004,12 @@ function approvalRouteDependencies(options = {}) {
 
 export async function createStudioServer(options = {}) {
   if (options.recoverOnStart !== false) {
+    const uploadRecovery = options.uploadRecovery ?? {};
+    await recoverPendingUploadTransactions({
+      ...uploadRecovery,
+      allowedRoot: uploadRecovery.allowedRoot ?? options.publicRoot ?? publicRoot,
+      listEpisodes: uploadRecovery.listEpisodes ?? options.listEpisodes
+    });
     await recoverInterruptedRuns(options.recovery ?? {});
   }
   const config = await readConfig();
@@ -1010,7 +1074,13 @@ export async function createStudioServer(options = {}) {
         let requestRouteOptions = routeOptions;
         if (mutating) {
           assertLocalRequestOrigin(request, config);
-          const operator = request.headers["x-operator-token"] !== undefined
+          const providerResultAdjudication =
+            /^\/api\/episodes\/[a-z0-9-]+\/control\/provider-results\/adjudicate$/u
+              .test(url.pathname);
+          const serviceTokenAllowed = options.allowServiceTokenMutations === true
+            && !providerResultAdjudication;
+          const operator = serviceTokenAllowed &&
+            request.headers["x-operator-token"] !== undefined
             ? authenticateOperatorRequest(request, operatorAuth)
             : operatorSessionAuthority.authenticateRequest(request);
           requireSideEffectGrant(
@@ -1041,7 +1111,7 @@ export async function createStudioServer(options = {}) {
         await serveFile(
           request,
           response,
-          ensureInside(servedPublicRoot, resolve(servedPublicRoot, relativePath))
+          await resolveExistingPathInside(servedPublicRoot, resolve(servedPublicRoot, relativePath))
         );
         return;
       }
@@ -1051,7 +1121,7 @@ export async function createStudioServer(options = {}) {
         await serveFile(
           request,
           response,
-          ensureInside(servedOutputRoot, resolve(servedOutputRoot, relativePath))
+          await resolveExistingPathInside(servedOutputRoot, resolve(servedOutputRoot, relativePath))
         );
         return;
       }
@@ -1060,7 +1130,7 @@ export async function createStudioServer(options = {}) {
       await serveFile(
         request,
         response,
-        ensureInside(servedWebRoot, resolve(servedWebRoot, webPath))
+        await resolveExistingPathInside(servedWebRoot, resolve(servedWebRoot, webPath))
       );
     } catch (error) {
       const statusCode = error?.statusCode

@@ -6,6 +6,10 @@
   "conceptId": "agentic-coding",
   "audience": "理解 AI 基础概念、关注产品落地的 AI 产品经理及技术邻近人群",
   "thesis": "AI 编程的工作单位正在从代码片段转向可验证的任务。",
+  "productionProfile": {
+    "id": "m1-golden-36s-v1",
+    "targetDurationSeconds": 36
+  },
   "status": "in_production",
   "createdAt": "2026-07-31T00:00:00.000Z",
   "updatedAt": "2026-08-03T07:46:01.752Z",
@@ -18,8 +22,9 @@
       "feedback": "",
       "currentVersion": 1,
       "history": [],
-      "provenance": "trusted-fixture",
-      "artifactHash": "30096218e4df76a00137b5e917fd1244ba923f7ba08088c0750437ef7a2feff6"
+      "provenance": "reviewed-v2",
+      "reviewReportId": "fixture-review-research-v1",
+      "artifactHash": "cd4bfb53c6755624ad06f2231b4d77b029a68692d45a2dc49b9c2c5640fd9f0b"
     },
     "script": {
       "status": "approved",
@@ -28,8 +33,9 @@
       "feedback": "",
       "currentVersion": 1,
       "history": [],
-      "provenance": "trusted-fixture",
-      "artifactHash": "92afdb8c9e60085f036dfeb52b5be1249aa2ddb7964ae8ff9bdc290cd39db1b7"
+      "provenance": "reviewed-v2",
+      "reviewReportId": "fixture-review-script-v1",
+      "artifactHash": "617d2ce72762a333f90a326c645da9e6d55edb25d25d371e93ea9e50a9c9ab8c"
     },
     "storyboard": {
       "status": "approved",
@@ -38,8 +44,9 @@
       "feedback": "",
       "currentVersion": 1,
       "history": [],
-      "provenance": "trusted-fixture",
-      "artifactHash": "41ff5e3978813feb0a5196131c7da12f38f6af6b5df317e0345561e03743e1e9"
+      "provenance": "reviewed-v2",
+      "reviewReportId": "fixture-review-storyboard-v1",
+      "artifactHash": "9d672404833d2e0831f656ce9fee5681591d8b9cc23af99a24ab6fb585a19d53"
     },
     "assets": {
       "status": "pending",
@@ -103,6 +110,22 @@
     ],
     "creatorEvidence": [],
     "evidenceSignals": []
+  },
+  "research": {
+    "status": "ready_for_fact_approval",
+    "version": 1,
+    "versions": [],
+    "packPath": null,
+    "assistTaskPath": null,
+    "generationKind": "deterministic-golden-m1-fixed-evidence",
+    "evidenceSource": "episodes/golden-001/03-claim-ledger.md",
+    "readiness": {
+      "readyForFactApproval": true,
+      "verifiedSourceCount": 7,
+      "supportedClaimCount": 10,
+      "reasons": []
+    },
+    "needsRevision": false
   },
   "pipeline": [
     {
@@ -273,6 +296,74 @@
       "verified": true
     }
   ],
+  "reviews": {
+    "research": {
+      "status": "passed",
+      "artifactVersion": 1,
+      "artifactHash": "cd4bfb53c6755624ad06f2231b4d77b029a68692d45a2dc49b9c2c5640fd9f0b",
+      "rubricVersion": "fixture-research-v1",
+      "revisionRounds": 0,
+      "latestReportId": "fixture-review-research-v1",
+      "reports": [
+        {
+          "id": "fixture-review-research-v1",
+          "stage": "research",
+          "decision": "pass",
+          "artifactVersion": 1,
+          "artifactHash": "cd4bfb53c6755624ad06f2231b4d77b029a68692d45a2dc49b9c2c5640fd9f0b",
+          "rubricVersion": "fixture-research-v1",
+          "confidence": 1,
+          "blockingIssues": [],
+          "warnings": [],
+          "passedChecks": ["fixture-reviewed"]
+        }
+      ]
+    },
+    "script": {
+      "status": "passed",
+      "artifactVersion": 1,
+      "artifactHash": "617d2ce72762a333f90a326c645da9e6d55edb25d25d371e93ea9e50a9c9ab8c",
+      "rubricVersion": "fixture-script-v1",
+      "revisionRounds": 0,
+      "latestReportId": "fixture-review-script-v1",
+      "reports": [
+        {
+          "id": "fixture-review-script-v1",
+          "stage": "script",
+          "decision": "pass",
+          "artifactVersion": 1,
+          "artifactHash": "617d2ce72762a333f90a326c645da9e6d55edb25d25d371e93ea9e50a9c9ab8c",
+          "rubricVersion": "fixture-script-v1",
+          "confidence": 1,
+          "blockingIssues": [],
+          "warnings": [],
+          "passedChecks": ["fixture-reviewed"]
+        }
+      ]
+    },
+    "storyboard": {
+      "status": "passed",
+      "artifactVersion": 1,
+      "artifactHash": "9d672404833d2e0831f656ce9fee5681591d8b9cc23af99a24ab6fb585a19d53",
+      "rubricVersion": "fixture-storyboard-v1",
+      "revisionRounds": 0,
+      "latestReportId": "fixture-review-storyboard-v1",
+      "reports": [
+        {
+          "id": "fixture-review-storyboard-v1",
+          "stage": "storyboard",
+          "decision": "pass",
+          "artifactVersion": 1,
+          "artifactHash": "9d672404833d2e0831f656ce9fee5681591d8b9cc23af99a24ab6fb585a19d53",
+          "rubricVersion": "fixture-storyboard-v1",
+          "confidence": 1,
+          "blockingIssues": [],
+          "warnings": [],
+          "passedChecks": ["fixture-reviewed"]
+        }
+      ]
+    }
+  },
   "production": {
     "ai": {
       "requestCount": 0,
@@ -284,11 +375,79 @@
     "assetBundleRevision": 1,
     "scriptDraft": {
       "version": 1,
-      "source": "episodes/golden-001/07-script.md"
+      "generationKind": "deterministic-golden-m1-short-script",
+      "referenceSource": "episodes/golden-001/07-script.md",
+      "content": {
+        "schemaVersion": 1,
+        "kind": "golden-m1-short-script-v1",
+        "targetDurationSeconds": 36,
+        "sections": [
+          {
+            "id": "S01",
+            "start": 0,
+            "end": 5,
+            "narration": "Agentic Coding 到底是什么？",
+            "evidenceRefs": [
+              "C01"
+            ]
+          },
+          {
+            "id": "S02",
+            "start": 5,
+            "end": 11,
+            "narration": "同样是写代码，为什么一种方式还没有完成任务？",
+            "evidenceRefs": [
+              "C09"
+            ]
+          },
+          {
+            "id": "S03",
+            "start": 11,
+            "end": 17,
+            "narration": "关键变化，是 AI 承担的工作单位变大了。",
+            "evidenceRefs": [
+              "C01",
+              "C03"
+            ]
+          },
+          {
+            "id": "S04",
+            "start": 17,
+            "end": 23,
+            "narration": "它不仅修改文件，还要验证权限和业务规则。",
+            "evidenceRefs": [
+              "C06"
+            ]
+          },
+          {
+            "id": "S05",
+            "start": 23,
+            "end": 30,
+            "narration": "测试、状态和最终结果共同构成完成证据。",
+            "evidenceRefs": [
+              "C05",
+              "C09"
+            ]
+          },
+          {
+            "id": "S06",
+            "start": 30,
+            "end": 36,
+            "narration": "从生成代码，到持续推进一个可验证任务。",
+            "evidenceRefs": [
+              "C01",
+              "C10"
+            ]
+          }
+        ],
+        "evidenceSource": "episodes/golden-001/03-claim-ledger.md"
+      }
     },
     "storyboardDraft": {
       "version": 1,
-      "source": "episodes/golden-001/08-storyboard.md"
+      "generationKind": "deterministic-golden-m1-structure",
+      "sourceKind": "episode-scenes-subtitles-render-v1",
+      "referenceSource": "episodes/golden-001/08-storyboard.md"
     }
   },
   "voice": {
@@ -325,6 +484,7 @@
       "end": 11,
       "type": "evidence",
       "asset": "episodes/golden-001/demo-baseline-export-failed.png",
+      "evidenceRef": "demo-baseline-export-failed",
       "label": "BEFORE｜真实失败",
       "title": "旧接口返回了 CSV\n页面却无法完成任务",
       "subtitle": "代码存在，不等于任务完成"
@@ -345,6 +505,7 @@
       "end": 23,
       "type": "evidence",
       "asset": "episodes/golden-001/demo-viewer-denied.png",
+      "evidenceRef": "demo-viewer-denied",
       "label": "权限验证｜viewer 403",
       "title": "普通用户必须被拒绝",
       "subtitle": "权限结果是完成证据的一部分"
@@ -355,6 +516,7 @@
       "end": 30,
       "type": "evidence",
       "asset": "episodes/golden-001/demo-admin-export-complete.png",
+      "evidenceRef": "demo-admin-export-complete",
       "label": "AFTER｜真实验收",
       "title": "管理员异步导出完成",
       "subtitle": "测试、状态、下载与脱敏全部可检查"
@@ -431,7 +593,7 @@
   ],
   "system": {
     "studioRoot": "studio",
-    "importedBy": "golden-sample-importer-v0.1",
-    "trustedFixture": true
+    "importedBy": "test-reviewed-fixture-v1",
+    "trustedFixture": false
   }
 }

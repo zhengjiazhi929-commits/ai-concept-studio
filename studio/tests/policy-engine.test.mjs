@@ -121,3 +121,18 @@ test("旧式 approved 状态没有审核证据时不能解锁下游 Worker", asy
     false
   );
 });
+
+test("golden v0.1 trusted-fixture 白名单不再绕过真实机器审核与人审证据", async () => {
+  const episode = await readFixtureEpisode();
+  episode.system = {
+    ...episode.system,
+    importedBy: "golden-sample-importer-v0.1",
+    trustedFixture: true
+  };
+  episode.approvals.research = {
+    ...episode.approvals.research,
+    provenance: "trusted-fixture",
+    reviewReportId: null
+  };
+  assert.equal(approvalValidForGate(episode, "research"), false);
+});

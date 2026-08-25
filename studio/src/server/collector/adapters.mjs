@@ -1,3 +1,36 @@
+import { fetchPublicHttps } from "../../shared/network.mjs";
+
+async function discardResponseBody(response, reason) {
+  try {
+    await response?.body?.cancel?.(reason);
+  } catch {
+    // The request is being rejected; cancellation failure does not make it usable.
+  }
+}
+
+async function readLimitedText(response, maximumBytes) {
+  if (!response.body) return { text: "", bytes: 0, tooLarge: false };
+  const reader = response.body.getReader();
+  const chunks = [];
+  let bytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > maximumBytes) {
+        await reader.cancel("collector-response-too-large").catch(() => undefined);
+        return { text: null, bytes, tooLarge: true };
+      }
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const body = Buffer.concat(chunks);
+  return { text: body.toString("utf8"), bytes: body.length, tooLarge: false };
+}
+
 function decodeHtml(value = "") {
   return String(value)
     .replaceAll("&amp;", "&")
@@ -128,7 +161,12 @@ function parseGenericMetadata(html, source, observedAt) {
   };
 }
 
-export async function collectPublicSource(source, { config, now, fetchImpl = fetch }) {
+export async function collectPublicSource(source, {
+  config,
+  now,
+  fetchImpl,
+  lookupImpl
+}) {
   const observedAt = now instanceof Date ? now.toISOString() : new Date(now).toISOString();
   if (source.platform === "douyin" && config.directAdapters.douyin === false) {
     return {
@@ -142,20 +180,30 @@ export async function collectPublicSource(source, { config, now, fetchImpl = fet
   let requestError = null;
   for (let attempt = 0; attempt <= config.retryCount; attempt += 1) {
     try {
-      response = await fetchImpl(source.profileUrl, {
-        redirect: "follow",
-        headers: {
-          "user-agent": config.userAgent,
-          accept: "text/html,application/xhtml+xml",
-          "accept-language": "zh-CN,zh;q=0.9,en;q=0.6"
-        },
-        signal: AbortSignal.timeout(config.timeoutMs)
+      const fetched = await fetchPublicHttps(source.profileUrl, {
+        fetchImpl,
+        lookupImpl,
+        init: {
+          headers: {
+            "user-agent": config.userAgent,
+            accept: "text/html,application/xhtml+xml",
+            "accept-language": "zh-CN,zh;q=0.9,en;q=0.6"
+          },
+          signal: AbortSignal.timeout(config.timeoutMs)
+        }
       });
+      response = fetched.response;
       const retryableStatus = response.status === 429 || response.status >= 500;
       if (!retryableStatus || attempt === config.retryCount) break;
+      try {
+        await response.body?.cancel?.("retryable-http-status");
+      } catch {
+        // The retry does not depend on whether the abandoned body cancels cleanly.
+      }
+      response = undefined;
     } catch (error) {
       requestError = error;
-      if (attempt === config.retryCount) break;
+      if (error?.unsafeNetworkTarget || attempt === config.retryCount) break;
     }
     if (config.retryBackoffMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, config.retryBackoffMs * (attempt + 1)));
@@ -165,11 +213,16 @@ export async function collectPublicSource(source, { config, now, fetchImpl = fet
     return {
       creatorId: source.id,
       status: "failed",
-      reason: requestError?.name === "TimeoutError" ? "request-timeout" : "request-failed",
+      reason: requestError?.unsafeNetworkTarget
+        ? "unsafe-network-target"
+        : requestError?.name === "TimeoutError"
+          ? "request-timeout"
+          : "request-failed",
       observations: []
     };
   }
   if (!response.ok) {
+    await discardResponseBody(response, "collector-non-success-http-status");
     return {
       creatorId: source.id,
       status: "failed",
@@ -180,6 +233,7 @@ export async function collectPublicSource(source, { config, now, fetchImpl = fet
   }
   const contentLength = Number(response.headers.get("content-length"));
   if (Number.isFinite(contentLength) && contentLength > config.maxResponseBytes) {
+    await discardResponseBody(response, "collector-declared-response-too-large");
     return {
       creatorId: source.id,
       status: "failed",
@@ -188,7 +242,17 @@ export async function collectPublicSource(source, { config, now, fetchImpl = fet
       observations: []
     };
   }
-  const html = await response.text();
+  const body = await readLimitedText(response, config.maxResponseBytes);
+  if (body.tooLarge) {
+    return {
+      creatorId: source.id,
+      status: "failed",
+      reason: "response-too-large",
+      httpStatus: response.status,
+      observations: []
+    };
+  }
+  const html = body.text;
   let parsed;
   if (source.platform === "bilibili" && config.directAdapters.bilibili) {
     parsed = parseBilibiliPage(html, source, observedAt);
@@ -206,7 +270,7 @@ export async function collectPublicSource(source, { config, now, fetchImpl = fet
   return {
     creatorId: source.id,
     httpStatus: response.status,
-    fetchedBytes: html.length,
+    fetchedBytes: body.bytes,
     ...parsed
   };
 }

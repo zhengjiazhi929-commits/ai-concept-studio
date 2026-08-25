@@ -72,7 +72,8 @@ export async function appendEvent(event) {
 export async function readRecentEvents(limit = 80) {
   try {
     return await readAuditEvents(auditLedgerPath, limit);
-  } catch {
+  } catch (error) {
+    if (error?.code === "audit_integrity_invalid") throw error;
     try {
       const content = await readFile(resolve(logsRoot, "events.ndjson"), "utf8");
       return content.trim().split("\n").filter(Boolean).slice(-limit).map((line) => JSON.parse(line)).reverse();

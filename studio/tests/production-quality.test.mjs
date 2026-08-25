@@ -54,6 +54,10 @@ test("过短尾句和字幕开头空格必须退回 Storyboard Agent", async () 
 
 test("结构完整但旁白量不足的十分钟脚本不能通过机器审核", async () => {
   const episode = structuredClone(await readFixtureEpisode());
+  episode.productionProfile = {
+    id: "long-form-explainer-v1",
+    targetDurationSeconds: 600
+  };
   const sections = Array.from({ length: 6 }, (_, index) => ({
     id: `S${String(index + 1).padStart(2, "0")}`,
     heading: `章节 ${index + 1}`,
@@ -117,6 +121,10 @@ test("结构化脚本每一节都必须绑定研究证据", async () => {
 
 test("生成分镜必须达到场景规模并覆盖已批准脚本内容", async () => {
   const episode = structuredClone(await readFixtureEpisode());
+  episode.productionProfile = {
+    id: "long-form-explainer-v1",
+    targetDurationSeconds: 600
+  };
   episode.production.scriptDraft = {
     version: 2,
     artifactPath: "studio/data/production/episodes/golden-001/script-draft-v002.json",

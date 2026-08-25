@@ -1,0 +1,67 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "codex/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Frozen install, checks, tests, render and supply chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: studio
+        shell: bash
+    steps:
+      - name: Check out tracked sources only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install exact Node.js runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .node-version
+
+      - name: Scan tracked files for high-confidence secrets
+        run: node scripts/scan-tracked-secrets.mjs
+
+      - name: Activate exact pnpm runtime
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.19.0 --activate
+
+      - name: Verify runtime versions
+        run: |
+          node -e 'const fs = require("node:fs"); const expected = `v${fs.readFileSync("../.node-version", "utf8").trim()}`; if (process.version !== expected) { throw new Error(`Node mismatch: expected ${expected}, received ${process.version}`); }'
+          test "$(pnpm --version)" = "11.19.0"
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Block high or critical production dependency advisories
+        run: pnpm audit --prod --audit-level high
+
+      - name: Check JavaScript syntax
+        run: pnpm check
+
+      - name: Run deterministic test suite
+        run: pnpm test
+
+      - name: Bundle and render one fixed local frame
+        env:
+          CI: "true"
+        run: pnpm ci:render-smoke

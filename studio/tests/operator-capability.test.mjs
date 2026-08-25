@@ -167,6 +167,7 @@ test("缺少 operator 认证或 Capability authority 时敏感 HTTP 请求零读
     const { server } = await createStudioServer({
       recoverOnStart: false,
       ...serverOptions,
+      allowServiceTokenMutations: Boolean(serverOptions.operatorToken),
       readEpisode: async () => {
         reads += 1;
         return readFixtureEpisode();
@@ -203,6 +204,40 @@ test("缺少 operator 认证或 Capability authority 时敏感 HTTP 请求零读
     } finally {
       await closeServer(server);
     }
+  }
+});
+
+test("长期 operator token 默认不能直接执行浏览器写请求", async () => {
+  let reads = 0;
+  const { server } = await createStudioServer({
+    recoverOnStart: false,
+    operatorToken: OPERATOR_TOKEN,
+    operatorActor: "human:service-token-default-denied",
+    capabilitySecret: CAPABILITY_SECRET,
+    readEpisode: async () => {
+      reads += 1;
+      return readFixtureEpisode();
+    }
+  });
+  try {
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const response = await fetch(
+      `http://127.0.0.1:${server.address().port}/api/episodes/golden-001/approvals/script`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-operator-token": OPERATOR_TOKEN
+        },
+        body: JSON.stringify({ note: "长期 token 不得直接写入" })
+      }
+    );
+    assert.equal(response.status, 403);
+    assert.equal((await response.json()).code, "operator_auth_forbidden");
+    assert.equal(reads, 0);
+  } finally {
+    await closeServer(server);
   }
 });
 
@@ -405,6 +440,7 @@ test("敏感 HTTP 请求拒绝客户端伪造 actor，并用服务端身份记�
     recoverOnStart: false,
     operatorToken: OPERATOR_TOKEN,
     operatorActor: "human:trusted-operator",
+    allowServiceTokenMutations: true,
     capabilitySecret: CAPABILITY_SECRET,
     readEpisode: async () => structuredClone(stored),
     writeEpisode: async (episode) => {

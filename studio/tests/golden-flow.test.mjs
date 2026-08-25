@@ -107,7 +107,7 @@ test("Golden 不可变夹具可经过素材与最终闸门完成整期流程", a
     "golden-001",
     "assets",
     approvalRequest(store.episode, "assets", "离线回归批准素材"),
-    store
+    { ...store, inspectFileIntegrity: fixtureFiles.inspectFileIntegrity }
   );
   assert.equal(store.episode.approvals.assets.status, "approved");
   assert.equal(store.episode.pipeline.find((step) => step.id === "voice").status, "ready");
@@ -118,6 +118,7 @@ test("Golden 不可变夹具可经过素材与最终闸门完成整期流程", a
 
   const rendered = await runAgent("golden-001", "render-agent", {
     ...store,
+    inspectFileIntegrity: fixtureFiles.inspectFileIntegrity,
     agent: {
       run: async (episode) => workerOutput("complete", "离线假渲染完成", {
         artifacts: ["outputs/studio/golden-001/preview-v001.mp4"],
@@ -173,6 +174,7 @@ test("Golden 不可变夹具可经过素材与最终闸门完成整期流程", a
 
   const rerendered = await runAgent("golden-001", "render-agent", {
     ...store,
+    inspectFileIntegrity: fixtureFiles.inspectFileIntegrity,
     agent: {
       run: async (episode) => workerOutput("complete", "离线修订版渲染完成", {
         artifacts: ["outputs/studio/golden-001/preview-v002.mp4"],
@@ -276,12 +278,13 @@ test("编排器串行落账未等待的进度回调，避免与 Worker 最终状
     "golden-001",
     "assets",
     approvalRequest(store.episode, "assets", "离线回归批准素材"),
-    store
+    { ...store, inspectFileIntegrity: review.inspectFileIntegrity }
   );
   await runAgent("golden-001", "voice-agent", { ...store, review });
 
   const result = await runAgent("golden-001", "render-agent", {
     ...store,
+    inspectFileIntegrity: review.inspectFileIntegrity,
     agent: {
       async run(episode, context) {
         void context.onProgress(0.25, "渲染 25%");

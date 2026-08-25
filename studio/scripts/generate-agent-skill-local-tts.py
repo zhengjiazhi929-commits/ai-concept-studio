@@ -2,10 +2,15 @@
 """Generate local Kokoro voice candidates and a 60-second proof with networking blocked."""
 
 import argparse
+import hashlib
+import importlib
+import importlib.metadata
 import json
 import math
 import os
+import platform
 import socket
+import sys
 import time
 from pathlib import Path
 
@@ -38,15 +43,69 @@ def load_inference_stack():
     from kokoro import KModel, KPipeline
 
 
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def distribution_record_sha256(distribution):
+    record = next(
+        (
+            item for item in (distribution.files or ())
+            if str(item).endswith(".dist-info/RECORD")
+        ),
+        None,
+    )
+    if record is None:
+        raise RuntimeError(f"Distribution {distribution.metadata['Name']} has no RECORD")
+    return file_sha256(distribution.locate_file(record))
+
+
+def runtime_fingerprint():
+    distributions = sorted(
+        (
+            f"{distribution.metadata['Name']}=={distribution.version}"
+            for distribution in importlib.metadata.distributions()
+        ),
+        key=str.casefold,
+    )
+    direct_modules = {}
+    for name in ("kokoro", "numpy", "soundfile", "torch"):
+        distribution = importlib.metadata.distribution(name)
+        module = importlib.import_module(name)
+        direct_modules[name] = {
+            "moduleFileSha256": file_sha256(module.__file__),
+            "recordSha256": distribution_record_sha256(distribution),
+        }
+    return {
+        "schemaVersion": 1,
+        "pythonVersion": platform.python_version(),
+        "implementation": platform.python_implementation(),
+        "executableSha256": file_sha256(Path(sys.executable).resolve()),
+        "distributions": distributions,
+        "directModules": direct_modules,
+    }
+
+
+def require_pinned_runtime(expected, actual):
+    if expected != actual:
+        raise RuntimeError("Local TTS Python runtime does not match the tracked lock")
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument("--request")
     parser.add_argument("--result")
     parser.add_argument("--network-guard-self-test", action="store_true")
+    parser.add_argument("--verify-runtime-lock")
     parser.add_argument("--validate-pacing-segment")
     arguments = parser.parse_args()
     if (
         not arguments.network_guard_self_test
+        and not arguments.verify_runtime_lock
         and not arguments.validate_pacing_segment
         and (not arguments.request or not arguments.result)
     ):
@@ -320,10 +379,22 @@ def main():
             ensure_ascii=False,
         ))
         return
+    if arguments.verify_runtime_lock:
+        require_offline_environment()
+        load_inference_stack()
+        runtime = runtime_fingerprint()
+        expected = json.loads(
+            Path(arguments.verify_runtime_lock).read_text(encoding="utf-8")
+        )
+        require_pinned_runtime(expected, runtime)
+        print(json.dumps(runtime, ensure_ascii=False, indent=2))
+        return
 
+    request = json.loads(Path(arguments.request).read_text(encoding="utf-8"))
     require_offline_environment()
     load_inference_stack()
-    request = json.loads(Path(arguments.request).read_text(encoding="utf-8"))
+    runtime = runtime_fingerprint()
+    require_pinned_runtime(request.get("runtimeLock"), runtime)
     sample_rate = int(request["sampleRate"])
     model_config_path = Path(request["model"]["configPath"])
     model_path = Path(request["model"]["modelPath"])
@@ -389,6 +460,7 @@ def main():
         "networkGuard": "python-socket-connect-blocked",
         "networkGuards": list(NETWORK_GUARDS),
         "offlineEnvironmentVerified": True,
+        "runtime": runtime,
         "sampleRate": sample_rate,
         "elapsedSeconds": round(time.perf_counter() - started, 3),
         "candidates": candidate_results,

@@ -36,7 +36,11 @@ import {
   recordRoutingOutcome
 } from "./control/workflow-kernel.mjs";
 import { readReviewConfig, reviewAgentOutput } from "./reviews/coordinator.mjs";
+import { assertCurrentApprovalArtifactIntegrity } from
+  "./reviews/approval-artifact-integrity.mjs";
 import { approvedAssetExecutionToolIds } from "./reviews/asset-execution-checkpoint.mjs";
+import { assertCurrentAssetBundleIntegrity } from
+  "./production/asset-bundle-integrity.mjs";
 import { recoverInterruptedPlan } from "./control/plan-store.mjs";
 import { recoverInterruptedDispatch } from "./control/controlled-dispatch.mjs";
 import {
@@ -485,6 +489,11 @@ export async function runAgent(episodeId, agentId, options = {}) {
         options
       ));
     }
+    if (agentId === "render-agent") {
+      await assertCurrentAssetBundleIntegrity(initialEpisode, {
+        inspectFileIntegrity: options.inspectFileIntegrity
+      });
+    }
     const workerToolIds = assertWorkerToolIdsAllowed(
       initialEpisode,
       agentId,
@@ -930,11 +939,13 @@ export function assertExactApprovalBinding(episode, gate, input = {}) {
   return expected;
 }
 
-export async function approveGate(episodeId, gate, input = {}, options = {}) {
+async function approveGateUnlocked(episodeId, gate, input = {}, options = {}) {
   const readState = options.readEpisode ?? readEpisode;
   const writeState = options.writeEpisode ?? writeEpisode;
   const recordEvent = options.appendEvent ?? appendEvent;
-  const sourceEpisode = await readState(episodeId);
+  const verifyApprovalArtifact = options.assertCurrentApprovalArtifactIntegrity
+    ?? assertCurrentApprovalArtifactIntegrity;
+  let sourceEpisode = await readState(episodeId);
   assertExactApprovalBinding(sourceEpisode, gate, input);
   const note = String(input.note ?? "").trim();
   const reviewStep = sourceEpisode.pipeline.find((step) => step.gate === gate);
@@ -958,6 +969,9 @@ export async function approveGate(episodeId, gate, input = {}, options = {}) {
   if (!reviewPassedForGate(sourceEpisode, gate)) {
     throw new Error("当前产物版本尚未通过机器审核，不能进入人工批准");
   }
+  if (["research", "script", "storyboard"].includes(gate)) {
+    await verifyApprovalArtifact(sourceEpisode, gate, options);
+  }
   if (
     gate === "research" &&
     sourceEpisode.research &&
@@ -966,17 +980,37 @@ export async function approveGate(episodeId, gate, input = {}, options = {}) {
     throw new Error("研究证据尚未达到审批门槛，不能批准");
   }
   if (gate === "assets") {
+    const initialStateVersion = sourceEpisode.control?.stateVersion ?? null;
+    const latestEpisode = await readState(episodeId);
+    if (latestEpisode.control?.stateVersion !== initialStateVersion) {
+      const error = new Error("素材或旁白状态已变化，请刷新机器审核结果后重新批准");
+      error.code = "assets_approval_state_conflict";
+      error.statusCode = 409;
+      throw error;
+    }
+    assertExactApprovalBinding(latestEpisode, gate, input);
+    if (!reviewPassedForGate(latestEpisode, gate)) {
+      throw new Error("当前素材与旁白版本尚未通过机器审核，不能进入人工批准");
+    }
+    sourceEpisode = latestEpisode;
     const hasAssets = (sourceEpisode.assets?.length ?? 0) > 0;
     const voiceReady = sourceEpisode.voice?.status === "ready" && sourceEpisode.voice?.audioPath;
     if (!hasAssets) throw new Error("请先登记并核验本期素材，再批准素材方案");
     if (!voiceReady && sourceEpisode.previewMode !== "visual-proof") {
       throw new Error("请先上传可试听的旁白文件，再批准素材与声音方案");
     }
+    const integrityBinding = await assertCurrentAssetBundleIntegrity(sourceEpisode, {
+      inspectFileIntegrity: options.inspectFileIntegrity
+    });
     sourceEpisode.assets = sourceEpisode.assets.map((asset) => ({
       ...asset,
       verified: true,
       verifiedAt: new Date().toISOString()
     }));
+    sourceEpisode.production = {
+      ...(sourceEpisode.production ?? {}),
+      assetApprovalIntegrity: integrityBinding
+    };
   }
   if (gate === "final" && sourceEpisode.qa.status !== "passed") {
     throw new Error("最终成片尚未通过 QA，不能批准");
@@ -992,6 +1026,17 @@ export async function approveGate(episodeId, gate, input = {}, options = {}) {
     note,
     actor: options.actor
   });
+  if (gate === "assets") {
+    episode.approvals.assets.integrityBinding =
+      episode.production?.assetApprovalIntegrity ?? null;
+  }
+  // Re-read external approval documents under the same per-Episode operation
+  // lock immediately before the Episode CAS. This closes the window between the
+  // initial human-decision check and persistence without binding Gate 2/3 to
+  // unrelated downstream files.
+  if (["research", "script", "storyboard"].includes(gate)) {
+    await verifyApprovalArtifact(sourceEpisode, gate, options);
+  }
   await writeState(episode);
   await recordEvent({
     type: "approval.granted",
@@ -1001,6 +1046,17 @@ export async function approveGate(episodeId, gate, input = {}, options = {}) {
     message: note || `${gate} 已批准`
   });
   return episode;
+}
+
+export async function approveGate(episodeId, gate, input = {}, options = {}) {
+  const releaseOperation = acquireEpisodeOperation(episodeId, `approval:${gate}`, {
+    conflictMessage: "这一期已有状态变更正在运行，不能并发提交人工批准"
+  });
+  try {
+    return await approveGateUnlocked(episodeId, gate, input, options);
+  } finally {
+    releaseOperation();
+  }
 }
 
 export async function rejectGate(episodeId, gate, input = {}, options = {}) {
@@ -1088,6 +1144,7 @@ export function recoverInterruptedEpisode(sourceEpisode, now = new Date()) {
     ? successfulProviderSettlementsAfter(episode, recoveredOperation.startedAt)
     : [];
   if (planningProviderResults.length > 0) {
+    const previousBudgetOverrun = Boolean(episode.control.budget.overrun);
     episode.control.budget.overrun = true;
     episode.history.push({
       at,
@@ -1096,6 +1153,7 @@ export function recoverInterruptedEpisode(sourceEpisode, now = new Date()) {
       agentId: "main-agent",
       failureCode: "provider_result_commit_unknown",
       reservationIds: planningProviderResults.map((entry) => entry.reservationId),
+      previousBudgetOverrun,
       message:
         "Main Agent 的 Provider 结果已成功结算，但计划是否完成提交无法确认；已禁止自动重试"
     });

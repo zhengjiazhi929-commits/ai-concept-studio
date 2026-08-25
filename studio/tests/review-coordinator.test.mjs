@@ -48,6 +48,7 @@ function memoryStore(initialEpisode) {
 
 test("通过报告绑定当前版本并追加到阶段历史", async () => {
   const source = await readFixtureEpisode();
+  const previousReportCount = source.reviews.script.reports.length;
   const result = await reviewAgentOutput({
     sourceEpisode: source,
     candidateEpisode: source,
@@ -57,7 +58,7 @@ test("通过报告绑定当前版本并追加到阶段历史", async () => {
   assert.equal(result.report.decision, "pass");
   assert.equal(result.report.artifactVersion, source.approvals.script.currentVersion);
   assert.equal(result.reviewState.status, "passed");
-  assert.equal(result.reviewState.reports.length, 1);
+  assert.equal(result.reviewState.reports.length, previousReportCount + 1);
   assert.equal(result.output.status, "waiting_approval");
 });
 
@@ -79,6 +80,7 @@ test("编排接缝会把未通过审核的等待审批输出改为阻塞", async
 
 test("连续两轮出现同类阻断问题时升级人工且不覆盖旧报告", async () => {
   const source = await readFixtureEpisode();
+  const previousReportCount = source.reviews.script.reports.length;
   const candidate = structuredClone(source);
   candidate.thesis = "";
   const first = await reviewAgentOutput({
@@ -98,8 +100,8 @@ test("连续两轮出现同类阻断问题时升级人工且不覆盖旧报告",
   assert.equal(first.report.decision, "revise");
   assert.equal(second.report.decision, "escalate");
   assert.equal(second.output.requiresHuman, true);
-  assert.equal(second.reviewState.reports.length, 2);
-  assert.notEqual(second.reviewState.reports[0].id, second.reviewState.reports[1].id);
+  assert.equal(second.reviewState.reports.length, previousReportCount + 2);
+  assert.notEqual(second.reviewState.reports.at(-2).id, second.reviewState.reports.at(-1).id);
 });
 
 test("假语义 Reviewer 的低置信度会安全升级，且不会调用真实模型", async () => {
@@ -458,9 +460,19 @@ test("最终 QA 发现字幕硬切时退回 Storyboard Agent 并失效下游审�
 
 test("编排器会持久化审核状态并在一次自动修改后进入人工审批", async () => {
   let stored = await readFixtureEpisode();
+  stored.productionProfile = {
+    id: "long-form-explainer-v1",
+    targetDurationSeconds: 600
+  };
+  const initialScriptReportCount = stored.reviews.script.reports.length;
   const originalThesis = stored.thesis;
   stored.sourceDocs = stored.sourceDocs.filter((source) => !source.path.endsWith("07-script.md"));
-  stored.approvals.research.artifactHash = currentGateArtifactHash(stored, "research");
+  const researchArtifactHash = currentGateArtifactHash(stored, "research");
+  stored.approvals.research.artifactHash = researchArtifactHash;
+  stored.reviews.research.artifactHash = researchArtifactHash;
+  for (const report of stored.reviews.research.reports) {
+    report.artifactHash = researchArtifactHash;
+  }
   stored.production.scriptDraft = {
     ...(stored.production.scriptDraft ?? {}),
     artifactPath: "outputs/test-script-v1.json",
@@ -536,7 +548,7 @@ test("编排器会持久化审核状态并在一次自动修改后进入人工�
   assert.equal(result.output.status, "waiting_approval");
   assert.equal(stored.reviews.script.status, "passed");
   assert.equal(stored.reviews.script.artifactVersion, 3);
-  assert.equal(stored.reviews.script.reports.length, 2);
+  assert.equal(stored.reviews.script.reports.length, initialScriptReportCount + 2);
   assert.equal(stored.pipeline.find((step) => step.agent === "script-agent").attempts, 2);
   assert.equal(events.filter((event) => event.type === "agent.revision_started").length, 1);
   assert.equal(originalThesis, stored.thesis);

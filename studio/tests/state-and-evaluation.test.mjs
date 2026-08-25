@@ -128,7 +128,7 @@ test("正式评测必须覆盖全部类别，且证据被修改后不再允许�
   assert.equal(reference.referencePassed, true);
   assert.equal(reference.admissionEligible, false);
   assert.equal(reference.passed, false);
-  assert.match(reference.admissionBlockReason, /attestation/u);
+  assert.match(reference.admissionBlockReason, /离线参考逻辑/u);
   const callerForgedSuite = structuredClone(suite);
   callerForgedSuite.admission = {
     eligible: true,
@@ -230,6 +230,7 @@ test("正式评测证据强绑定 Rubric、Prompt、Router、模型配置与控�
   const fieldByBinding = {
     reviewRubrics: "reviewVersion",
     mainAgentPrompt: "promptVersion",
+    workerPrompts: "workerPromptVersion",
     routingPolicy: "routerVersion",
     modelRegistry: "modelRegistryVersion",
     aiConfig: "modelConfigVersion",

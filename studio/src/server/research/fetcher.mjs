@@ -1,7 +1,16 @@
 import { createHash } from "node:crypto";
+import { fetchPublicHttps } from "../../shared/network.mjs";
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function discardResponseBody(response, reason) {
+  try {
+    await response?.body?.cancel?.(reason);
+  } catch {
+    // The response is being rejected; cancellation failure does not make it usable.
+  }
 }
 
 function decodeTitle(value = "") {
@@ -70,15 +79,19 @@ export async function inspectPrimarySource(source, options) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), options.config.timeoutMs);
     try {
-      const response = await options.fetchImpl(source.url, {
-        redirect: "follow",
-        signal: controller.signal,
-        headers: {
-          accept: "text/html,application/xhtml+xml,application/json,text/plain,application/pdf;q=0.9,*/*;q=0.1",
-          "user-agent": "AI-Concept-Studio-Research/0.1"
+      const fetched = await fetchPublicHttps(source.url, {
+        fetchImpl: options.fetchImpl,
+        lookupImpl: options.lookupImpl,
+        init: {
+          signal: controller.signal,
+          headers: {
+            accept: "text/html,application/xhtml+xml,application/json,text/plain,application/pdf;q=0.9,*/*;q=0.1",
+            "user-agent": "AI-Concept-Studio-Research/0.1"
+          }
         }
       });
-      const finalUrl = new URL(response.url || source.url);
+      const response = fetched.response;
+      const finalUrl = fetched.finalUrl;
       const contentType = response.headers.get("content-type")?.split(";")[0]?.toLowerCase() ?? null;
       if (finalUrl.protocol !== "https:") {
         return accessResult(source, {
@@ -91,9 +104,11 @@ export async function inspectPrimarySource(source, options) {
       }
       if (!response.ok) {
         if ((response.status >= 500 || response.status === 429) && attempt < options.config.retryCount) {
+          await discardResponseBody(response, "retryable-http-status");
           await wait(options.config.retryBackoffMs * (attempt + 1));
           continue;
         }
+        await discardResponseBody(response, "non-success-http-status");
         return accessResult(source, {
           checkedAt,
           status: "needs_assist",
@@ -110,6 +125,7 @@ export async function inspectPrimarySource(source, options) {
         "application/pdf"
       ]);
       if (contentType && !allowedContent.has(contentType)) {
+        await discardResponseBody(response, "unsupported-content-type");
         return accessResult(source, {
           checkedAt,
           status: "needs_assist",
@@ -120,6 +136,7 @@ export async function inspectPrimarySource(source, options) {
       }
       const declaredLength = Number(response.headers.get("content-length"));
       if (declaredLength > options.config.maxSourceBytes) {
+        await discardResponseBody(response, "declared-source-too-large");
         return accessResult(source, {
           checkedAt,
           status: "needs_assist",
@@ -152,6 +169,13 @@ export async function inspectPrimarySource(source, options) {
       });
     } catch (error) {
       lastError = error;
+      if (error?.unsafeNetworkTarget) {
+        return accessResult(source, {
+          checkedAt,
+          status: "needs_assist",
+          reason: "unsafe-network-target"
+        });
+      }
       if (attempt < options.config.retryCount) {
         await wait(options.config.retryBackoffMs * (attempt + 1));
         continue;

@@ -162,7 +162,8 @@ export async function runCollectorAgent(options = {}) {
         dependencies.collectPublicSource(source, {
           config,
           now,
-          fetchImpl: options.fetchImpl ?? fetch
+          fetchImpl: options.fetchImpl,
+          lookupImpl: options.lookupImpl
         })
     );
     const batchId = buildRunId("collector-direct", now);

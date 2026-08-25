@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 3,
-  "id": "main-agent-control-reference-v4",
-  "version": "4.0.0",
+  "schemaVersion": 4,
+  "id": "main-agent-control-reference-v5",
+  "version": "5.0.0",
   "policyVersion": "routing-policy-v1",
   "reviewVersion": "review-rubrics-v9",
   "runner": {
@@ -15,7 +15,7 @@
   "admission": {
     "eligible": false,
     "evidenceClass": "offline-reference-only",
-    "reason": "缺少受信 runner attestation 与 append-only 证据存储"
+    "reason": "当前 Runner 仅执行离线参考逻辑，未运行真实 Main Agent、Workflow Kernel 与 Model Router shadow；签名与账本不能替代真实准入证据"
   },
   "runtimeBindings": {
     "reviewRubrics": {
@@ -25,6 +25,10 @@
     "mainAgentPrompt": {
       "version": "main-agent-planner-prompt-v1",
       "hash": "2d6874883b6e468c094eff45b6b8955cd56022881c41db0b0e7ac38c80757569"
+    },
+    "workerPrompts": {
+      "version": "worker-prompts-v1",
+      "hash": "ebca66d8de7daeed9fe5b6cde252a3600fa3a39a2a81c5bd14aa1115cd1f3471"
     },
     "routingPolicy": {
       "version": "routing-policy-v1",
@@ -43,8 +47,8 @@
       "hash": "7b9071f728445d58f5a7a5c2b0a08764e386f0a37433a29b14f1bb1de876287b"
     },
     "implementation": {
-      "version": "agent-control-release-v2",
-      "hash": "c88416b9d435501687652a32ea42d12ebac33ef349fdf2119c09f16b6e1d67b4"
+      "version": "agent-control-release-v3",
+      "hash": "2fd6277a9ca168aa826412e8a2cca92a3e8c448c75ba1dc668ed35deedc7844e"
     }
   },
   "requiredCases": [

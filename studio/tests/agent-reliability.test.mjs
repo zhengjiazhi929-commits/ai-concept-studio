@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   appendAuditEvent,
+  readAuditEvents,
   validateAuditLedger
 } from "../src/shared/audit-log.mjs";
 import {
@@ -68,13 +69,21 @@ test("审计事件使用哈希链和幂等键，篡改与重复写入都可识�
     await appendAuditEvent(path, {
       type: "agent.completed",
       episodeId: "episode-1",
-      idempotencyKey: "episode-1:plan-1:complete"
+      idempotencyKey: "episode-1:plan-1:complete",
+      provider: { apiKey: "opaque-synthetic-credential" }
     });
     const ledger = JSON.parse(await readFile(path, "utf8"));
     assert.equal(ledger.records.length, 2);
+    assert.equal(ledger.records[1].provider.apiKey, "[REDACTED]");
+    assert.equal(JSON.stringify(ledger).includes("opaque-synthetic-credential"), false);
     assert.equal(validateAuditLedger(ledger).valid, true);
     ledger.records[0].type = "approval.granted";
     assert.equal(validateAuditLedger(ledger).valid, false);
+    await writeFile(path, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
+    await assert.rejects(
+      readAuditEvents(path),
+      (error) => error.code === "audit_integrity_invalid"
+    );
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

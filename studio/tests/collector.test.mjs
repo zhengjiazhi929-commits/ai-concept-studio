@@ -6,6 +6,7 @@ import { readCollectorConfig } from "../src/server/collector/store.mjs";
 import { readConceptTaxonomy } from "../src/server/trends/store.mjs";
 
 const observedAt = "2026-08-03T08:00:00.000Z";
+const publicLookup = async () => [{ address: "93.184.216.34", family: 4 }];
 const bilibiliSource = {
   id: "bilibili-feiman-ai",
   platform: "bilibili",
@@ -54,6 +55,7 @@ test("抖音客户端渲染页被明确转入 Codex 辅助，而不是伪装采�
     {
       config,
       now: new Date(observedAt),
+      lookupImpl: publicLookup,
       fetchImpl: async () => new Response("<html><div id='root'></div></html>", { status: 200 })
     }
   );
@@ -69,6 +71,7 @@ test("公开页面遇到一次临时网络失败后会短重试", async () => {
   const result = await collectPublicSource(bilibiliSource, {
     config,
     now: new Date(observedAt),
+    lookupImpl: publicLookup,
     fetchImpl: async () => {
       attempts += 1;
       if (attempts === 1) throw new TypeError("temporary network failure");
@@ -78,6 +81,44 @@ test("公开页面遇到一次临时网络失败后会短重试", async () => {
 
   assert.equal(attempts, 2);
   assert.equal(result.status, "success");
+});
+
+test("公开页采集拒绝 DNS 解析到私网的目标且不会发送请求", async () => {
+  const config = await readCollectorConfig();
+  let requests = 0;
+  const result = await collectPublicSource(
+    { ...bilibiliSource, profileUrl: "https://collector.example.org/video/1" },
+    {
+      config,
+      now: new Date(observedAt),
+      lookupImpl: async () => [{ address: "192.168.1.20", family: 4 }],
+      fetchImpl: async () => {
+        requests += 1;
+        throw new Error("unsafe request should not execute");
+      }
+    }
+  );
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.reason, "unsafe-network-target");
+  assert.equal(requests, 0);
+});
+
+test("公开页采集对没有 Content-Length 的响应仍按真实字节流限流", async () => {
+  const config = await readCollectorConfig();
+  const result = await collectPublicSource(bilibiliSource, {
+    config: { ...config, maxResponseBytes: 8, retryCount: 0 },
+    now: new Date(observedAt),
+    lookupImpl: publicLookup,
+    fetchImpl: async () => new Response("123456789", {
+      status: 200,
+      headers: { "content-type": "text/html" }
+    })
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.reason, "response-too-large");
+  assert.equal(result.observations.length, 0);
 });
 
 test("采集观察通过概念词典归一化后才能成为热点信号", async () => {

@@ -221,7 +221,7 @@ test("默认 Provider 路径缺少 grant 时在预算派发和 fetch 前关闭",
   });
 });
 
-test("HTTP 503 的 retry 与 fallback 逐次消费 grant，次数耗尽时零 fetch 零派发", async () => {
+test("HTTP 503 的 retry 与 fallback 以 production Capability 为最终上限，未授权尝试零预留零派发", async () => {
   await withProviderKeys(async () => {
     const ledger = recordingBudgetLedger();
     const urls = [];
@@ -252,9 +252,12 @@ test("HTTP 503 的 retry 与 fallback 逐次消费 grant，次数耗尽时零 fe
 
     await assert.rejects(
       client.generateStructured("script", routingRequest()),
-      (error) => error.code === "side_effect_capability_calls_exceeded" &&
-        error.details.usedCalls === 2 &&
-        error.details.remainingCalls === 0
+      (error) => error instanceof Error &&
+        error.code === "manual_intervention_required" &&
+        error.attempts.length === 2 &&
+        error.retryPolicy.authorizedCalls === 2 &&
+        error.retryPolicy.consumedCalls === 2 &&
+        /其余重试和 fallback 未获授权/u.test(error.message)
     );
 
     assert.equal(urls.length, 2);
@@ -270,15 +273,14 @@ test("HTTP 503 的 retry 与 fallback 逐次消费 grant，次数耗尽时零 fe
         .map(({ usedCalls, usedCostUsd }) => ({ usedCalls, usedCostUsd })),
       [
         { usedCalls: 1, usedCostUsd: 0.1 },
-        { usedCalls: 1, usedCostUsd: 0.1 },
-        { usedCalls: 0, usedCostUsd: 0 }
+        { usedCalls: 1, usedCostUsd: 0.1 }
       ]
     );
     assert.equal(ledger.reservations.size, 0);
   });
 });
 
-test("Provider attempt 的预留费用超过 grant 剩余额度时不 fetch 不派发", async () => {
+test("Provider attempt 超过 production Capability 剩余费用时不预留、不 fetch、不派发", async () => {
   await withProviderKeys(async () => {
     const ledger = recordingBudgetLedger();
     let providerCalls = 0;
@@ -309,9 +311,11 @@ test("Provider attempt 的预留费用超过 grant 剩余额度时不 fetch 不�
 
     await assert.rejects(
       client.generateStructured("script", routingRequest()),
-      (error) => error.code === "side_effect_capability_cost_exceeded" &&
-        error.details.usedCostUsd === 0.1 &&
-        error.details.remainingCostUsd === 0.05
+      (error) => error.code === "manual_intervention_required" &&
+        error.attempts.length === 1 &&
+        error.retryPolicy.authorizedCostUsd === 0.15 &&
+        error.retryPolicy.consumedCostUsd === 0.1 &&
+        /其余重试和 fallback 未获授权/u.test(error.message)
     );
     assert.equal(providerCalls, 1);
     assert.equal(

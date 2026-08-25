@@ -41,6 +41,7 @@ function approvedHistoricalEpisode() {
 
 test("导入的 Markdown 脚本可作为分镜驳回后的再生成输入", async () => {
   const episode = await readFixtureEpisode();
+  delete episode.production.scriptDraft.content;
   episode.production.scriptDraft.source =
     "studio/tests/fixtures/episodes/golden-001-approved-script.md";
   const input = await readApprovedScriptInput(episode);

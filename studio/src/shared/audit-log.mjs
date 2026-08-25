@@ -37,9 +37,20 @@ export function appendAuditRecord(sourceLedger, event, options = {}) {
 
 export function validateAuditLedger(ledger) {
   const errors = [];
+  if (!ledger || typeof ledger !== "object" || Array.isArray(ledger)) {
+    return { valid: false, errors: ["audit ledger must be an object"] };
+  }
+  if (!Array.isArray(ledger.records)) {
+    return { valid: false, errors: ["audit records must be an array"] };
+  }
   let previousHash = null;
   let sequence = 1;
-  for (const record of ledger?.records ?? []) {
+  for (const record of ledger.records) {
+    if (!record || typeof record !== "object" || Array.isArray(record)) {
+      errors.push(`audit record must be an object at ${sequence}`);
+      sequence += 1;
+      continue;
+    }
     if (record.sequence !== sequence) errors.push(`audit sequence mismatch at ${sequence}`);
     if (record.previousHash !== previousHash) errors.push(`audit previous hash mismatch at ${sequence}`);
     if (record.hash !== integrityHash(recordPayload(record))) errors.push(`audit hash mismatch at ${sequence}`);
@@ -51,7 +62,14 @@ export function validateAuditLedger(ledger) {
 
 async function readLedger(path) {
   try {
-    return JSON.parse(await readFile(path, "utf8"));
+    const ledger = JSON.parse(await readFile(path, "utf8"));
+    const validation = validateAuditLedger(ledger);
+    if (!validation.valid) {
+      const error = new Error(`Audit ledger integrity check failed: ${validation.errors.join("; ")}`);
+      error.code = "audit_integrity_invalid";
+      throw error;
+    }
+    return ledger;
   } catch (error) {
     if (error?.code === "ENOENT") return { stateVersion: 0, records: [] };
     throw error;

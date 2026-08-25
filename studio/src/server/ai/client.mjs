@@ -327,6 +327,15 @@ export async function createAiClient(options = {}) {
       if (providerCapabilityRequired) {
         assertSideEffectGrant(options.sideEffectGrant, providerCapabilitySpec);
       }
+      // Retry configuration is an upper bound, never an authority expansion.
+      // The signed production Capability is the final ceiling for both the
+      // initial request and every configured retry/fallback request.
+      const authorizedProviderCalls = providerCapabilityRequired
+        ? options.sideEffectGrant.maxCalls
+        : Number.POSITIVE_INFINITY;
+      const authorizedProviderCostUsd = providerCapabilityRequired
+        ? options.sideEffectGrant.maxCostUsd
+        : Number.POSITIVE_INFINITY;
       const requestBudget = request.routingContext?.control?.budget;
       const remainingCallBudget = requestBudget?.maxCalls === null || requestBudget?.maxCalls === undefined
         ? Number.POSITIVE_INFINITY
@@ -350,6 +359,10 @@ export async function createAiClient(options = {}) {
       let actualCostKnown = true;
       let budgetBlocked = false;
       let budgetBlockedMessage = null;
+      let capabilityRetryLimitReached = false;
+      let capabilityCostLimitReached = false;
+      let consumedProviderCalls = 0;
+      let consumedProviderCostUsd = 0;
       let reservationSequence = 0;
       const configuredRoutes = routingDecision.orderedRoutes.filter((route, index, routes) => {
         const provider = config.providers[route.providerId];
@@ -423,6 +436,10 @@ export async function createAiClient(options = {}) {
           ? route.reservationCostUsd
           : selectedReservedCostPerAttempt;
         for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+          if (consumedProviderCalls >= authorizedProviderCalls) {
+            capabilityRetryLimitReached = true;
+            break providerLoop;
+          }
           if (!durableBudget && attempts.length >= remainingCallBudget) break providerLoop;
           if (
             !durableBudget &&
@@ -442,6 +459,13 @@ export async function createAiClient(options = {}) {
               { providerId, model: route.model, attempt },
               403
             );
+          }
+          if (
+            providerCapabilityRequired &&
+            consumedProviderCostUsd + reservedCostPerAttempt > authorizedProviderCostUsd
+          ) {
+            capabilityCostLimitReached = true;
+            break providerLoop;
           }
           let reservationId = null;
           if (durableBudget) {
@@ -486,6 +510,10 @@ export async function createAiClient(options = {}) {
               }
               throw error;
             }
+            consumedProviderCalls += 1;
+            consumedProviderCostUsd = Number((
+              consumedProviderCostUsd + reservedCostPerAttempt
+            ).toFixed(6));
           }
           if (durableBudget && reservationId) {
             try {
@@ -731,10 +759,29 @@ export async function createAiClient(options = {}) {
         budgetOverrun: accountedCostUsd > remainingCostBudget,
         failureCode: budgetBlocked
           ? "budget_reservation_denied"
-          : attempts.at(-1)?.code ?? attempts.at(-1)?.httpStatus ?? "request_failed"
+          : capabilityRetryLimitReached
+            ? "side_effect_capability_retry_limit_reached"
+            : capabilityCostLimitReached
+              ? "side_effect_capability_cost_limit_reached"
+              : attempts.at(-1)?.code ?? attempts.at(-1)?.httpStatus ?? "request_failed"
       });
       await persistDecision(completedDecision);
       if (attempts.length === 0) {
+        if (capabilityRetryLimitReached || capabilityCostLimitReached) {
+          const paused = new AiGenerationPausedError(
+            capabilityRetryLimitReached
+              ? "本次 production Capability 未授权任何 Provider 调用，配置中的重试不会扩大权限"
+              : "本次 production Capability 费用上限不足，配置中的重试不会扩大权限"
+          );
+          paused.routingDecision = completedDecision;
+          paused.retryPolicy = {
+            authorizedCalls: authorizedProviderCalls,
+            consumedCalls: consumedProviderCalls,
+            authorizedCostUsd: authorizedProviderCostUsd,
+            consumedCostUsd: consumedProviderCostUsd
+          };
+          throw paused;
+        }
         if (budgetBlocked) {
           const paused = new AiGenerationPausedError(
             budgetBlockedMessage ?? "剩余预算不足以安全预留下一次模型调用"
@@ -749,6 +796,22 @@ export async function createAiClient(options = {}) {
         throw paused;
       }
       const lastFailure = attempts.at(-1)?.message;
+      if (capabilityRetryLimitReached || capabilityCostLimitReached) {
+        const paused = new AiGenerationPausedError(
+          capabilityRetryLimitReached
+            ? `已执行 production Capability 明确授权的 ${consumedProviderCalls} 次调用；配置中的其余重试和 fallback 未获授权，因此没有执行`
+            : `已消费 production Capability 明确授权的费用 ${consumedProviderCostUsd} USD；配置中的其余重试和 fallback 未获授权，因此没有执行`,
+          attempts
+        );
+        paused.routingDecision = completedDecision;
+        paused.retryPolicy = {
+          authorizedCalls: authorizedProviderCalls,
+          consumedCalls: consumedProviderCalls,
+          authorizedCostUsd: authorizedProviderCostUsd,
+          consumedCostUsd: consumedProviderCostUsd
+        };
+        throw paused;
+      }
       const paused = new AiGenerationPausedError(
         `AI 已按策略尝试 ${attempts.length} 次仍未成功，流水线已暂停，请人工检查通道、额度或模型权限${lastFailure ? `。最后错误：${lastFailure}` : ""}`,
         attempts

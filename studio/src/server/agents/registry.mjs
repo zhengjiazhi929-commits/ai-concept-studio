@@ -66,6 +66,9 @@ function aiState(episode, generated) {
     lastProvider: generated.provider,
     lastModel: generated.model,
     lastUsage: generated.usage,
+    ...(generated.promptBinding
+      ? { lastPromptBinding: structuredClone(generated.promptBinding) }
+      : {}),
     lastRequestAt: new Date().toISOString(),
     attempts: [...(episode.production?.ai?.attempts ?? []), ...(generated.attempts ?? [])]
   };
@@ -104,6 +107,9 @@ function versionEntry(generated, extras = {}) {
     usage: generated.usage,
     generatedAt: new Date().toISOString(),
     ...(generated.generationKind ? { generationKind: generated.generationKind } : {}),
+    ...(generated.promptBinding
+      ? { promptBinding: structuredClone(generated.promptBinding) }
+      : {}),
     ...(generated.sourceSnapshotHash
       ? { sourceSnapshotHash: generated.sourceSnapshotHash }
       : {}),

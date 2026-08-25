@@ -275,7 +275,12 @@ export function evaluateProductionQuality(episode, options = {}) {
   }
 
   if (hasStage(stage, "storyboard", "voice", "qa")) {
-    const generatedStoryboard = Boolean(episode.production?.storyboardDraft?.artifactPath);
+    const generatedStoryboard = Boolean(
+      episode.productionProfile
+      || episode.production?.storyboardDraft?.artifactPath
+      || episode.production?.storyboardDraft?.content
+      || episode.production?.storyboardDraft?.generationKind
+    );
     const sceneCountPassed = generatedStoryboard
       ? scenes.length >= profile.storyboardScenes.minimum &&
         scenes.length <= profile.storyboardScenes.maximum

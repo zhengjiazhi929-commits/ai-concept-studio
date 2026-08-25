@@ -1,7 +1,9 @@
-import { mkdir, readdir, rename, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
-import { episodePublicDirectory } from "../../shared/paths.mjs";
+import {
+  episodePublicDirectory as defaultEpisodePublicDirectory,
+  publicRoot
+} from "../../shared/paths.mjs";
 import { appendEvent, readEpisode, writeEpisode } from "../../shared/store.mjs";
 import {
   invalidateReviewForGate,
@@ -13,6 +15,11 @@ import {
   assetExecutionApprovalValid,
   assertAssetExecutionAuthorized
 } from "../reviews/asset-execution-checkpoint.mjs";
+import {
+  pendingUploadTransactionRoot,
+  stageExclusiveVersionedUpload
+} from "./upload-transaction.mjs";
+import { inspectSupportedMedia } from "./media-signatures.mjs";
 
 const supportedTypes = new Map([
   ["image/png", { extension: ".png", type: "image" }],
@@ -54,16 +61,20 @@ function nextFileName(files, extension) {
   return `material-v${String(highest + 1).padStart(3, "0")}${extension}`;
 }
 
-export async function saveAssetUpload(episodeId, upload) {
+export async function saveAssetUpload(episodeId, upload, options = {}) {
   const fileType = assetFileType(upload.contentType, upload.fileName);
   if (!fileType) {
     throw new Error("素材格式不支持，请使用图片、MP4/MOV 或常见音频格式");
   }
   if (!Buffer.isBuffer(upload.data) || upload.data.length === 0) throw new Error("素材文件为空");
+  await (options.inspectMedia ?? inspectSupportedMedia)(upload.data, fileType.extension);
   const planItemId = String(upload.planItemId ?? "").trim();
   if (!planItemId) throw new Error("上传素材必须关联素材清单条目");
 
-  const episode = await readEpisode(episodeId);
+  const readState = options.readEpisode ?? readEpisode;
+  const writeState = options.writeEpisode ?? writeEpisode;
+  const recordEvent = options.appendEvent ?? appendEvent;
+  const episode = await readState(episodeId);
   if (assetExecutionApprovalRequired(episode) && !assetExecutionApprovalValid(episode)) {
     const error = new Error("素材执行方案尚未通过生成前机器审核与人工批准，不能登记执行产物");
     error.code = "asset_execution_approval_required";
@@ -96,17 +107,29 @@ export async function saveAssetUpload(episodeId, upload) {
     }
   }
 
-  const directory = resolve(episodePublicDirectory(episodeId), "materials");
-  await mkdir(directory, { recursive: true });
-  const fileName = nextFileName(await readdir(directory), fileType.extension);
-  const destination = resolve(directory, fileName);
-  const temporary = `${destination}.tmp`;
-  await writeFile(temporary, upload.data);
-  await rename(temporary, destination);
-
-  const publicPath = `episodes/${episodeId}/materials/${fileName}`;
-  const materialVersion = Number(/material-v(\d{3})/u.exec(fileName)?.[1] ?? 1);
-  const asset = {
+  const assetStepIndex = episode.pipeline.findIndex((step) => step.agent === "asset-agent");
+  if (assetStepIndex < 0) throw new Error("这一期缺少素材 Agent 流水线步骤");
+  const episodeDirectory = options.episodePublicDirectory ?? defaultEpisodePublicDirectory;
+  const directory = resolve(episodeDirectory(episodeId), "materials");
+  const staged = await stageExclusiveVersionedUpload({
+    allowedRoot: options.uploadRoot ?? publicRoot,
+    directory,
+    data: upload.data,
+    nextFileName: (files) => nextFileName(files, fileType.extension),
+    transaction: {
+      markerRoot: options.uploadTransactionRoot ?? pendingUploadTransactionRoot,
+      episodeId,
+      kind: "asset",
+      publicPathForFileName: (fileName) =>
+        `episodes/${episodeId}/materials/${fileName}`
+    }
+  });
+  const { fileName } = staged;
+  let asset;
+  try {
+    const publicPath = `episodes/${episodeId}/materials/${fileName}`;
+    const materialVersion = Number(/material-v(\d{3})/u.exec(fileName)?.[1] ?? 1);
+    asset = {
     id: fileName.replace(/\.[^.]+$/u, ""),
     planItemId,
     type: fileType.type,
@@ -126,15 +149,11 @@ export async function saveAssetUpload(episodeId, upload) {
       ? { ...scene, [fileType.type === "audio" ? "audio" : "asset"]: publicPath }
       : scene
   );
-  const assetStepIndex = episode.pipeline.findIndex((step) => step.agent === "asset-agent");
-  if (assetStepIndex < 0) throw new Error("这一期缺少素材 Agent 流水线步骤");
-  if (assetStepIndex >= 0) {
-    episode.pipeline[assetStepIndex] = {
-      ...episode.pipeline[assetStepIndex],
-      status: "ready",
-      message: "新素材已上传，可以重新核验素材清单"
-    };
-  }
+  episode.pipeline[assetStepIndex] = {
+    ...episode.pipeline[assetStepIndex],
+    status: "ready",
+    message: "新素材已上传，可以重新核验素材清单"
+  };
   for (let index = assetStepIndex + 1; index < episode.pipeline.length; index += 1) {
     episode.pipeline[index] = {
       ...episode.pipeline[index],
@@ -169,8 +188,13 @@ export async function saveAssetUpload(episodeId, upload) {
     type: "asset-upload",
     message: `${planItemId} 已上传 ${fileName}，等待素材审批`
   });
-  await writeEpisode(episode);
-  await appendEvent({
+    await writeState(episode);
+  } catch (error) {
+    await staged.rollback().catch(() => undefined);
+    throw error;
+  }
+  await staged.commit();
+  await recordEvent({
     type: "asset.uploaded",
     episodeId,
     agentId: "asset-agent",

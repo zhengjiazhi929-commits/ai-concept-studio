@@ -152,7 +152,8 @@ export async function runEpisodeResearchAgent(episode, options = {}) {
       dependencies.inspectPrimarySource(source, {
         config,
         now,
-        fetchImpl: options.fetchImpl ?? fetch
+        fetchImpl: options.fetchImpl,
+        lookupImpl: options.lookupImpl
       })
   );
   pack = mergeSourceInspections(pack, inspections, config, now);

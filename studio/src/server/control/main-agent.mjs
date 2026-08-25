@@ -433,6 +433,7 @@ export async function runShadowPlanning(episodeId, options = {}) {
         const reservationIds = uncommittedProviderResults.map(
           (entry) => entry.reservationId
         );
+        const previousBudgetOverrun = Boolean(failed.episode.control.budget.overrun);
         failed.record.requiresHuman = true;
         failed.record.uncommittedProviderResultIds = reservationIds;
         failed.episode.control.budget.overrun = true;
@@ -443,6 +444,7 @@ export async function runShadowPlanning(episodeId, options = {}) {
           agentId: "main-agent",
           failureCode: "provider_result_commit_unknown",
           reservationIds,
+          previousBudgetOverrun,
           message:
             "Main Agent 的 Provider 结果已成功结算，但计划是否完成提交无法确认；已禁止自动重试"
         });

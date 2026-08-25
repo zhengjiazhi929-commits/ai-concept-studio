@@ -1,9 +1,8 @@
-import { mkdir, readdir, rename, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { resolve } from "node:path";
 import {
-  episodePublicDirectory,
-  workspaceRelativePath
+  episodePublicDirectory as defaultEpisodePublicDirectory,
+  publicRoot,
+  workspaceRelativePath as defaultWorkspaceRelativePath
 } from "../../shared/paths.mjs";
 import { appendEvent, readEpisode, writeEpisode } from "../../shared/store.mjs";
 import {
@@ -12,6 +11,11 @@ import {
   resetApprovalForVersion
 } from "../../shared/workflow.mjs";
 import { assetExecutionApprovalRequired, assetExecutionApprovalValid } from "../reviews/asset-execution-checkpoint.mjs";
+import {
+  pendingUploadTransactionRoot,
+  stageExclusiveVersionedUpload
+} from "./upload-transaction.mjs";
+import { inspectSupportedMedia } from "./media-signatures.mjs";
 
 const supportedTypes = new Map([
   ["audio/mpeg", ".mp3"],
@@ -83,34 +87,49 @@ function nextVoiceFileName(files, extension) {
   return `voice-v${String(highest + 1).padStart(3, "0")}${extension}`;
 }
 
-export async function saveVoiceUpload(episodeId, upload) {
+export async function saveVoiceUpload(episodeId, upload, options = {}) {
   const extension = voiceExtension(upload.contentType, upload.fileName);
   if (!extension) throw new Error("旁白文件格式不支持，请使用 MP3、WAV、M4A、AAC 或 OGG");
   if (!Buffer.isBuffer(upload.data) || upload.data.length === 0) throw new Error("旁白文件为空");
+  await (options.inspectMedia ?? inspectSupportedMedia)(upload.data, extension);
   const durationSeconds = extension === ".wav" ? wavDurationSeconds(upload.data) : null;
 
-  const episode = await readEpisode(episodeId);
+  const readState = options.readEpisode ?? readEpisode;
+  const writeState = options.writeEpisode ?? writeEpisode;
+  const recordEvent = options.appendEvent ?? appendEvent;
+  const episode = await readState(episodeId);
   if (assetExecutionApprovalRequired(episode) && !assetExecutionApprovalValid(episode)) {
     const error = new Error("素材执行方案尚未通过生成前机器审核与人工批准，不能登记旁白执行产物");
     error.code = "asset_execution_approval_required";
     throw error;
   }
-  const directory = episodePublicDirectory(episodeId);
-  await mkdir(directory, { recursive: true });
-  const fileName = nextVoiceFileName(await readdir(directory), extension);
-  const destination = resolve(directory, fileName);
-  const temporary = `${destination}.tmp`;
-  await writeFile(temporary, upload.data);
-  await rename(temporary, destination);
-
-  const publicPath = `episodes/${episodeId}/${fileName}`;
-  const version = Number(/voice-v(\d{3})/u.exec(fileName)?.[1] ?? 1);
-  episode.voice = {
+  const stepIndex = episode.pipeline.findIndex((step) => step.agent === "voice-agent");
+  if (stepIndex < 0) throw new Error("这一期缺少旁白 Agent 流水线步骤");
+  const episodeDirectory = options.episodePublicDirectory ?? defaultEpisodePublicDirectory;
+  const relativePath = options.workspaceRelativePath ?? defaultWorkspaceRelativePath;
+  const staged = await stageExclusiveVersionedUpload({
+    allowedRoot: options.uploadRoot ?? publicRoot,
+    directory: episodeDirectory(episodeId),
+    data: upload.data,
+    nextFileName: (files) => nextVoiceFileName(files, extension),
+    transaction: {
+      markerRoot: options.uploadTransactionRoot ?? pendingUploadTransactionRoot,
+      episodeId,
+      kind: "voice",
+      publicPathForFileName: (fileName) => `episodes/${episodeId}/${fileName}`
+    }
+  });
+  const { fileName, destination } = staged;
+  let publicPath;
+  try {
+    publicPath = `episodes/${episodeId}/${fileName}`;
+    const version = Number(/voice-v(\d{3})/u.exec(fileName)?.[1] ?? 1);
+    episode.voice = {
     ...episode.voice,
     status: "ready",
     version,
     mode: "uploaded-recording",
-    audioPath: workspaceRelativePath(destination),
+    audioPath: relativePath(destination),
     publicPath,
     bytes: upload.data.length,
     durationSeconds,
@@ -137,8 +156,6 @@ export async function saveVoiceUpload(episodeId, upload) {
   invalidateReviewForGate(episode, "final");
   const assetStepIndex = episode.pipeline.findIndex((step) => step.agent === "asset-agent");
   const assetsComplete = episode.pipeline[assetStepIndex]?.status === "complete";
-  const stepIndex = episode.pipeline.findIndex((step) => step.agent === "voice-agent");
-  if (stepIndex < 0) throw new Error("这一期缺少旁白 Agent 流水线步骤");
   episode.pipeline[stepIndex] = voiceStepAfterUpload(
     episode.pipeline[stepIndex],
     assetsComplete
@@ -161,8 +178,13 @@ export async function saveVoiceUpload(episodeId, upload) {
     type: "voice-upload",
     message: `${fileName} 已登记，等待声音审批`
   });
-  await writeEpisode(episode);
-  await appendEvent({
+    await writeState(episode);
+  } catch (error) {
+    await staged.rollback().catch(() => undefined);
+    throw error;
+  }
+  await staged.commit();
+  await recordEvent({
     type: "voice.uploaded",
     episodeId,
     message: assetsComplete
