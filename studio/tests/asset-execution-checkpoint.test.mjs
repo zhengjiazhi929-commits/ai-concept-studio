@@ -19,10 +19,10 @@ import {
 } from "../src/server/reviews/asset-execution-checkpoint.mjs";
 import { inspectAssetExecutionPreflight } from
   "../src/server/reviews/asset-execution-preflight.mjs";
-import {
-  HYBRID_GENERATION_PROFILES,
-  adaptApprovedStoryboardToShortAssetPlan
-} from "../src/server/production/short-asset-plan-adapter.mjs";
+import { HYBRID_GENERATION_PROFILES } from
+  "../src/server/production/short-asset-plan-adapter.mjs";
+import { adaptStoryboardWithSyntheticExternalRights } from
+  "./synthetic-external-rights.fixture.mjs";
 import { inspectLocalCodeImplementation } from
   "../src/server/production/local-code-implementation.mjs";
 import { integrityHash } from "../src/shared/integrity.mjs";
@@ -71,7 +71,7 @@ function memoryStore(initialEpisode) {
 }
 
 function evidenceHarness(episode, mutate = (plan) => plan) {
-  const plan = mutate(adaptApprovedStoryboardToShortAssetPlan(episode));
+  const plan = mutate(adaptStoryboardWithSyntheticExternalRights(episode));
   const document = {
     episodeId: episode.id,
     provider: "deterministic-local",
@@ -549,6 +549,29 @@ test("技术图解外部调用删除 visualContract 后不能进入人工批准"
   ]);
 });
 
+test("外部调用缺少人工核验的结构化权利声明时不能进入人工批准", async () => {
+  const base = historicalApprovedStoryboardV3Episode();
+  base.production.assetPlanDirection = {
+    strategy: "hybrid-api-selective",
+    selectedBy: "human"
+  };
+  const evidence = evidenceHarness(base, (plan) => {
+    delete plan.executionPolicy.externalApiCalls[0].rightsDeclaration;
+    return plan;
+  });
+  const reviewed = await buildAssetExecutionCheckpoint(
+    withCandidateEpisode(base, evidence.plan),
+    { artifactPath: PLAN_PATH, version: 1 },
+    evidence
+  );
+  const check = reviewed.inspected.checks.find(
+    (item) => item.id === "external-rights-declaration"
+  );
+  assert.equal(reviewed.checkpoint.status, "blocked");
+  assert.equal(check.passed, false);
+  assert.equal(check.actual[0].callId, evidence.plan.executionPolicy.externalApiCalls[0].id);
+});
+
 test("技术图解 visualContract 的边引用未知节点时不能进入人工批准", async () => {
   const base = historicalApprovedStoryboardV3Episode();
   base.production.assetPlanDirection = {
@@ -807,6 +830,7 @@ test("AIHubMix 与 Seedance 2.5 方案逐币种审核并把精确请求参数绑
     prompt: videoCall.prompt,
     outputSpec: videoCall.outputSpec,
     requestParameters: videoCall.requestParameters,
+    rightsDeclarationHash: integrityHash(videoCall.rightsDeclaration),
     external: true
   });
   assert.equal(authorized.authorized, true);
@@ -826,6 +850,7 @@ test("AIHubMix 与 Seedance 2.5 方案逐币种审核并把精确请求参数绑
         ...videoCall.requestParameters,
         content: [{ type: "text", text: "changed unapproved prompt parameters" }]
       },
+      rightsDeclarationHash: integrityHash(videoCall.rightsDeclaration),
       external: true
     }),
     (error) => error.code === "asset_execution_scope_exceeded"

@@ -20,6 +20,7 @@ import {
   stageExclusiveVersionedUpload
 } from "./upload-transaction.mjs";
 import { inspectSupportedMedia } from "./media-signatures.mjs";
+import { buildUploadRights } from "../../shared/asset-rights.mjs";
 
 const supportedTypes = new Map([
   ["image/png", { extension: ".png", type: "image" }],
@@ -70,6 +71,15 @@ export async function saveAssetUpload(episodeId, upload, options = {}) {
   await (options.inspectMedia ?? inspectSupportedMedia)(upload.data, fileType.extension);
   const planItemId = String(upload.planItemId ?? "").trim();
   if (!planItemId) throw new Error("上传素材必须关联素材清单条目");
+  const source = String(upload.source ?? "human-upload");
+  const uploadAt = new Date(
+    typeof options.now === "function" ? options.now() : options.now ?? Date.now()
+  ).toISOString();
+  const rights = buildUploadRights(upload.rights, {
+    actor: options.actor,
+    acquiredAt: uploadAt,
+    source
+  });
 
   const readState = options.readEpisode ?? readEpisode;
   const writeState = options.writeEpisode ?? writeEpisode;
@@ -92,7 +102,6 @@ export async function saveAssetUpload(episodeId, upload, options = {}) {
       "licensed-stock",
       "local-code-animation"
     ]);
-    const source = String(upload.source ?? "human-upload");
     if (!allowedSources.has(source)) {
       const error = new Error("素材来源不在允许登记范围内");
       error.code = "asset_execution_source_not_allowed";
@@ -120,8 +129,15 @@ export async function saveAssetUpload(episodeId, upload, options = {}) {
       markerRoot: options.uploadTransactionRoot ?? pendingUploadTransactionRoot,
       episodeId,
       kind: "asset",
+      now: () => uploadAt,
       publicPathForFileName: (fileName) =>
-        `episodes/${episodeId}/materials/${fileName}`
+        `episodes/${episodeId}/materials/${fileName}`,
+      auditEventForFileName: () => ({
+        actor: options.actor,
+        planItemId,
+        rights,
+        message: `${planItemId} 素材已上传，等待核验`
+      })
     }
   });
   const { fileName } = staged;
@@ -134,12 +150,13 @@ export async function saveAssetUpload(episodeId, upload, options = {}) {
     planItemId,
     type: fileType.type,
     path: publicPath,
-    source: String(upload.source ?? "human-upload"),
+    source,
     originalFileName: upload.fileName || null,
     bytes: upload.data.length,
     sha256: createHash("sha256").update(upload.data).digest("hex"),
-    uploadedAt: new Date().toISOString(),
-    privacy: "requires-human-review",
+    uploadedAt: uploadAt,
+    privacy: rights.privacyPortraitStatus,
+    rights,
     verified: false
   };
   episode.assets = [...(episode.assets ?? []).filter((item) => item.planItemId !== planItemId), asset];
@@ -182,10 +199,12 @@ export async function saveAssetUpload(episodeId, upload, options = {}) {
   episode.render = { ...episode.render, status: "stale", progress: 0 };
   episode.qa = { ...episode.qa, status: "stale", checkedAt: new Date().toISOString() };
   episode.status = "in_production";
-  episode.updatedAt = new Date().toISOString();
+  episode.updatedAt = uploadAt;
   episode.history.push({
     at: episode.updatedAt,
     type: "asset-upload",
+    actor: options.actor,
+    auditEventId: staged.auditEvent?.eventId ?? null,
     message: `${planItemId} 已上传 ${fileName}，等待素材审批`
   });
     await writeState(episode);
@@ -193,12 +212,6 @@ export async function saveAssetUpload(episodeId, upload, options = {}) {
     await staged.rollback().catch(() => undefined);
     throw error;
   }
-  await staged.commit();
-  await recordEvent({
-    type: "asset.uploaded",
-    episodeId,
-    agentId: "asset-agent",
-    message: `${planItemId} 素材已上传，等待核验`
-  });
+  await staged.commitWithAudit(recordEvent);
   return { episode, asset };
 }

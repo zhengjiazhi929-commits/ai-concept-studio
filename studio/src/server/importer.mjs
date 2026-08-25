@@ -282,6 +282,7 @@ export async function importGoldenSample(options = {}) {
 
   const config = await readStudioConfig();
   const publicDirectory = publicDirectoryFor(GOLDEN_ID);
+  const now = timestamp(options.now);
 
   const assets = [];
   for (const fileName of screenshotFiles) {
@@ -339,14 +340,24 @@ export async function importGoldenSample(options = {}) {
       bytes: publicIntegrity.bytes,
       sha256: publicIntegrity.sha256,
       privacy: "fictional-data",
-      verified: true
+      verified: true,
+      rights: {
+        schemaVersion: 1,
+        authorOrSource: "AI Concept Studio synthetic fixture generator",
+        sourceUrl: null,
+        acquiredAt: now,
+        license: "project-original-private-use",
+        allowedUse: "private-internal-review",
+        attributionRequirements: "none",
+        privacyPortraitStatus: "fictional-data",
+        verifiedBy: `machine:${IMPORTER_ID}`
+      }
     });
   }
 
   const sourceDocs = [];
   for (const sourceFile of sourceFiles) sourceDocs.push(await recordFile(sourceFile));
 
-  const now = timestamp(options.now);
   const scenes = bindGoldenM1LogicalEvidence([
     {
       id: "S01",

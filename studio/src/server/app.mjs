@@ -11,6 +11,7 @@ import {
   webRoot
 } from "../shared/paths.mjs";
 import {
+  appendEvent,
   listEpisodes,
   readConfig,
   readEpisode,
@@ -99,12 +100,29 @@ import { createOperatorSessionAuthority } from
 const localHosts = new Set(["127.0.0.1", "::1", "localhost"]);
 const budgetReconciliationTokenHeader = "x-budget-reconciliation-token";
 
-function httpMutationCapabilitySpec(url, method) {
+function decodedHeader(request, name) {
+  const value = request.headers[name];
+  return value === undefined ? null : decodeURIComponent(String(value));
+}
+
+function uploadRightsFromHeaders(request) {
+  return {
+    authorOrSource: decodedHeader(request, "x-rights-author-source"),
+    sourceUrl: decodedHeader(request, "x-rights-source-url"),
+    license: decodedHeader(request, "x-rights-license"),
+    allowedUse: decodedHeader(request, "x-rights-allowed-use"),
+    attributionRequirements: decodedHeader(request, "x-rights-attribution"),
+    privacyPortraitStatus: decodedHeader(request, "x-rights-privacy")
+  };
+}
+
+export function httpMutationCapabilitySpec(url, method) {
   const episodeId = /^\/api\/episodes\/([a-z0-9-]+)/u.exec(url.pathname)?.[1]
     ?? "studio";
   const scopes = new Set(["http.mutation", "state.write"]);
   if (
     /\/(?:upload|register)$/u.test(url.pathname) ||
+    url.pathname === "/api/ai/primary" ||
     url.pathname === "/api/import/golden" ||
     url.pathname.includes("evidence-batches") ||
     url.pathname.includes("assisted-batches") ||
@@ -884,7 +902,8 @@ async function routeApi(
     const result = await saveVoiceUpload(voiceUploadMatch[1], {
       fileName: decodeURIComponent(String(encodedFileName)),
       contentType: request.headers["content-type"] ?? "application/octet-stream",
-      data: await readBinaryBody(request, 32 * 1024 * 1024)
+      data: await readBinaryBody(request, 32 * 1024 * 1024),
+      rights: uploadRightsFromHeaders(request)
     }, options);
     sendJson(response, 201, { episode: result.episode, bytes: result.bytes });
     return true;
@@ -926,7 +945,8 @@ async function routeApi(
       model: decodeURIComponent(String(request.headers["x-model"] ?? "")),
       maximumCostUsd: Number(request.headers["x-maximum-cost-usd"] ?? 0),
       contentType: request.headers["content-type"] ?? "application/octet-stream",
-      data: await readBinaryBody(request)
+      data: await readBinaryBody(request),
+      rights: uploadRightsFromHeaders(request)
     }, options);
     sendJson(response, 201, { episode: result.episode, asset: result.asset });
     return true;
@@ -1008,7 +1028,8 @@ export async function createStudioServer(options = {}) {
     await recoverPendingUploadTransactions({
       ...uploadRecovery,
       allowedRoot: uploadRecovery.allowedRoot ?? options.publicRoot ?? publicRoot,
-      listEpisodes: uploadRecovery.listEpisodes ?? options.listEpisodes
+      listEpisodes: uploadRecovery.listEpisodes ?? options.listEpisodes,
+      appendEvent: uploadRecovery.appendEvent ?? options.appendEvent ?? appendEvent
     });
     await recoverInterruptedRuns(options.recovery ?? {});
   }

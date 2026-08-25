@@ -338,7 +338,18 @@
       "bytes": 175975,
       "sha256": "04171997bf445942c69788b66e9e9e1c507b475228c7f9e529d6a4d341919b8e",
       "privacy": "fictional-data",
-      "verified": true
+      "verified": true,
+      "rights": {
+        "schemaVersion": 1,
+        "authorOrSource": "AI Concept Studio synthetic fixture generator",
+        "sourceUrl": null,
+        "acquiredAt": "2026-07-31T00:00:00.000Z",
+        "license": "project-original-private-use",
+        "allowedUse": "private-internal-review",
+        "attributionRequirements": "none",
+        "privacyPortraitStatus": "fictional-data",
+        "verifiedBy": "machine:golden-fixture-v1"
+      }
     },
     {
       "id": "demo-viewer-denied",
@@ -348,7 +359,18 @@
       "bytes": 175267,
       "sha256": "2cc926451b33f9a3040c293e1479f042776d8fd3fc20b89c30b8fc13911cd157",
       "privacy": "fictional-data",
-      "verified": true
+      "verified": true,
+      "rights": {
+        "schemaVersion": 1,
+        "authorOrSource": "AI Concept Studio synthetic fixture generator",
+        "sourceUrl": null,
+        "acquiredAt": "2026-07-31T00:00:00.000Z",
+        "license": "project-original-private-use",
+        "allowedUse": "private-internal-review",
+        "attributionRequirements": "none",
+        "privacyPortraitStatus": "fictional-data",
+        "verifiedBy": "machine:golden-fixture-v1"
+      }
     },
     {
       "id": "demo-admin-export-complete",
@@ -358,7 +380,18 @@
       "bytes": 182123,
       "sha256": "e548604e98466cb34b6f85390c8293ec6aec9081245f2a370862e75da9b4f297",
       "privacy": "fictional-data",
-      "verified": true
+      "verified": true,
+      "rights": {
+        "schemaVersion": 1,
+        "authorOrSource": "AI Concept Studio synthetic fixture generator",
+        "sourceUrl": null,
+        "acquiredAt": "2026-07-31T00:00:00.000Z",
+        "license": "project-original-private-use",
+        "allowedUse": "private-internal-review",
+        "attributionRequirements": "none",
+        "privacyPortraitStatus": "fictional-data",
+        "verifiedBy": "machine:golden-fixture-v1"
+      }
     },
     {
       "id": "demo-final-before-export",
@@ -368,7 +401,18 @@
       "bytes": 172619,
       "sha256": "26f9b5398e9b0f1327b4bd5b7b1ea601b3a2b57b1ca343947f5c047931509313",
       "privacy": "fictional-data",
-      "verified": true
+      "verified": true,
+      "rights": {
+        "schemaVersion": 1,
+        "authorOrSource": "AI Concept Studio synthetic fixture generator",
+        "sourceUrl": null,
+        "acquiredAt": "2026-07-31T00:00:00.000Z",
+        "license": "project-original-private-use",
+        "allowedUse": "private-internal-review",
+        "attributionRequirements": "none",
+        "privacyPortraitStatus": "fictional-data",
+        "verifiedBy": "machine:golden-fixture-v1"
+      }
     }
   ],
   "reviews": {

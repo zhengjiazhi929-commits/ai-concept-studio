@@ -65,6 +65,23 @@ function sha256(data) {
   return createHash("sha256").update(data).digest("hex");
 }
 
+function uploadRights(kind = "asset") {
+  return {
+    authorOrSource: kind === "voice" ? "fixture narrator" : "fixture author",
+    sourceUrl: null,
+    license: "project-original-private-use",
+    allowedUse: "private-internal-review",
+    attributionRequirements: "none",
+    privacyPortraitStatus: kind === "voice"
+      ? "consent-recorded"
+      : "no-identifiable-person"
+  };
+}
+
+function receiptFor(event) {
+  return { ...structuredClone(event), sequence: 1, hash: "fixture-receipt" };
+}
+
 async function isolatedUploadRoots(prefix) {
   const root = await mkdtemp(resolve(tmpdir(), prefix));
   const uploadRoot = resolve(root, "public");
@@ -88,7 +105,8 @@ test("素材上传发生 Episode CAS 冲突时删除自己发布的文件和临�
         contentType: "image/png",
         planItemId: "transaction-test-item",
         source: "human-upload",
-        data: pngFixture("synthetic-png-fixture")
+        data: pngFixture("synthetic-png-fixture"),
+        rights: uploadRights()
       }, {
         readEpisode: async () => structuredClone(source),
         writeEpisode: async () => {
@@ -101,7 +119,8 @@ test("素材上传发生 Episode CAS 冲突时删除自己发布的文件和临�
           resolve(roots.uploadRoot, "episodes", episodeId),
         inspectMedia: async () => ({ kind: "image" }),
         uploadRoot: roots.uploadRoot,
-        uploadTransactionRoot: roots.markerRoot
+        uploadTransactionRoot: roots.markerRoot,
+        actor: "human:fixture-operator"
       }),
       (error) => error.code === "state_version_conflict"
     );
@@ -127,21 +146,24 @@ test("两个并发素材上传只有 Episode CAS 胜者保留文件，败者不�
       next.control.stateVersion = committed.control.stateVersion;
       stored = committed;
     },
-    appendEvent: async () => {
+    appendEvent: async (event) => {
       events += 1;
+      return receiptFor(event);
     },
     episodePublicDirectory: (episodeId) =>
       resolve(roots.uploadRoot, "episodes", episodeId),
     inspectMedia: async () => ({ kind: "image" }),
     uploadRoot: roots.uploadRoot,
-    uploadTransactionRoot: roots.markerRoot
+    uploadTransactionRoot: roots.markerRoot,
+    actor: "human:fixture-operator"
   };
   const upload = (label) => saveAssetUpload(stored.id, {
     fileName: `${label}.png`,
     contentType: "image/png",
     planItemId: "transaction-test-item",
     source: "human-upload",
-    data: pngFixture(`synthetic-png-${label}`)
+    data: pngFixture(`synthetic-png-${label}`),
+    rights: uploadRights()
   }, dependencies);
   try {
     const results = await Promise.allSettled([upload("first"), upload("second")]);
@@ -171,7 +193,8 @@ test("旁白上传发生 Episode CAS 冲突时同样不留下可被误认的音�
       saveVoiceUpload(source.id, {
         fileName: "fixture.mp3",
         contentType: "audio/mpeg",
-        data: mp3Fixture("synthetic-mp3-fixture")
+        data: mp3Fixture("synthetic-mp3-fixture"),
+        rights: uploadRights("voice")
       }, {
         readEpisode: async () => structuredClone(source),
         writeEpisode: async () => {
@@ -185,7 +208,8 @@ test("旁白上传发生 Episode CAS 冲突时同样不留下可被误认的音�
         inspectMedia: async () => ({ kind: "audio" }),
         uploadRoot: roots.uploadRoot,
         uploadTransactionRoot: roots.markerRoot,
-        workspaceRelativePath: (path) => `test/${path.split("/").at(-1)}`
+        workspaceRelativePath: (path) => `test/${path.split("/").at(-1)}`,
+        actor: "human:fixture-operator"
       }),
       (error) => error.code === "state_version_conflict"
     );
@@ -270,13 +294,151 @@ test("Episode 已提交引用时，启动恢复只清 marker 并保留 final", a
       quarantineRoot: roots.quarantineRoot,
       allowedRoot: roots.uploadRoot,
       listEpisodes: async () => [committed],
-      isProcessAlive: async () => false
+      isProcessAlive: async () => false,
+      appendEvent: async (event) => receiptFor(event)
     });
     assert.equal(recovered.committedCount, 1);
     assert.equal(recovered.removedFinalCount, 0);
     await access(staged.destination);
     assert.deepEqual(await readdir(roots.markerRoot), []);
     assert.deepEqual(await readdir(roots.quarantineRoot), []);
+  } finally {
+    await rm(roots.root, { recursive: true, force: true });
+  }
+});
+
+test("素材上传在 Episode 提交后审计失败时保留 outbox，重试不会产生第二个版本，启动可幂等补账", async () => {
+  const roots = await isolatedUploadRoots("acs-asset-audit-outbox-");
+  let stored = assetUploadEpisode(await readFixtureEpisode());
+  let auditAttempts = 0;
+  let writes = 0;
+  const data = pngFixture("audit-outbox-asset");
+  const upload = {
+    fileName: "audit-outbox.png",
+    contentType: "image/png",
+    planItemId: "transaction-test-item",
+    source: "human-upload",
+    data,
+    rights: uploadRights()
+  };
+  const dependencies = {
+    readEpisode: async () => structuredClone(stored),
+    writeEpisode: async (next) => {
+      if (next.control.stateVersion !== stored.control.stateVersion) throw stateConflict();
+      const committed = structuredClone(next);
+      committed.control.stateVersion += 1;
+      next.control.stateVersion = committed.control.stateVersion;
+      stored = committed;
+      writes += 1;
+    },
+    appendEvent: async () => {
+      auditAttempts += 1;
+      throw new Error("synthetic upload audit failure");
+    },
+    episodePublicDirectory: (episodeId) =>
+      resolve(roots.uploadRoot, "episodes", episodeId),
+    inspectMedia: async () => ({ kind: "image" }),
+    uploadRoot: roots.uploadRoot,
+    uploadTransactionRoot: roots.markerRoot,
+    actor: "human:fixture-operator"
+  };
+  try {
+    await assert.rejects(
+      saveAssetUpload(stored.id, upload, dependencies),
+      /synthetic upload audit failure/u
+    );
+    assert.equal(writes, 1);
+    assert.equal(auditAttempts, 1);
+    assert.equal(stored.assets.at(-1).sha256, sha256(data));
+    assert.equal((await readdir(roots.markerRoot)).length, 1);
+    assert.equal((await readdir(
+      resolve(roots.uploadRoot, "episodes", stored.id, "materials")
+    )).length, 1);
+
+    await assert.rejects(
+      saveAssetUpload(stored.id, upload, dependencies),
+      (error) => error.code === "upload_recovery_required" && error.statusCode === 503
+    );
+    assert.equal(writes, 1);
+    assert.equal((await readdir(
+      resolve(roots.uploadRoot, "episodes", stored.id, "materials")
+    )).length, 1);
+
+    const delivered = [];
+    const recovered = await recoverPendingUploadTransactions({
+      markerRoot: roots.markerRoot,
+      quarantineRoot: roots.quarantineRoot,
+      allowedRoot: roots.uploadRoot,
+      listEpisodes: async () => [structuredClone(stored)],
+      isProcessAlive: async () => false,
+      appendEvent: async (event) => {
+        delivered.push(structuredClone(event));
+        return receiptFor(event);
+      }
+    });
+    assert.equal(recovered.committedCount, 1);
+    assert.equal(delivered.length, 1);
+    assert.equal(delivered[0].type, "asset.uploaded");
+    assert.equal(delivered[0].artifact.sha256, sha256(data));
+    assert.deepEqual(await readdir(roots.markerRoot), []);
+    assert.equal((await readdir(
+      resolve(roots.uploadRoot, "episodes", stored.id, "materials")
+    )).length, 1);
+  } finally {
+    await rm(roots.root, { recursive: true, force: true });
+  }
+});
+
+test("旁白上传的审计失败同样保留可恢复 outbox", async () => {
+  const roots = await isolatedUploadRoots("acs-voice-audit-outbox-");
+  let stored = await readFixtureEpisode();
+  const data = mp3Fixture("audit-outbox-voice");
+  try {
+    await assert.rejects(
+      saveVoiceUpload(stored.id, {
+        fileName: "audit-outbox.mp3",
+        contentType: "audio/mpeg",
+        data,
+        rights: uploadRights("voice")
+      }, {
+        readEpisode: async () => structuredClone(stored),
+        writeEpisode: async (next) => {
+          const committed = structuredClone(next);
+          committed.control.stateVersion += 1;
+          next.control.stateVersion = committed.control.stateVersion;
+          stored = committed;
+        },
+        appendEvent: async () => {
+          throw new Error("synthetic voice audit failure");
+        },
+        episodePublicDirectory: (episodeId) =>
+          resolve(roots.uploadRoot, "episodes", episodeId),
+        inspectMedia: async () => ({ kind: "audio" }),
+        uploadRoot: roots.uploadRoot,
+        uploadTransactionRoot: roots.markerRoot,
+        workspaceRelativePath: (path) => `test/${path.split("/").at(-1)}`,
+        actor: "human:fixture-operator"
+      }),
+      /synthetic voice audit failure/u
+    );
+    assert.equal(stored.voice.sha256, sha256(data));
+    assert.equal((await readdir(roots.markerRoot)).length, 1);
+    const events = [];
+    const recovered = await recoverPendingUploadTransactions({
+      markerRoot: roots.markerRoot,
+      quarantineRoot: roots.quarantineRoot,
+      allowedRoot: roots.uploadRoot,
+      listEpisodes: async () => [structuredClone(stored)],
+      isProcessAlive: async () => false,
+      appendEvent: async (event) => {
+        events.push(structuredClone(event));
+        return receiptFor(event);
+      }
+    });
+    assert.equal(recovered.committedCount, 1);
+    assert.equal(events.length, 1);
+    assert.equal(events[0].type, "voice.uploaded");
+    assert.deepEqual(await readdir(roots.markerRoot), []);
   } finally {
     await rm(roots.root, { recursive: true, force: true });
   }

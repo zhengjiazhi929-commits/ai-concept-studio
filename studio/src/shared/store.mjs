@@ -1,5 +1,4 @@
 import { mkdir, readFile, readdir } from "node:fs/promises";
-import { resolve } from "node:path";
 import {
   auditLedgerPath,
   configPath,
@@ -69,16 +68,9 @@ export async function appendEvent(event) {
   return appendAuditEvent(auditLedgerPath, { at: new Date().toISOString(), ...event });
 }
 
-export async function readRecentEvents(limit = 80) {
-  try {
-    return await readAuditEvents(auditLedgerPath, limit);
-  } catch (error) {
-    if (error?.code === "audit_integrity_invalid") throw error;
-    try {
-      const content = await readFile(resolve(logsRoot, "events.ndjson"), "utf8");
-      return content.trim().split("\n").filter(Boolean).slice(-limit).map((line) => JSON.parse(line)).reverse();
-    } catch {
-      return [];
-    }
-  }
+export async function readRecentEvents(limit = 80, options = {}) {
+  // The JSON ledger is the only current audit source. Any unreadable,
+  // malformed, truncated, or integrity-invalid ledger must stay visible as a
+  // hard failure instead of being disguised as an empty/legacy event stream.
+  return readAuditEvents(options.auditPath ?? auditLedgerPath, limit);
 }

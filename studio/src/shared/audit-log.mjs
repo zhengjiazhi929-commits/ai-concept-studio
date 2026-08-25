@@ -61,19 +61,28 @@ export function validateAuditLedger(ledger) {
 }
 
 async function readLedger(path) {
+  let content;
   try {
-    const ledger = JSON.parse(await readFile(path, "utf8"));
-    const validation = validateAuditLedger(ledger);
-    if (!validation.valid) {
-      const error = new Error(`Audit ledger integrity check failed: ${validation.errors.join("; ")}`);
-      error.code = "audit_integrity_invalid";
-      throw error;
-    }
-    return ledger;
+    content = await readFile(path, "utf8");
   } catch (error) {
     if (error?.code === "ENOENT") return { stateVersion: 0, records: [] };
     throw error;
   }
+  let ledger;
+  try {
+    ledger = JSON.parse(content);
+  } catch (cause) {
+    const error = new Error("Audit ledger is malformed or truncated", { cause });
+    error.code = "audit_integrity_invalid";
+    throw error;
+  }
+  const validation = validateAuditLedger(ledger);
+  if (!validation.valid) {
+    const error = new Error(`Audit ledger integrity check failed: ${validation.errors.join("; ")}`);
+    error.code = "audit_integrity_invalid";
+    throw error;
+  }
+  return ledger;
 }
 
 export async function appendAuditEvent(path, event, options = {}) {

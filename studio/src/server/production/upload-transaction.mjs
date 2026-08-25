@@ -251,12 +251,83 @@ function validatePublicPath(value) {
   return publicPath;
 }
 
+function validateAuditActor(value) {
+  const actor = String(value ?? "").trim();
+  if (!actor || actor.length > 128 || /[\u0000-\u001f\u007f]/u.test(actor)) {
+    throw uploadTransactionError(
+      "上传审计 outbox actor 无效",
+      "upload_transaction_marker_invalid",
+      503
+    );
+  }
+  return actor;
+}
+
+function expectedUploadAuditEventId(marker) {
+  return `upload-transaction:${marker.transactionId}:${marker.kind}.uploaded`;
+}
+
+function validateUploadAuditEvent(marker) {
+  const event = marker.auditEvent;
+  const expectedEventId = expectedUploadAuditEventId(marker);
+  const expectedMessage = marker.kind === "asset"
+    ? `${event?.planItemId ?? ""} 素材已上传，等待核验`
+    : "旁白文件已上传，等待素材与声音核验";
+  if (
+    !event ||
+    typeof event !== "object" ||
+    Array.isArray(event) ||
+    event.eventId !== expectedEventId ||
+    event.idempotencyKey !== expectedEventId ||
+    event.type !== `${marker.kind}.uploaded` ||
+    event.episodeId !== marker.episodeId ||
+    event.at !== marker.createdAt ||
+    typeof event.message !== "string" ||
+    !event.message.trim() ||
+    event.message.length > 512 ||
+    event.message !== expectedMessage ||
+    event.artifact?.path !== marker.publicPath ||
+    event.artifact?.bytes !== marker.bytes ||
+    event.artifact?.sha256 !== marker.sha256 ||
+    (marker.kind === "asset" && (
+      typeof event.planItemId !== "string" ||
+      !event.planItemId.trim() ||
+      event.agentId !== "asset-agent"
+    )) ||
+    (marker.kind === "voice" && event.agentId !== "voice-agent")
+  ) {
+    throw uploadTransactionError(
+      "上传审计 outbox 与事务 marker 不一致",
+      "upload_transaction_marker_invalid",
+      503
+    );
+  }
+  validateAuditActor(event.actor);
+  return event;
+}
+
+function auditReceiptMatches(receipt, event) {
+  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return false;
+  return Object.entries(event).every(([key, value]) => (
+    JSON.stringify(receipt[key]) === JSON.stringify(value)
+  ));
+}
+
+function assertAuditReceipt(receipt, event) {
+  if (auditReceiptMatches(receipt, event)) return receipt;
+  throw uploadTransactionError(
+    "上传审计账本未返回与 outbox 精确匹配的幂等回执",
+    "upload_audit_receipt_invalid",
+    500
+  );
+}
+
 function validateMarker(marker, fileName) {
   if (
     !marker ||
     typeof marker !== "object" ||
     Array.isArray(marker) ||
-    marker.schemaVersion !== 1 ||
+    ![1, 2].includes(marker.schemaVersion) ||
     marker.status !== "prepared" ||
     typeof marker.transactionId !== "string" ||
     `${marker.transactionId}.json` !== fileName ||
@@ -278,6 +349,7 @@ function validateMarker(marker, fileName) {
   }
   validateEpisodeId(marker.episodeId);
   validatePublicPath(marker.publicPath);
+  if (marker.schemaVersion === 2) validateUploadAuditEvent(marker);
   return marker;
 }
 
@@ -302,7 +374,7 @@ async function writePendingMarker(options) {
   }
   const transactionId = randomUUID();
   const marker = {
-    schemaVersion: 1,
+    schemaVersion: options.transaction.auditEventForFileName ? 2 : 1,
     transactionId,
     status: "prepared",
     episodeId: validateEpisodeId(options.transaction.episodeId),
@@ -323,6 +395,30 @@ async function writePendingMarker(options) {
       "upload_transaction_marker_invalid"
     );
   }
+  if (marker.schemaVersion === 2) {
+    const eventDetails = options.transaction.auditEventForFileName(options.fileName) ?? {};
+    const eventId = expectedUploadAuditEventId(marker);
+    marker.auditEvent = {
+      eventId,
+      idempotencyKey: eventId,
+      at: marker.createdAt,
+      type: `${marker.kind}.uploaded`,
+      episodeId: marker.episodeId,
+      actor: validateAuditActor(eventDetails.actor),
+      agentId: marker.kind === "asset" ? "asset-agent" : "voice-agent",
+      ...(marker.kind === "asset"
+        ? { planItemId: String(eventDetails.planItemId ?? "").trim() }
+        : {}),
+      message: String(eventDetails.message ?? "").trim(),
+      artifact: {
+        path: marker.publicPath,
+        bytes: marker.bytes,
+        sha256: marker.sha256
+      },
+      rights: structuredClone(eventDetails.rights ?? null)
+    };
+    validateUploadAuditEvent(marker);
+  }
   const markerPath = resolve(realMarkerRoot, `${transactionId}.json`);
   await writeFile(markerPath, `${JSON.stringify(marker, null, 2)}\n`, {
     encoding: "utf8",
@@ -332,13 +428,55 @@ async function writePendingMarker(options) {
   return { marker, markerPath };
 }
 
-function episodeReferenceForMarker(episodes, marker) {
+function episodeBindingForMarker(episodes, marker) {
   const episode = episodes.find((candidate) => candidate?.id === marker.episodeId);
   if (!episode) return null;
   if (marker.kind === "asset") {
-    return (episode.assets ?? []).find((asset) => asset?.path === marker.publicPath) ?? null;
+    const reference = (episode.assets ?? []).find(
+      (asset) => asset?.path === marker.publicPath
+    ) ?? null;
+    return reference ? { episode, reference } : null;
   }
-  return episode.voice?.publicPath === marker.publicPath ? episode.voice : null;
+  return episode.voice?.publicPath === marker.publicPath
+    ? { episode, reference: episode.voice }
+    : null;
+}
+
+function validateCommittedAuditOutbox(binding, marker) {
+  if (marker.schemaVersion !== 2) return;
+  const event = validateUploadAuditEvent(marker);
+  const historyType = marker.kind === "asset" ? "asset-upload" : "voice-upload";
+  const history = (binding.episode.history ?? []).find((entry) => (
+    entry?.type === historyType &&
+    entry.auditEventId === event.eventId &&
+    entry.at === event.at &&
+    entry.actor === event.actor
+  ));
+  if (
+    !history ||
+    (marker.kind === "asset" && binding.reference?.planItemId !== event.planItemId) ||
+    JSON.stringify(binding.reference?.rights ?? null) !==
+      JSON.stringify(event.rights ?? null)
+  ) {
+    throw uploadTransactionError(
+      "已提交上传与审计 outbox 的 Episode 绑定无效，恢复已安全停止",
+      "upload_recovery_audit_outbox_invalid",
+      503
+    );
+  }
+}
+
+async function deliverCommittedAuditOutbox(marker, options) {
+  if (marker.schemaVersion !== 2) return null;
+  if (typeof options.appendEvent !== "function") {
+    throw uploadTransactionError(
+      "上传恢复缺少审计写入器，恢复已安全停止",
+      "upload_recovery_audit_writer_missing",
+      503
+    );
+  }
+  const event = validateUploadAuditEvent(marker);
+  return assertAuditReceipt(await options.appendEvent(event), event);
 }
 
 async function inspectPublishedFile(allowedRoot, publicPath) {
@@ -489,12 +627,12 @@ export async function recoverPendingUploadTransactions(options = {}) {
     const decisions = [];
     for (const pendingItem of pending) {
       const { marker } = pendingItem;
-      const reference = episodeReferenceForMarker(episodes, marker);
+      const binding = episodeBindingForMarker(episodes, marker);
       const published = await inspectPublishedFile(
         markerBoundary.realAllowedRoot,
         marker.publicPath
       );
-      if (reference) {
+      if (binding) {
         const finalHash = published.resolvedDestination && published.identity?.isFile()
           ? await sha256File(published.resolvedDestination)
           : null;
@@ -503,8 +641,8 @@ export async function recoverPendingUploadTransactions(options = {}) {
           !sameIdentity(marker.identity, published.identity) ||
           published.identity.size !== marker.bytes ||
           finalHash !== marker.sha256 ||
-          reference.bytes !== marker.bytes ||
-          reference.sha256 !== marker.sha256
+          binding.reference.bytes !== marker.bytes ||
+          binding.reference.sha256 !== marker.sha256
         ) {
           throw uploadTransactionError(
             `Episode 已引用的上传文件缺失或完整性漂移：${marker.publicPath}`,
@@ -512,7 +650,8 @@ export async function recoverPendingUploadTransactions(options = {}) {
             503
           );
         }
-        decisions.push({ ...pendingItem, action: "committed", published });
+        validateCommittedAuditOutbox(binding, marker);
+        decisions.push({ ...pendingItem, action: "committed", published, binding });
       } else if (
         published.identity &&
         sameIdentity(marker.identity, published.identity)
@@ -530,6 +669,14 @@ export async function recoverPendingUploadTransactions(options = {}) {
         quarantineBoundary.realMarkerRoot
       )
     };
+    // Deliver every committed outbox before removing any marker. An append
+    // failure therefore leaves the entire recovery batch inspectable, while a
+    // duplicate append is harmless because eventId/idempotencyKey are stable.
+    for (const decision of decisions) {
+      if (decision.action === "committed") {
+        await deliverCommittedAuditOutbox(decision.marker, options);
+      }
+    }
     for (const decision of decisions) {
       if (decision.action === "committed") {
         await rm(decision.markerPath, { force: true });
@@ -621,6 +768,20 @@ export async function stageExclusiveVersionedUpload(options) {
       lockRoot,
       lockQuarantineRoot
     };
+    const markerBoundary = await assertPrivateTransactionRoot(
+      markerRoot,
+      realAllowedRoot
+    );
+    const pendingEntries = await readdir(markerBoundary.realMarkerRoot);
+    if (pendingEntries.length > 0) {
+      await transactionLock.release();
+      transactionLock = null;
+      throw uploadTransactionError(
+        "存在尚未恢复的上传事务；为避免重复版本和审计缺口，已拒绝新上传",
+        "upload_recovery_required",
+        503
+      );
+    }
   }
   const temporary = resolve(temporaryDirectory, `.upload-${randomUUID()}.tmp`);
   try {
@@ -680,24 +841,43 @@ export async function stageExclusiveVersionedUpload(options) {
         transactionLock = null;
         return lock.release();
       };
+      const removeMarkerAndRelease = async () => {
+        try {
+          if (!markerPath) return false;
+          await rm(markerPath, { force: true });
+          markerPath = null;
+          return true;
+        } catch {
+          // Episode and audit already reference the final. Startup recovery
+          // will remove the marker without deleting the committed file.
+          return false;
+        } finally {
+          await releaseLock();
+        }
+      };
       lockTransferred = true;
       return {
         fileName,
         destination,
         transactionId: pending?.marker.transactionId ?? null,
+        auditEvent: pending?.marker.auditEvent ?? null,
         async commit() {
+          return removeMarkerAndRelease();
+        },
+        async commitWithAudit(appendEvent) {
+          if (!pending?.marker.auditEvent) return removeMarkerAndRelease();
           try {
-            if (!markerPath) return false;
-            await rm(markerPath, { force: true });
-            markerPath = null;
-            return true;
-          } catch {
-            // Episode already references the final. Startup recovery will
-            // remove this marker without deleting the committed file.
-            return false;
-          } finally {
+            const event = validateUploadAuditEvent(pending.marker);
+            assertAuditReceipt(await appendEvent(event), event);
+          } catch (error) {
             await releaseLock();
+            throw error;
           }
+          return removeMarkerAndRelease();
+        },
+        async defer() {
+          await releaseLock();
+          return Boolean(markerPath);
         },
         async rollback() {
           try {

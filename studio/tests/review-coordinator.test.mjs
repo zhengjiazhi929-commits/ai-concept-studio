@@ -366,7 +366,7 @@ test("素材总审能把资产计划问题退回真正的 Asset Agent", async ()
       decision: "revise",
       artifactVersion: context.artifact?.plan?.version
         ?? source.approvals.assets.currentVersion,
-      rubricVersion: "assets-v6",
+      rubricVersion: "assets-v8",
       confidence: 0.96,
       blockingIssues: [{
         code: "ASSET_PLAN_RIGHTS_GAP",

@@ -34,7 +34,10 @@ test("五个阶段加载独立且版本化的审核规则", async () => {
   assert.equal(config.stages.storyboard.version, "storyboard-v3");
   assert.ok(config.stages.storyboard.requiredChecks.includes("storyboard-script-coverage"));
   assert.ok(config.stages.storyboard.requiredChecks.includes("subtitle-boundaries"));
-  assert.equal(config.stages.assets.version, "assets-v6");
+  assert.equal(config.stages.assets.version, "assets-v8");
+  assert.ok(config.stages.assets.requiredChecks.includes("asset-rights-registry"));
+  assert.ok(config.stages.assets.requiredChecks.includes("external-asset-receipts"));
+  assert.ok(config.stages.assets.requiredChecks.includes("voice-rights-registry"));
   assert.ok(config.stages.assets.requiredChecks.includes("voice-duration"));
   assert.ok(config.stages.assets.requiredChecks.includes("progressive-technical-explanation"));
   assert.ok(config.stages.assets.requiredChecks.includes("voice-local-offline-provenance"));
@@ -49,6 +52,42 @@ test("五个阶段加载独立且版本化的审核规则", async () => {
     "voice-agent",
     "render-agent"
   ]);
+});
+
+test("素材来源缺少许可证台账最小字段时是机器阻断，不再只是 warning", async () => {
+  const episode = await readFixtureEpisode();
+  const incomplete = structuredClone(episode);
+  delete incomplete.assets[0].rights;
+  const missing = await validateAssetsForReview(incomplete, {
+    access: async () => undefined
+  });
+  const missingRights = missing.find((check) => check.code === "asset-rights-registry");
+  assert.equal(missingRights.passed, false);
+  assert.equal(missingRights.severity, "error");
+  assert.ok(missingRights.actual.invalidAssets.length > 0);
+
+  const complete = structuredClone(episode);
+  complete.assets = complete.assets.map((asset) => ({
+    ...asset,
+    rights: {
+      schemaVersion: 1,
+      authorOrSource: "AI Concept Studio synthetic fixture",
+      sourceUrl: null,
+      acquiredAt: "2026-08-25T00:00:00.000Z",
+      license: "project-original-private-use",
+      allowedUse: "private-internal-review",
+      attributionRequirements: "none",
+      privacyPortraitStatus: "fictional-data",
+      verifiedBy: "machine:test-fixture"
+    }
+  }));
+  const completeChecks = await validateAssetsForReview(complete, {
+    access: async () => undefined
+  });
+  assert.equal(
+    completeChecks.find((check) => check.code === "asset-rights-registry").passed,
+    true
+  );
 });
 
 test("素材 Rubric 把渐进式技术讲解合同作为稳定必检项", async () => {

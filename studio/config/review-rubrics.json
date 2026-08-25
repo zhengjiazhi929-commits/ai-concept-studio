@@ -44,7 +44,7 @@
       ]
     },
     "assets": {
-      "version": "assets-v6",
+      "version": "assets-v8",
       "semanticReview": false,
       "automaticRevision": true,
       "revisionAgents": ["storyboard-agent", "asset-agent", "voice-agent"],
@@ -52,6 +52,9 @@
         "artifact-version",
         "episode-contract",
         "asset-count",
+        "asset-rights-registry",
+        "external-asset-receipts",
+        "voice-rights-registry",
         "progressive-technical-explanation",
         "evidence-assets",
         "voice-plan",

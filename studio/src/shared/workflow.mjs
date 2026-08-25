@@ -74,7 +74,8 @@ function stableAssets(assets = []) {
     source: asset.source ?? null,
     bytes: asset.bytes ?? null,
     sha256: asset.sha256 ?? null,
-    privacy: asset.privacy ?? null
+    privacy: asset.privacy ?? null,
+    rights: asset.rights ?? null
   }));
 }
 
@@ -139,7 +140,8 @@ export function gateArtifactPayload(episode, gate) {
         bitsPerSample: episode.voice?.bitsPerSample ?? null,
         provenance: episode.voice?.provenance ?? null,
         verification: episode.voice?.verification ?? null,
-        authorization: episode.voice?.authorization ?? null
+        authorization: episode.voice?.authorization ?? null,
+        rights: episode.voice?.rights ?? null
       },
       sceneBindings: (episode.scenes ?? []).map((scene) => ({
         id: scene.id,

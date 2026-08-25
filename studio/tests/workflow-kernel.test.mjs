@@ -8,10 +8,10 @@ import {
   validateKernelPlan
 } from "../src/server/control/workflow-kernel.mjs";
 import { runAgent, runNextReadyAgent } from "../src/server/orchestrator.mjs";
-import {
-  HYBRID_GENERATION_PROFILES,
-  adaptApprovedStoryboardToShortAssetPlan
-} from "../src/server/production/short-asset-plan-adapter.mjs";
+import { HYBRID_GENERATION_PROFILES } from
+  "../src/server/production/short-asset-plan-adapter.mjs";
+import { adaptStoryboardWithSyntheticExternalRights } from
+  "./synthetic-external-rights.fixture.mjs";
 import {
   approveAssetExecutionCandidate,
   beginAssetExecutionPreflight,
@@ -146,7 +146,7 @@ async function approvedAndPreflightPassedAssetEpisode() {
       HYBRID_GENERATION_PROFILES.AIHUBMIX_VOLCENGINE_SEEDANCE_2_5_720P,
     selectedBy: "human"
   };
-  const plan = adaptApprovedStoryboardToShortAssetPlan(source);
+  const plan = adaptStoryboardWithSyntheticExternalRights(source);
   source.production.assetPlan = {
     version: 1,
     artifactPath: "studio/tests/fixtures/workflow-kernel/asset-plan-v001.json",

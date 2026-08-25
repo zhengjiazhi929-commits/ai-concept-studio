@@ -3,8 +3,12 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
-import { publicRoot } from "../src/shared/paths.mjs";
+import { episodePublicDirectory, publicRoot } from "../src/shared/paths.mjs";
 import { integrityHash } from "../src/shared/integrity.mjs";
+import {
+  validateApprovedExternalAssetReceipt,
+  validateAssetRights
+} from "../src/shared/asset-rights.mjs";
 import { historicalApprovedStoryboardV3Episode } from
   "./historical-approved-storyboard-v3.fixture.mjs";
 import { validateWorkerMutation } from "../src/shared/agent-contracts.mjs";
@@ -12,9 +16,10 @@ import { agents } from "../src/server/agents/registry.mjs";
 import { createCapabilityAuthority } from
   "../src/server/security/side-effect-capability.mjs";
 import {
-  HYBRID_GENERATION_PROFILES,
-  adaptApprovedStoryboardToShortAssetPlan
+  HYBRID_GENERATION_PROFILES
 } from "../src/server/production/short-asset-plan-adapter.mjs";
+import { adaptStoryboardWithSyntheticExternalRights } from
+  "./synthetic-external-rights.fixture.mjs";
 import {
   AIHUBMIX_GEMINI_MODEL_METADATA_ENDPOINT,
   inspectAssetExecutionPreflight
@@ -28,6 +33,8 @@ import {
 } from "../src/server/production/external-assets.mjs";
 import { inspectLocalCodeImplementation } from
   "../src/server/production/local-code-implementation.mjs";
+import { validateAssetsForReview } from
+  "../src/server/reviews/validators/assets.mjs";
 
 const EPISODE_ID = "agent-skill-tool-mcp-60s-20260813";
 const PNG = Buffer.concat([
@@ -38,6 +45,7 @@ const MP4 = Buffer.concat([
   Buffer.from([0x00, 0x00, 0x00, 0x18]),
   Buffer.from("ftypmp42safe-test-video")
 ]);
+const PUBLIC_LOOKUP = async () => [{ address: "93.184.216.34", family: 4 }];
 const PROVIDER_FACTS = {
   aihubmix: {
     available: true,
@@ -111,25 +119,28 @@ const GEMINI_CREDENTIAL_VERIFICATION = {
 };
 
 function jsonResponse(value, status = 200) {
-  return {
-    ok: status >= 200 && status < 300,
+  const body = JSON.stringify(value);
+  return new Response(body, {
     status,
-    headers: { get: () => null },
-    async json() {
-      return structuredClone(value);
+    headers: {
+      "content-type": "application/json",
+      "content-length": String(Buffer.byteLength(body))
     }
-  };
+  });
 }
 
 function binaryResponse(value, status = 200) {
-  return {
-    ok: status >= 200 && status < 300,
+  return new Response(value, {
     status,
-    headers: { get: (name) => name === "content-length" ? String(value.length) : null },
-    async arrayBuffer() {
-      return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
-    }
-  };
+    headers: { "content-length": String(value.length) }
+  });
+}
+
+function abortingFetch(init = {}) {
+  assert.ok(init.signal instanceof AbortSignal);
+  return new Promise((_resolve, reject) => {
+    init.signal.addEventListener("abort", () => reject(init.signal.reason), { once: true });
+  });
 }
 
 async function approvedEpisode(options = {}) {
@@ -141,7 +152,7 @@ async function approvedEpisode(options = {}) {
     generationProfile,
     selectedBy: "human"
   };
-  const plan = adaptApprovedStoryboardToShortAssetPlan(episode);
+  const plan = adaptStoryboardWithSyntheticExternalRights(episode);
   const version = options.version ?? 4;
   const artifactPath =
     `studio/data/production/episodes/${EPISODE_ID}/asset-plan-v${String(version).padStart(3, "0")}.json`;
@@ -221,6 +232,15 @@ async function approvedEpisode(options = {}) {
   return episode;
 }
 
+function trustedExternalDirectory(episode) {
+  const candidateHash = episode.reviewCheckpoints.assetExecution.currentCandidate.candidateHash;
+  return resolve(
+    episodePublicDirectory(episode.id),
+    "generated-assets",
+    candidateHash.slice(0, 16)
+  );
+}
+
 test("外部素材执行必须同时绑定批准、预检、Worker 工具和精确请求体", async () => {
   const episode = await approvedEpisode();
   const call = episode.production.assetPlan.content.executionPolicy.externalApiCalls[0];
@@ -278,6 +298,48 @@ test("外部素材执行必须同时绑定批准、预检、Worker 工具和精�
     }),
     (error) => error.code === "asset_execution_preflight_required"
   );
+});
+
+test("外部权利声明缺失或在批准后篡改时零 fetch、零付费失败关闭", async () => {
+  const episode = await approvedEpisode();
+  const originalCall = episode.production.assetPlan.content.executionPolicy.externalApiCalls[0];
+
+  for (const testCase of [
+    {
+      name: "missing",
+      expectedCode: "external_asset_rights_declaration_required",
+      mutate(call) {
+        delete call.rightsDeclaration;
+      }
+    },
+    {
+      name: "approval binding tampered",
+      expectedCode: "asset_execution_preflight_required",
+      mutate(call) {
+        call.rightsDeclaration.license = "synthetic-test-fixture-tampered-after-approval";
+      }
+    }
+  ]) {
+    const changed = structuredClone(episode);
+    const changedCall = changed.production.assetPlan.content.executionPolicy.externalApiCalls[0];
+    testCase.mutate(changedCall);
+    let fetches = 0;
+    await assert.rejects(
+      executeApprovedExternalAssetCall(changed, {
+        itemId: "generated-architecture-depth-plate",
+        callId: originalCall.id
+      }, {
+        allowedToolIds: [EXTERNAL_ASSET_TOOL_IDS.aihubmix],
+        credentials: { AIHUBMIX_API_KEY: "test-only-key" },
+        fetch: async () => {
+          fetches += 1;
+          throw new Error(`fetch must not run for ${testCase.name}`);
+        }
+      }),
+      (error) => error.code === testCase.expectedCode
+    );
+    assert.equal(fetches, 0);
+  }
 });
 
 test("外部付费素材每次 POST 前原子消费 Capability 的 calls 与 cost", async () => {
@@ -442,6 +504,7 @@ test("明确的 401 鉴权拒绝写入可恢复收据，下一次显式运行才
       ARK_API_KEY: "video-test-key"
     },
     fetch,
+    lookupImpl: PUBLIC_LOOKUP,
     sleep: async () => {},
     pollIntervalMs: 0,
     maxPollAttempts: 2,
@@ -560,6 +623,65 @@ test("网络无响应保持 started 且第二次运行在 fetch 前 fail closed"
   }
 });
 
+test("Provider POST 的 3xx 不跟随且按结算不明冻结后续重试", async () => {
+  const episode = await approvedEpisode();
+  const directory = await mkdtemp(resolve(publicRoot, "external-redirect-test-"));
+  const requests = [];
+  const options = {
+    outputDirectory: directory,
+    publicPrefix: "episodes/test/generated-assets/redirect",
+    allowedToolIds: requiredExternalAssetToolIds(episode),
+    credentials: { AIHUBMIX_API_KEY: "redirect-test-key", ARK_API_KEY: "video-test-key" },
+    fetch: async (url, init = {}) => {
+      requests.push({
+        url,
+        redirect: init.redirect,
+        hasBody: typeof init.body === "string",
+        hasAuthorization: typeof init.headers?.authorization === "string"
+      });
+      return new Response(null, {
+        status: 307,
+        headers: { location: "https://attacker.example.org/capture" }
+      });
+    },
+    now: "2026-08-14T05:21:15.000Z"
+  };
+  try {
+    await assert.rejects(
+      buildApprovedExternalAssets(episode, options),
+      (error) => error.code === "external_asset_image_response_ambiguous" &&
+        error.ambiguous === true &&
+        error.reasonCode === "external_asset_provider_redirect"
+    );
+    assert.deepEqual(requests, [{
+      url: "https://aihubmix.com/v1/images/generations",
+      redirect: "manual",
+      hasBody: true,
+      hasAuthorization: true
+    }]);
+    const receipt = JSON.parse(await readFile(resolve(
+      directory,
+      "generated-architecture-depth-plate.receipt.json"
+    ), "utf8"));
+    assert.equal(receipt.status, "started");
+
+    let retryRequests = 0;
+    await assert.rejects(
+      buildApprovedExternalAssets(episode, {
+        ...options,
+        fetch: async () => {
+          retryRequests += 1;
+          throw new Error("redirected Provider call must not retry");
+        }
+      }),
+      (error) => error.code === "external_asset_execution_ambiguous"
+    );
+    assert.equal(retryRequests, 0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("人工核对 Provider 无记录无扣费后仅授权一次并在 fetch 前消费", async () => {
   const episode = await approvedEpisode({
     version: 6,
@@ -586,6 +708,7 @@ test("人工核对 Provider 无记录无扣费后仅授权一次并在 fetch 前
   const receiptPath = resolve(directory, `${item.id}.receipt.json`);
   const started = {
     schemaVersion: "approved-external-assets-v1",
+    stateVersion: 0,
     attempt: 1,
     history: [],
     status: "started",
@@ -599,6 +722,8 @@ test("人工核对 Provider 无记录无扣费后仅授权一次并在 fetch 前
     endpoint: call.endpoint,
     promptHash: createHash("sha256").update(call.prompt).digest("hex"),
     requestParametersHash: integrityHash(call.requestParameters),
+    rightsDeclarationHash: integrityHash(call.rightsDeclaration),
+    rightsDeclaration: structuredClone(call.rightsDeclaration),
     startedAt: "2026-08-14T05:21:00.000Z",
     submittedAt: null,
     completedAt: null,
@@ -700,6 +825,7 @@ test("人工核对 Provider 无记录无扣费后仅授权一次并在 fetch 前
         }
         throw new Error(`unexpected request: ${url}`);
       },
+      lookupImpl: PUBLIC_LOOKUP,
       sleep: async () => {},
       pollIntervalMs: 0,
       maxPollAttempts: 2,
@@ -777,6 +903,7 @@ test("视频已提交后轮询 401 保留 task ID，恢复时只 GET 且空 ID f
       if (url.endsWith("/tasks/task-resume-401")) return jsonResponse({}, 401);
       throw new Error(`unexpected request: ${url}`);
     },
+    lookupImpl: PUBLIC_LOOKUP,
     sleep: async () => {},
     pollIntervalMs: 0,
     maxPollAttempts: 1,
@@ -831,7 +958,8 @@ test("视频已提交后轮询 401 保留 task ID，恢复时只 GET 且空 ID f
         }
         if (url === "https://media.example.com/resumed.mp4") return binaryResponse(MP4);
         throw new Error(`unexpected resumed request: ${url}`);
-      }
+      },
+      lookupImpl: PUBLIC_LOOKUP
     });
     assert.equal(resumed.assets.length, 3);
     assert.equal(resumedRequests.some((item) =>
@@ -847,8 +975,8 @@ test("视频已提交后轮询 401 保留 task ID，恢复时只 GET 且空 ID f
 });
 
 test("两图一视频生成写入无秘密收据，完成收据可避免重复付费请求", async () => {
-  const episode = await approvedEpisode();
-  const directory = await mkdtemp(resolve(publicRoot, "external-assets-test-"));
+  const episode = await approvedEpisode({ version: 91 });
+  const directory = trustedExternalDirectory(episode);
   const requests = [];
   const fakeFetch = async (url, init = {}) => {
     requests.push({ url, method: init.method ?? "GET" });
@@ -874,13 +1002,13 @@ test("两图一视频生成写入无秘密收据，完成收据可避免重复�
   try {
     const options = {
       outputDirectory: directory,
-      publicPrefix: "episodes/test/generated-assets/candidate",
       allowedToolIds: requiredExternalAssetToolIds(episode),
       credentials: {
         AIHUBMIX_API_KEY: "test-image-key",
         ARK_API_KEY: "test-video-key"
       },
       fetch: fakeFetch,
+      lookupImpl: PUBLIC_LOOKUP,
       sleep: async () => {},
       pollIntervalMs: 0,
       maxPollAttempts: 2,
@@ -893,6 +1021,10 @@ test("两图一视频生成写入无秘密收据，完成收据可避免重复�
     assert.equal(first.accountedCallIds.length, 3);
     assert.equal(first.accountedCostUsd, 2.12);
     assert.equal(first.assets.every((asset) => asset.verified === false), true);
+    assert.equal(first.assets.every((asset) => validateAssetRights(asset).valid), true);
+    assert.equal(first.assets.every(
+      (asset) => asset.rights.declarationHash === asset.rightsDeclarationHash
+    ), true);
     assert.equal(first.assets.find((asset) => asset.type === "video").actualNativeAmount, 12.096);
     const mutation = validateWorkerMutation(episode, "asset-agent", {
       status: "complete",
@@ -902,15 +1034,49 @@ test("两图一视频生成写入无秘密收据，完成收据可避免重复�
       patch: { assets: first.assets }
     });
     assert.equal(mutation.valid, true, mutation.errors.join("; "));
-    const tampered = structuredClone(first.assets);
-    tampered[0].model = "unapproved-model";
-    assert.equal(validateWorkerMutation(episode, "asset-agent", {
-      status: "complete",
-      message: "篡改模型",
-      artifacts: [],
-      findings: [],
-      patch: { assets: tampered }
-    }).valid, false);
+    for (const testCase of [
+      {
+        name: "model",
+        mutate(asset) {
+          asset.model = "unapproved-model";
+        }
+      },
+      {
+        name: "rights declaration hash",
+        mutate(asset) {
+          asset.rightsDeclarationHash = "f".repeat(64);
+        }
+      },
+      {
+        name: "rights content",
+        mutate(asset) {
+          asset.rights.license = "forged-license";
+        }
+      },
+      {
+        name: "rights extra field",
+        mutate(asset) {
+          asset.rights.unapprovedClaim = "forged";
+        }
+      },
+      {
+        name: "receipt path",
+        mutate(asset) {
+          asset.receiptPath = "episodes/forged/completed.receipt.json";
+        }
+      }
+    ]) {
+      const tampered = structuredClone(first.assets);
+      testCase.mutate(tampered[0]);
+      const validation = validateWorkerMutation(episode, "asset-agent", {
+        status: "complete",
+        message: `篡改 ${testCase.name}`,
+        artifacts: [],
+        findings: [],
+        patch: { assets: tampered }
+      });
+      assert.equal(validation.valid, false, testCase.name);
+    }
     const firstRequestCount = requests.length;
 
     const receipts = await Promise.all(first.assets.map((asset) =>
@@ -918,6 +1084,52 @@ test("两图一视频生成写入无秘密收据，完成收据可避免重复�
     ));
     assert.equal(receipts.some((receipt) => receipt.includes("test-image-key")), false);
     assert.equal(receipts.some((receipt) => receipt.includes("test-video-key")), false);
+
+    const firstReceiptPath = resolve(
+      directory,
+      `${first.assets[0].planItemId}.receipt.json`
+    );
+    const originalReceipt = await readFile(firstReceiptPath, "utf8");
+    const reviewEpisode = structuredClone(episode);
+    reviewEpisode.assets = structuredClone(first.assets);
+    const malformedCallEpisode = structuredClone(reviewEpisode);
+    delete malformedCallEpisode.production.assetPlan.content.executionPolicy
+      .externalApiCalls[0].prompt;
+    assert.equal(validateApprovedExternalAssetReceipt(
+      malformedCallEpisode,
+      first.assets[0],
+      JSON.parse(originalReceipt)
+    ).valid, false);
+    let receiptCheck = (await validateAssetsForReview(reviewEpisode)).find(
+      (check) => check.code === "external-asset-receipts"
+    );
+    assert.equal(receiptCheck.passed, true, JSON.stringify(receiptCheck.actual));
+
+    const forgedSnapshot = JSON.parse(originalReceipt);
+    forgedSnapshot.asset.rights.license = "forged-receipt-snapshot";
+    await writeFile(firstReceiptPath, `${JSON.stringify(forgedSnapshot, null, 2)}\n`);
+    receiptCheck = (await validateAssetsForReview(reviewEpisode)).find(
+      (check) => check.code === "external-asset-receipts"
+    );
+    assert.equal(receiptCheck.passed, false);
+    await writeFile(firstReceiptPath, originalReceipt);
+
+    await rm(firstReceiptPath);
+    receiptCheck = (await validateAssetsForReview(reviewEpisode)).find(
+      (check) => check.code === "external-asset-receipts"
+    );
+    assert.equal(receiptCheck.passed, false);
+    await writeFile(firstReceiptPath, originalReceipt);
+
+    const tamperedReceipt = JSON.parse(originalReceipt);
+    tamperedReceipt.rightsDeclaration.license = "tampered-receipt-license";
+    await writeFile(firstReceiptPath, `${JSON.stringify(tamperedReceipt, null, 2)}\n`);
+    await assert.rejects(
+      buildApprovedExternalAssets(episode, options),
+      (error) => error.code === "external_asset_receipt_integrity_failed"
+    );
+    assert.equal(requests.length, firstRequestCount);
+    await writeFile(firstReceiptPath, originalReceipt);
 
     const second = await buildApprovedExternalAssets(episode, options);
     assert.equal(second.assets.length, 3);
@@ -966,6 +1178,314 @@ test("Provider 返回本机 IPv6 素材地址时在下载前拒绝", async () =>
   assert.equal(requests, 1);
 });
 
+test("Provider 素材域名解析到私网时在媒体请求前拒绝", async () => {
+  const episode = await approvedEpisode();
+  const call = episode.production.assetPlan.content.executionPolicy.externalApiCalls[0];
+  let requests = 0;
+  await assert.rejects(
+    executeApprovedExternalAssetCall(episode, {
+      itemId: "generated-architecture-depth-plate",
+      callId: call.id
+    }, {
+      allowedToolIds: [EXTERNAL_ASSET_TOOL_IDS.aihubmix],
+      environment: { AIHUBMIX_API_KEY: "test-only-key" },
+      lookupImpl: async () => [{ address: "10.0.0.7", family: 4 }],
+      fetch: async () => {
+        requests += 1;
+        return jsonResponse({ data: [{ url: "https://cdn.example.org/asset.png" }] });
+      }
+    }),
+    (error) => error.code === "external_asset_media_url_unsafe" &&
+      error.networkCode === "public_https_address_forbidden"
+  );
+  assert.equal(requests, 1);
+});
+
+test("Provider 素材公开 URL 重定向到私网域名时不发出第二次媒体请求", async () => {
+  const episode = await approvedEpisode();
+  const call = episode.production.assetPlan.content.executionPolicy.externalApiCalls[0];
+  const requests = [];
+  await assert.rejects(
+    executeApprovedExternalAssetCall(episode, {
+      itemId: "generated-architecture-depth-plate",
+      callId: call.id
+    }, {
+      allowedToolIds: [EXTERNAL_ASSET_TOOL_IDS.aihubmix],
+      environment: { AIHUBMIX_API_KEY: "test-only-key" },
+      lookupImpl: async (hostname) => [{
+        address: hostname === "internal.example.org" ? "192.168.1.8" : "93.184.216.34",
+        family: 4
+      }],
+      fetch: async (url) => {
+        requests.push(url);
+        if (url === call.endpoint) {
+          return jsonResponse({ data: [{ url: "https://cdn.example.org/asset.png" }] });
+        }
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://internal.example.org/asset.png" }
+        });
+      }
+    }),
+    (error) => error.code === "external_asset_media_url_unsafe" &&
+      error.networkCode === "public_https_address_forbidden"
+  );
+  assert.deepEqual(requests, [call.endpoint, "https://cdn.example.org/asset.png"]);
+});
+
+test("媒体请求包装错误的有限 cause 链仍保留公网安全分类", async () => {
+  const episode = await approvedEpisode();
+  const call = episode.production.assetPlan.content.executionPolicy.externalApiCalls[0];
+  const unsafeCause = new Error("dispatcher rejected target");
+  unsafeCause.code = "public_https_address_forbidden";
+  unsafeCause.unsafeNetworkTarget = true;
+  const wrapped = new TypeError("fetch failed", {
+    cause: new Error("connection failed", { cause: unsafeCause })
+  });
+  let requests = 0;
+  await assert.rejects(
+    executeApprovedExternalAssetCall(episode, {
+      itemId: "generated-architecture-depth-plate",
+      callId: call.id
+    }, {
+      allowedToolIds: [EXTERNAL_ASSET_TOOL_IDS.aihubmix],
+      environment: { AIHUBMIX_API_KEY: "test-only-key" },
+      lookupImpl: PUBLIC_LOOKUP,
+      fetch: async () => {
+        requests += 1;
+        if (requests === 1) {
+          return jsonResponse({ data: [{ url: "https://cdn.example.org/asset.png" }] });
+        }
+        throw wrapped;
+      }
+    }),
+    (error) => error.code === "external_asset_media_url_unsafe" &&
+      error.networkCode === "public_https_address_forbidden"
+  );
+  assert.equal(requests, 2);
+});
+
+test("素材流在无或伪造 Content-Length 时仍按真实字节立即中止", async (context) => {
+  for (const declaredLength of [null, "1"]) {
+    await context.test(declaredLength === null ? "无 Content-Length" : "伪造 Content-Length", async () => {
+      const episode = await approvedEpisode();
+      const call = episode.production.assetPlan.content.executionPolicy.externalApiCalls[0];
+      let requests = 0;
+      let pulledChunks = 0;
+      let cancelled = false;
+      const body = new ReadableStream({
+        pull(controller) {
+          pulledChunks += 1;
+          if (pulledChunks > 12) {
+            controller.close();
+            return;
+          }
+          controller.enqueue(new Uint8Array(5 * 1024 * 1024));
+        },
+        cancel() {
+          cancelled = true;
+        }
+      });
+      const headers = declaredLength === null ? {} : { "content-length": declaredLength };
+      await assert.rejects(
+        executeApprovedExternalAssetCall(episode, {
+          itemId: "generated-architecture-depth-plate",
+          callId: call.id
+        }, {
+          allowedToolIds: [EXTERNAL_ASSET_TOOL_IDS.aihubmix],
+          environment: { AIHUBMIX_API_KEY: "test-only-key" },
+          lookupImpl: PUBLIC_LOOKUP,
+          fetch: async () => {
+            requests += 1;
+            if (requests === 1) {
+              return jsonResponse({ data: [{ url: "https://cdn.example.org/large.png" }] });
+            }
+            return new Response(body, { status: 200, headers });
+          }
+        }),
+        (error) => error.code === "external_asset_media_too_large"
+      );
+      assert.equal(requests, 2);
+      assert.equal(cancelled, true);
+      assert.ok(pulledChunks < 12, `expected early cancellation, pulled ${pulledChunks} chunks`);
+    });
+  }
+});
+
+test("Provider JSON 在无、伪造或 chunked 长度下均按响应类型硬限流", async (context) => {
+  const variants = [
+    { name: "无 Content-Length", headers: {} },
+    { name: "伪造 Content-Length", headers: { "content-length": "1" } },
+    { name: "chunked", headers: { "transfer-encoding": "chunked" }, slowCancel: true }
+  ];
+  for (const variant of variants) {
+    await context.test(variant.name, { timeout: 1000 }, async () => {
+      const episode = await approvedEpisode();
+      const call = episode.production.assetPlan.content.executionPolicy.externalApiCalls.find(
+        (candidate) => candidate.providerId === "volcengine-ark"
+      );
+      let pulledChunks = 0;
+      let cancelled = false;
+      const body = new ReadableStream({
+        pull(controller) {
+          pulledChunks += 1;
+          if (pulledChunks > 8) {
+            controller.close();
+            return;
+          }
+          controller.enqueue(new Uint8Array(256 * 1024));
+        },
+        cancel() {
+          cancelled = true;
+          if (!variant.slowCancel) return undefined;
+          return new Promise(() => {});
+        }
+      });
+      await assert.rejects(
+        executeApprovedExternalAssetCall(episode, {
+          itemId: "generated-mcp-data-flow-clip",
+          callId: call.id
+        }, {
+          allowedToolIds: [EXTERNAL_ASSET_TOOL_IDS["volcengine-ark"]],
+          environment: { ARK_API_KEY: "test-only-key" },
+          fetch: async (_url, init) => {
+            assert.equal(init.redirect, "manual");
+            return new Response(body, { status: 200, headers: variant.headers });
+          }
+        }),
+        (error) => error.code === "external_asset_video_submission_ambiguous" &&
+          error.ambiguous === true &&
+          error.reasonCode === "external_asset_provider_json_too_large"
+      );
+      assert.equal(cancelled, true);
+      assert.ok(pulledChunks < 8, `expected early cancellation, pulled ${pulledChunks} chunks`);
+    });
+  }
+});
+
+test("内联 Base64 图片在解码分配前按 30 MiB 上限拒绝", async () => {
+  const episode = await approvedEpisode();
+  const call = episode.production.assetPlan.content.executionPolicy.externalApiCalls[0];
+  const oversizedEncoded = "A".repeat(Math.ceil((30 * 1024 * 1024 + 1) / 3) * 4);
+  await assert.rejects(
+    executeApprovedExternalAssetCall(episode, {
+      itemId: "generated-architecture-depth-plate",
+      callId: call.id
+    }, {
+      allowedToolIds: [EXTERNAL_ASSET_TOOL_IDS.aihubmix],
+      environment: { AIHUBMIX_API_KEY: "test-only-key" },
+      fetch: async () => jsonResponse({ data: [{ b64_json: oversizedEncoded }] })
+    }),
+    (error) => error.code === "external_asset_image_base64_too_large" &&
+      error.requiresHuman === true
+  );
+});
+
+test("Provider JSON、媒体下载和视频轮询请求分别受 AbortSignal 超时约束", async (context) => {
+  await context.test("Provider JSON 超时保持付费调用不确定", async () => {
+    const episode = await approvedEpisode();
+    const call = episode.production.assetPlan.content.executionPolicy.externalApiCalls[0];
+    let observedSignal = null;
+    await assert.rejects(
+      executeApprovedExternalAssetCall(episode, {
+        itemId: "generated-architecture-depth-plate",
+        callId: call.id
+      }, {
+        allowedToolIds: [EXTERNAL_ASSET_TOOL_IDS.aihubmix],
+        environment: { AIHUBMIX_API_KEY: "test-only-key" },
+        providerRequestTimeoutMs: 100,
+        fetch: async (_url, init) => {
+          observedSignal = init.signal;
+          return abortingFetch(init);
+        }
+      }),
+      (error) => error.code === "external_asset_image_response_ambiguous" &&
+        error.ambiguous === true && error.requiresHuman === true
+    );
+    assert.ok(observedSignal instanceof AbortSignal);
+    assert.equal(observedSignal.aborted, true);
+  });
+
+  await context.test("媒体下载超时中止读取且不伪装为成功", async () => {
+    const episode = await approvedEpisode();
+    const call = episode.production.assetPlan.content.executionPolicy.externalApiCalls[0];
+    let requests = 0;
+    let mediaSignal = null;
+    let bodyCancelled = false;
+    let bodyPulls = 0;
+    const stalledBody = new ReadableStream({
+      pull(controller) {
+        bodyPulls += 1;
+        if (bodyPulls === 1) {
+          controller.enqueue(new Uint8Array(PNG.subarray(0, 8)));
+          return;
+        }
+        return new Promise(() => {});
+      },
+      async cancel() {
+        bodyCancelled = true;
+        await Promise.resolve();
+      }
+    });
+    await assert.rejects(
+      executeApprovedExternalAssetCall(episode, {
+        itemId: "generated-architecture-depth-plate",
+        callId: call.id
+      }, {
+        allowedToolIds: [EXTERNAL_ASSET_TOOL_IDS.aihubmix],
+        environment: { AIHUBMIX_API_KEY: "test-only-key" },
+        lookupImpl: PUBLIC_LOOKUP,
+        mediaRequestTimeoutMs: 100,
+        fetch: async (_url, init) => {
+          requests += 1;
+          if (requests === 1) {
+            return jsonResponse({ data: [{ url: "https://cdn.example.org/slow.png" }] });
+          }
+          mediaSignal = init.signal;
+          return new Response(stalledBody, { status: 200 });
+        }
+      }),
+      (error) => error.code === "external_asset_download_timeout" &&
+        error.requiresHuman === true
+    );
+    assert.equal(requests, 2);
+    assert.ok(mediaSignal instanceof AbortSignal);
+    assert.equal(mediaSignal.aborted, true);
+    assert.equal(bodyCancelled, true);
+    assert.equal(bodyPulls, 2);
+  });
+
+  await context.test("视频轮询单次请求超时保留可恢复任务语义", async () => {
+    const episode = await approvedEpisode();
+    const call = episode.production.assetPlan.content.executionPolicy.externalApiCalls.find(
+      (candidate) => candidate.providerId === "volcengine-ark"
+    );
+    let requests = 0;
+    let pollSignal = null;
+    await assert.rejects(
+      executeApprovedExternalAssetCall(episode, {
+        itemId: "generated-mcp-data-flow-clip",
+        callId: call.id
+      }, {
+        allowedToolIds: [EXTERNAL_ASSET_TOOL_IDS["volcengine-ark"]],
+        environment: { ARK_API_KEY: "test-only-key" },
+        videoPollRequestTimeoutMs: 100,
+        fetch: async (_url, init) => {
+          requests += 1;
+          if (requests === 1) return jsonResponse({ id: "task-timeout-001" });
+          pollSignal = init.signal;
+          return abortingFetch(init);
+        }
+      }),
+      (error) => error.code === "external_asset_video_poll_ambiguous" &&
+        error.ambiguous === true && error.requiresHuman === true
+    );
+    assert.equal(requests, 2);
+    assert.ok(pollSignal instanceof AbortSignal);
+    assert.equal(pollSignal.aborted, true);
+  });
+});
+
 test("视频实际 completion_tokens 超出人民币批准上限时停止登记", async () => {
   const episode = await approvedEpisode();
   const videoCall = episode.production.assetPlan.content.executionPolicy.externalApiCalls.find(
@@ -994,9 +1514,56 @@ test("视频实际 completion_tokens 超出人民币批准上限时停止登记"
   );
 });
 
+test("视频计费量缺失或无效时不得按零费用接受素材", async (context) => {
+  const cases = [
+    { name: "字段缺失", usage: undefined },
+    { name: "null", usage: { completion_tokens: null } },
+    { name: "空字符串", usage: { completion_tokens: "" } },
+    { name: "负数", usage: { completion_tokens: -1 } },
+    { name: "小数", usage: { completion_tokens: 0.5 } }
+  ];
+
+  for (const scenario of cases) {
+    await context.test(scenario.name, async () => {
+      const episode = await approvedEpisode();
+      const videoCall = episode.production.assetPlan.content.executionPolicy.externalApiCalls.find(
+        (call) => call.providerId === "volcengine-ark"
+      );
+      const requests = [];
+      await assert.rejects(
+        executeApprovedExternalAssetCall(episode, {
+          itemId: "generated-mcp-data-flow-clip",
+          callId: videoCall.id
+        }, {
+          allowedToolIds: [EXTERNAL_ASSET_TOOL_IDS["volcengine-ark"]],
+          credentials: { ARK_API_KEY: "test-video-key" },
+          fetch: async (url, init = {}) => {
+            requests.push({ url, method: init.method ?? "GET" });
+            if (init.method === "POST") return jsonResponse({ id: "task-invalid-usage" });
+            if (url.endsWith("/tasks/task-invalid-usage")) {
+              return jsonResponse({
+                status: "succeeded",
+                content: { video_url: "https://media.example.com/invalid-usage.mp4" },
+                ...(scenario.usage === undefined ? {} : { usage: scenario.usage })
+              });
+            }
+            throw new Error("无效计费量不得进入媒体下载");
+          },
+          sleep: async () => {},
+          pollIntervalMs: 0,
+          maxPollAttempts: 1
+        }),
+        (error) => error.code === "external_asset_video_usage_missing"
+      );
+      assert.equal(requests.length, 2);
+    });
+  }
+});
+
 test("Asset Agent 在双重工具授权下组合本地动画与三项外部素材并原子提交补丁", async () => {
-  const episode = await approvedEpisode();
+  const episode = await approvedEpisode({ version: 92 });
   const directory = await mkdtemp(resolve(publicRoot, "external-agent-test-"));
+  const externalDirectory = trustedExternalDirectory(episode);
   const publicPrefix = relative(publicRoot, directory).replaceAll("\\", "/");
   const requests = [];
   const fetch = async (url, init = {}) => {
@@ -1025,13 +1592,13 @@ test("Asset Agent 在双重工具授权下组合本地动画与三项外部素�
         publicPrefix
       },
       externalAssetOptions: {
-        outputDirectory: resolve(directory, "generated"),
-        publicPrefix: `${publicPrefix}/generated`,
+        outputDirectory: externalDirectory,
         credentials: {
           AIHUBMIX_API_KEY: "test-image-key",
           ARK_API_KEY: "test-video-key"
         },
         fetch,
+        lookupImpl: PUBLIC_LOOKUP,
         sleep: async () => {},
         pollIntervalMs: 0,
         maxPollAttempts: 2
@@ -1060,5 +1627,6 @@ test("Asset Agent 在双重工具授权下组合本地动画与三项外部素�
     assert.equal(requests.filter((request) => request.method === "POST").length, 3);
   } finally {
     await rm(directory, { recursive: true, force: true });
+    await rm(externalDirectory, { recursive: true, force: true });
   }
 });

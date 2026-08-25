@@ -4,10 +4,10 @@ import { integrityHash } from "../src/shared/integrity.mjs";
 import { historicalApprovedStoryboardV3Episode } from
   "./historical-approved-storyboard-v3.fixture.mjs";
 import { kernelSnapshot } from "../src/server/control/workflow-kernel.mjs";
-import {
-  HYBRID_GENERATION_PROFILES,
-  adaptApprovedStoryboardToShortAssetPlan
-} from "../src/server/production/short-asset-plan-adapter.mjs";
+import { HYBRID_GENERATION_PROFILES } from
+  "../src/server/production/short-asset-plan-adapter.mjs";
+import { adaptStoryboardWithSyntheticExternalRights } from
+  "./synthetic-external-rights.fixture.mjs";
 import {
   assetExecutionPreflightValid,
   beginAssetExecutionPreflight,
@@ -174,7 +174,7 @@ async function hybridPlan() {
       HYBRID_GENERATION_PROFILES.AIHUBMIX_VOLCENGINE_SEEDANCE_2_5_720P,
     selectedBy: "human"
   };
-  return { episode, plan: adaptApprovedStoryboardToShortAssetPlan(episode) };
+  return { episode, plan: adaptStoryboardWithSyntheticExternalRights(episode) };
 }
 
 async function geminiHybridPlan() {
@@ -185,7 +185,7 @@ async function geminiHybridPlan() {
       HYBRID_GENERATION_PROFILES.AIHUBMIX_GEMINI_3_PRO_IMAGE_VOLCENGINE_SEEDANCE_2_5_720P,
     selectedBy: "human"
   };
-  return { episode, plan: adaptApprovedStoryboardToShortAssetPlan(episode) };
+  return { episode, plan: adaptStoryboardWithSyntheticExternalRights(episode) };
 }
 
 test("旧 Seedance 模型与嵌入 prompt 的参数在零生成预检中技术性退回", async () => {

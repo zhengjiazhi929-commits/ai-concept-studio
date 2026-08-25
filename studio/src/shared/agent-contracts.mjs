@@ -1,6 +1,7 @@
 import { WORKER_MANIFESTS } from "./worker-manifests.mjs";
 import { createHash } from "node:crypto";
 import { integrityHash } from "./integrity.mjs";
+import { validateApprovedExternalAssetBinding } from "./asset-rights.mjs";
 
 export const CONTROL_MODES = new Set(["shadow", "assisted", "active"]);
 export const MAIN_AGENT_ACTIONS = new Set([
@@ -452,7 +453,9 @@ function validateAssetRegistration(sourceEpisode, assets) {
       : item?.productionMethod?.kind === "external-video-generation"
         ? "video"
         : null;
+    const provenance = validateApprovedExternalAssetBinding(sourceEpisode, asset);
     return Boolean(
+      provenance.valid &&
       call &&
       expectedType &&
       asset?.source === "approved-external-generation" &&

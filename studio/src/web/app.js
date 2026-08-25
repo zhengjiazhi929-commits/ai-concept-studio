@@ -201,6 +201,43 @@ function showToast(message, tone = "info") {
   }, 4200);
 }
 
+function collectUploadRights(kind) {
+  const authorOrSource = window.prompt(
+    kind === "voice" ? "请输入旁白录音者或授权来源" : "请输入素材作者或来源"
+  )?.trim();
+  if (!authorOrSource) return null;
+  const license = window.prompt(
+    "请输入明确的许可证或权利依据（不能填写 unknown / pending）"
+  )?.trim();
+  if (!license) return null;
+  const allowedUse = window.prompt(
+    "请输入允许用途",
+    "private-internal-review"
+  )?.trim();
+  if (!allowedUse) return null;
+  const attributionRequirements = window.prompt(
+    "请输入署名要求；无需署名请填写 none",
+    "none"
+  )?.trim();
+  if (!attributionRequirements) return null;
+  const privacyPortraitStatus = window.prompt(
+    kind === "voice"
+      ? "请输入隐私/声音授权状态：consent-recorded 或 synthetic-no-real-person"
+      : "请输入隐私/肖像状态：no-identifiable-person、consent-recorded、fictional-data、project-original",
+    kind === "voice" ? "consent-recorded" : "no-identifiable-person"
+  )?.trim();
+  if (!privacyPortraitStatus) return null;
+  const sourceUrl = window.prompt("如来源有网页，请输入 URL；本地原创可留空", "")?.trim() ?? "";
+  return {
+    "x-rights-author-source": encodeURIComponent(authorOrSource),
+    "x-rights-source-url": encodeURIComponent(sourceUrl),
+    "x-rights-license": encodeURIComponent(license),
+    "x-rights-allowed-use": encodeURIComponent(allowedUse),
+    "x-rights-attribution": encodeURIComponent(attributionRequirements),
+    "x-rights-privacy": encodeURIComponent(privacyPortraitStatus)
+  };
+}
+
 function clearOpenApprovalReview() {
   state.approvalReviewRequestToken += 1;
   state.approvalReview = null;
@@ -992,6 +1029,11 @@ document.addEventListener("change", (event) => {
     const file = event.target.files?.[0];
     const planItemId = state.pendingAssetPlanItemId;
     if (!file || !planItemId) return;
+    const rightsHeaders = collectUploadRights("asset");
+    if (!rightsHeaders) {
+      showToast("许可证台账未填写完整，素材未上传", "error");
+      return;
+    }
     void withBusy(async () => {
       showToast(`正在上传素材 ${planItemId}`);
       await api(`/api/episodes/${state.episode.id}/assets/upload`, {
@@ -999,7 +1041,8 @@ document.addEventListener("change", (event) => {
         headers: {
           "content-type": file.type || "application/octet-stream",
           "x-file-name": encodeURIComponent(file.name),
-          "x-plan-item-id": encodeURIComponent(planItemId)
+          "x-plan-item-id": encodeURIComponent(planItemId),
+          ...rightsHeaders
         },
         body: file
       });
@@ -1011,13 +1054,19 @@ document.addEventListener("change", (event) => {
   if (event.target.id !== "voiceFile") return;
   const file = event.target.files?.[0];
   if (!file) return;
+  const rightsHeaders = collectUploadRights("voice");
+  if (!rightsHeaders) {
+    showToast("旁白授权台账未填写完整，文件未上传", "error");
+    return;
+  }
   void withBusy(async () => {
     showToast("正在上传旁白文件");
     await api(`/api/episodes/${state.episode.id}/voice/upload`, {
       method: "POST",
       headers: {
         "content-type": file.type || "application/octet-stream",
-        "x-file-name": encodeURIComponent(file.name)
+        "x-file-name": encodeURIComponent(file.name),
+        ...rightsHeaders
       },
       body: file
     });

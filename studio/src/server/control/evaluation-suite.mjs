@@ -23,7 +23,7 @@ export const FORMAL_EVALUATION_RUNNER_ID = "main-agent-offline-reference-runner"
 export const FORMAL_EVALUATION_RUNNER_VERSION = "2.0.0";
 export const INDEPENDENT_JUDGE_ID = "deterministic-action-rubric-judge";
 export const INDEPENDENT_JUDGE_VERSION = "2.0.0";
-export const AGENT_CONTROL_IMPLEMENTATION_VERSION = "agent-control-release-v3";
+export const AGENT_CONTROL_IMPLEMENTATION_VERSION = "agent-control-release-v5";
 export const EFFECTIVE_AI_ROUTING_VERSION = "effective-ai-routing-v1";
 
 export const AGENT_CONTROL_IMPLEMENTATION_PATHS = Object.freeze([
@@ -109,6 +109,7 @@ export const AGENT_CONTROL_IMPLEMENTATION_PATHS = Object.freeze([
   "src/server/trends/store.mjs",
   "src/shared/agent-contracts.mjs",
   "src/shared/ai-config.mjs",
+  "src/shared/asset-rights.mjs",
   "src/shared/audit-log.mjs",
   "src/shared/cloud-backup.mjs",
   "src/shared/config-integrity.mjs",

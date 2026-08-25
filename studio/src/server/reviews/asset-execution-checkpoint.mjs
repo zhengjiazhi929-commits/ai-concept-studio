@@ -30,6 +30,7 @@ import {
   progressiveTechnicalFlowPlanReview,
   technicalDiagramContractValid
 } from "../../shared/technical-diagram-contract.mjs";
+import { validateExternalRightsDeclaration } from "../../shared/asset-rights.mjs";
 
 export const ASSET_EXECUTION_CHECKPOINT_VERSION = 1;
 
@@ -235,6 +236,7 @@ function externalCallContractValid(call) {
     typeof call.endpoint === "string" && call.endpoint.trim() &&
     typeof call.prompt === "string" && call.prompt.trim() &&
     typeof call.outputSpec === "string" && call.outputSpec.trim() &&
+    validateExternalRightsDeclaration(call.rightsDeclaration).valid &&
     (!call.billing || billingContractValid(call.billing)) &&
     (!call.requestParameters || (
       typeof call.requestParameters === "object" && !Array.isArray(call.requestParameters)
@@ -342,6 +344,12 @@ export function inspectAssetExecutionPlan(episode, plan, metadata = {}) {
   const invalidPreflightCallIds = externalApiCalls
     .filter((call) => billingRequired && !executionPreflightContractValid(call?.executionPreflight))
     .map((call) => call?.id ?? null);
+  const invalidRightsDeclarations = externalApiCalls
+    .map((call) => ({
+      callId: call?.id ?? null,
+      ...validateExternalRightsDeclaration(call?.rightsDeclaration)
+    }))
+    .filter((result) => !result.valid);
   const nativeTotals = Object.fromEntries(
     billedCalls.reduce((totals, call) => {
       const currency = call.billing.currency;
@@ -491,11 +499,19 @@ export function inspectAssetExecutionPlan(episode, plan, metadata = {}) {
     ),
     reviewCheck(
       "external-api-contract",
-      "所有外部 API 调用都显式登记 Provider、模型、范围、提示词、输出规格、价格证据与费用上限",
+      "所有外部 API 调用都显式登记 Provider、模型、范围、提示词、输出规格、权利声明、价格证据与费用上限",
       externalApiCalls.every(externalCallContractValid),
       externalApiCalls.length,
       "all declared calls fully priced",
       "外部调用信息或价格未确认时禁止执行"
+    ),
+    reviewCheck(
+      "external-rights-declaration",
+      "任何付费生成前都绑定人工核验的结构化权利声明",
+      invalidRightsDeclarations.length === 0,
+      invalidRightsDeclarations.map(({ callId, errors }) => ({ callId, errors })),
+      "every external call has a complete human-verified rightsDeclaration",
+      "逐调用登记来源 URL、许可证、允许用途、署名、隐私肖像状态、核验人和核验时间；不得推断 Provider 条款"
     ),
     reviewCheck(
       "native-currency-contract",
@@ -1835,12 +1851,15 @@ export function assetExecutionApprovalValid(episode) {
   if (!assetExecutionApprovalRecordValid(episode)) return false;
   const currentPlan = episode.production?.assetPlan;
   const currentCalls = currentPlan?.content?.executionPolicy?.externalApiCalls ?? [];
+  const externalRightsCurrent = currentCalls.every(
+    (call) => validateExternalRightsDeclaration(call?.rightsDeclaration).valid
+  );
   const technicalContractsCurrent = !String(currentPlan?.content?.visualSystem ?? "")
     .includes("技术图解") || currentCalls.every(technicalDiagramContractValid);
   const progressiveMotionCurrent = progressiveTechnicalFlowPlanReview(
     currentPlan?.content
   ).passed;
-  return technicalContractsCurrent && progressiveMotionCurrent;
+  return externalRightsCurrent && technicalContractsCurrent && progressiveMotionCurrent;
 }
 
 export function assetExecutionApprovalRequired(episode) {
@@ -1910,6 +1929,8 @@ export function assertAssetExecutionAuthorized(episode, request = {}) {
   );
   const requestParametersAuthorized = integrityHash(request.requestParameters ?? null) ===
     integrityHash(externalCall?.requestParameters ?? null);
+  const rightsDeclarationAuthorized = request.rightsDeclarationHash ===
+    integrityHash(externalCall?.rightsDeclaration ?? null);
   if (
     !externalCall ||
     externalCall.providerId !== request.providerId ||
@@ -1918,6 +1939,7 @@ export function assertAssetExecutionAuthorized(episode, request = {}) {
     request.maximumCostUsd > externalCall.maximumCostUsd ||
     !billingAuthorized ||
     !requestParametersAuthorized ||
+    !rightsDeclarationAuthorized ||
     item.productionMethod?.externalProvider !== request.providerId ||
     item.productionMethod?.externalModel !== request.model ||
     externalCall.endpoint !== request.endpoint ||

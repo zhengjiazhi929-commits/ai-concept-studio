@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { readFile } from "node:fs/promises";
-import { createStudioServer } from "../src/server/app.mjs";
+import {
+  createStudioServer,
+  httpMutationCapabilitySpec
+} from "../src/server/app.mjs";
 import {
   assertSideEffectGrant,
   consumeSideEffectGrantUsage,
@@ -205,6 +208,16 @@ test("缺少 operator 认证或 Capability authority 时敏感 HTTP 请求零读
       await closeServer(server);
     }
   }
+});
+
+test("切换 primary Provider 的 HTTP Capability 显式声明配置文件写入", () => {
+  const spec = httpMutationCapabilitySpec(
+    new URL("http://127.0.0.1:4317/api/ai/primary"),
+    "POST"
+  );
+  assert.equal(spec.scopes.includes("state.write"), true);
+  assert.equal(spec.scopes.includes("filesystem.write"), true);
+  assert.equal(spec.scopes.includes("network.request"), false);
 });
 
 test("长期 operator token 默认不能直接执行浏览器写请求", async () => {

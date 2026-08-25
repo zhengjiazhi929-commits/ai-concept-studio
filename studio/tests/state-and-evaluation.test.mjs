@@ -268,6 +268,7 @@ test("正式评测证据强绑定 Rubric、Prompt、Router、模型配置与控�
 test("implementation 指纹覆盖控制链路的最小安全依赖闭包", async () => {
   const requiredPaths = [
     "src/shared/integrity.mjs",
+    "src/shared/asset-rights.mjs",
     "src/shared/config-integrity.mjs",
     "src/shared/paths.mjs",
     "src/shared/env.mjs",

@@ -16,6 +16,7 @@ import {
   stageExclusiveVersionedUpload
 } from "./upload-transaction.mjs";
 import { inspectSupportedMedia } from "./media-signatures.mjs";
+import { buildUploadRights } from "../../shared/asset-rights.mjs";
 
 const supportedTypes = new Map([
   ["audio/mpeg", ".mp3"],
@@ -93,6 +94,14 @@ export async function saveVoiceUpload(episodeId, upload, options = {}) {
   if (!Buffer.isBuffer(upload.data) || upload.data.length === 0) throw new Error("旁白文件为空");
   await (options.inspectMedia ?? inspectSupportedMedia)(upload.data, extension);
   const durationSeconds = extension === ".wav" ? wavDurationSeconds(upload.data) : null;
+  const uploadAt = new Date(
+    typeof options.now === "function" ? options.now() : options.now ?? Date.now()
+  ).toISOString();
+  const rights = buildUploadRights(upload.rights, {
+    actor: options.actor,
+    acquiredAt: uploadAt,
+    source: "human-uploaded-recording"
+  });
 
   const readState = options.readEpisode ?? readEpisode;
   const writeState = options.writeEpisode ?? writeEpisode;
@@ -116,11 +125,18 @@ export async function saveVoiceUpload(episodeId, upload, options = {}) {
       markerRoot: options.uploadTransactionRoot ?? pendingUploadTransactionRoot,
       episodeId,
       kind: "voice",
-      publicPathForFileName: (fileName) => `episodes/${episodeId}/${fileName}`
+      now: () => uploadAt,
+      publicPathForFileName: (fileName) => `episodes/${episodeId}/${fileName}`,
+      auditEventForFileName: () => ({
+        actor: options.actor,
+        rights,
+        message: "旁白文件已上传，等待素材与声音核验"
+      })
     }
   });
   const { fileName, destination } = staged;
   let publicPath;
+  let assetsComplete = false;
   try {
     publicPath = `episodes/${episodeId}/${fileName}`;
     const version = Number(/voice-v(\d{3})/u.exec(fileName)?.[1] ?? 1);
@@ -134,10 +150,11 @@ export async function saveVoiceUpload(episodeId, upload, options = {}) {
     bytes: upload.data.length,
     durationSeconds,
     sha256: createHash("sha256").update(upload.data).digest("hex"),
-    uploadedAt: new Date().toISOString(),
+    uploadedAt: uploadAt,
     originalFileName: upload.fileName || null,
     note: "旁白文件已上传，等待人工素材与声音审批。",
-    needsRevision: false
+    needsRevision: false,
+    rights
   };
   const assetBundleRevision = nextAssetBundleRevision(episode);
   episode.production = {
@@ -155,7 +172,7 @@ export async function saveVoiceUpload(episodeId, upload, options = {}) {
   invalidateReviewForGate(episode, "assets");
   invalidateReviewForGate(episode, "final");
   const assetStepIndex = episode.pipeline.findIndex((step) => step.agent === "asset-agent");
-  const assetsComplete = episode.pipeline[assetStepIndex]?.status === "complete";
+  assetsComplete = episode.pipeline[assetStepIndex]?.status === "complete";
   episode.pipeline[stepIndex] = voiceStepAfterUpload(
     episode.pipeline[stepIndex],
     assetsComplete
@@ -172,10 +189,12 @@ export async function saveVoiceUpload(episodeId, upload, options = {}) {
   episode.render = { ...episode.render, status: "stale", progress: 0 };
   episode.qa = { ...episode.qa, status: "stale", checkedAt: new Date().toISOString() };
   episode.status = "in_production";
-  episode.updatedAt = new Date().toISOString();
+  episode.updatedAt = uploadAt;
   episode.history.push({
     at: episode.updatedAt,
     type: "voice-upload",
+    actor: options.actor,
+    auditEventId: staged.auditEvent?.eventId ?? null,
     message: `${fileName} 已登记，等待声音审批`
   });
     await writeState(episode);
@@ -183,13 +202,6 @@ export async function saveVoiceUpload(episodeId, upload, options = {}) {
     await staged.rollback().catch(() => undefined);
     throw error;
   }
-  await staged.commit();
-  await recordEvent({
-    type: "voice.uploaded",
-    episodeId,
-    message: assetsComplete
-      ? "旁白文件已上传，等待旁白 Agent 和机器审核"
-      : "旁白文件已上传，等待素材核验"
-  });
+  await staged.commitWithAudit(recordEvent);
   return { episode, publicPath, bytes: upload.data.length };
 }
