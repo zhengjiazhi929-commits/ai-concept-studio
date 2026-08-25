@@ -43,15 +43,20 @@
     "rehearse:rollback": "node scripts/rehearse-remediation-rollback.mjs",
     "test": "node --test tests/*.test.mjs",
     "precheck": "node --check src/shared/redaction.mjs && node --check src/video/agent-skill-motion-plan.mjs && node --check src/video/agent-skill-full-video-plan.mjs && node --check src/server/reviews/human-approval-view.mjs && node --check src/server/reviews/asset-execution-preflight-runner.mjs && node --check src/server/production/external-assets.mjs && node --check src/server/security/operator-session.mjs && node --check scripts/render-agent-skill-full-video-stills.mjs && node --check scripts/start-studio.mjs",
-    "check": "node scripts/check-syntax.mjs"
+    "check": "node scripts/check-syntax.mjs",
+    "diff:check": "git diff --check && git diff --cached --check",
+    "verify": "pnpm scan:secrets && pnpm check && pnpm motion:check && pnpm test && pnpm rehearse:rollback && pnpm ci:render-smoke && pnpm diff:check"
   },
   "dependencies": {
-    "@phosphor-icons/react": "^2.1.10",
+    "@phosphor-icons/react": "2.1.10",
     "@remotion/bundler": "4.0.504",
     "@remotion/renderer": "4.0.504",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "remotion": "4.0.504",
     "undici": "7.29.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1"
   }
 }

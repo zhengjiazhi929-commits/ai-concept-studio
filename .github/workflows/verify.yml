@@ -55,13 +55,7 @@ jobs:
       - name: Block high or critical production dependency advisories
         run: pnpm audit --prod --audit-level high
 
-      - name: Check JavaScript syntax
-        run: pnpm check
-
-      - name: Run deterministic test suite
-        run: pnpm test
-
-      - name: Bundle and render one fixed local frame
+      - name: Run source, motion, test and fixed render gates
         env:
           CI: "true"
-        run: pnpm ci:render-smoke
+        run: pnpm verify

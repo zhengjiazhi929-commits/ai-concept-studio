@@ -92,6 +92,14 @@ test("CI 与本地 package 共享精确 Node 和 pnpm 版本", async () => {
     "utf8"
   );
   const lockfile = await readFile(resolve(studioRoot, "pnpm-lock.yaml"), "utf8");
+  const macLauncher = await readFile(
+    resolve(studioRoot, "启动AI视频系统.command"),
+    "utf8"
+  );
+  const windowsLauncher = await readFile(
+    resolve(studioRoot, "启动AI视频系统.cmd"),
+    "utf8"
+  );
 
   assert.equal(nodeVersion, "24.19.0");
   assert.equal(packageDocument.engines.node, nodeVersion);
@@ -103,6 +111,16 @@ test("CI 与本地 package 共享精确 Node 和 pnpm 版本", async () => {
     "node scripts/scan-tracked-secrets.mjs"
   );
   assert.equal(packageDocument.scripts.check, "node scripts/check-syntax.mjs");
+  assert.equal(
+    packageDocument.scripts.verify,
+    "pnpm scan:secrets && pnpm check && pnpm motion:check && pnpm test && pnpm rehearse:rollback && pnpm ci:render-smoke && pnpm diff:check"
+  );
+  assert.equal(
+    packageDocument.scripts["diff:check"],
+    "git diff --check && git diff --cached --check"
+  );
+  assert.equal(packageDocument.devDependencies.esbuild, "0.28.1");
+  assert.equal(packageDocument.dependencies["@phosphor-icons/react"], "2.1.10");
   assert.equal(
     packageDocument.scripts["build:golden-local-voice"],
     "node scripts/build-golden-local-voice-candidate.mjs"
@@ -125,9 +143,7 @@ test("CI 与本地 package 共享精确 Node 和 pnpm 版本", async () => {
   assert.doesNotMatch(lockfile, /nanoid@3\.3\.16/u);
   assert.match(workflow, /pnpm install --frozen-lockfile/u);
   assert.match(workflow, /pnpm audit --prod --audit-level high/u);
-  assert.match(workflow, /pnpm check/u);
-  assert.match(workflow, /pnpm test/u);
-  assert.match(workflow, /pnpm ci:render-smoke/u);
+  assert.match(workflow, /pnpm verify/u);
   assert.match(workflow, /permissions:\n  contents: read/u);
   assert.match(
     workflow,
@@ -140,6 +156,12 @@ test("CI 与本地 package 共享精确 Node 和 pnpm 版本", async () => {
   assert.doesNotMatch(workflow, /uses: actions\/(?:checkout|setup-node)@v\d/u);
   assert.match(workflow, /node scripts\/scan-tracked-secrets\.mjs/u);
   assert.doesNotMatch(workflow, /STUDIO_|OPENAI_|ANTHROPIC_|API_KEY/u);
+  assert.match(macLauncher, /expected_node_version="\$\(<\.\.\/\.node-version\)"/u);
+  assert.match(macLauncher, /actual_node_version="\$\(node -p 'process\.versions\.node'\)"/u);
+  assert.doesNotMatch(macLauncher, /Node\.js 20|node_major >= 20/u);
+  assert.match(windowsLauncher, /STUDIO_EXPECTED_NODE/u);
+  assert.match(windowsLauncher, /process\.versions\.node/u);
+  assert.doesNotMatch(windowsLauncher, /Node\.js 20/u);
 });
 
 test("黄金样例文档与运行时保持五道人审 Gate", async () => {

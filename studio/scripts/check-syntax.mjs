@@ -1,8 +1,15 @@
-import { readdir } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { transform } from "esbuild";
 import { studioRoot } from "../src/shared/paths.mjs";
+
+const TRANSFORM_LOADERS = Object.freeze({
+  ".jsx": "jsx",
+  ".ts": "ts",
+  ".tsx": "tsx"
+});
 
 export const DEFAULT_SYNTAX_ROOTS = Object.freeze([
   resolve(studioRoot, "scripts"),
@@ -20,7 +27,7 @@ async function collectSyntaxFiles(directory, files) {
       await collectSyntaxFiles(path, files);
       continue;
     }
-    if (entry.isFile() && /\.(?:mjs|js)$/u.test(entry.name)) files.push(path);
+    if (entry.isFile() && /\.(?:mjs|js|jsx|ts|tsx)$/u.test(entry.name)) files.push(path);
   }
 }
 
@@ -43,14 +50,39 @@ function checkOneFile(path, spawnProcess = spawnSync) {
   }
 }
 
+async function transformOneFile(path, transformImpl = transform, readFileImpl = readFile) {
+  const extension = /\.(?:jsx|tsx|ts)$/u.exec(path)?.[0] ?? null;
+  const loader = TRANSFORM_LOADERS[extension];
+  if (!loader) return checkOneFile(path);
+  try {
+    await transformImpl(await readFileImpl(path, "utf8"), {
+      loader,
+      sourcefile: path,
+      format: "esm",
+      jsx: "automatic",
+      target: "es2024",
+      logLevel: "silent"
+    });
+  } catch (error) {
+    const output = error instanceof Error ? error.message : String(error);
+    throw new Error(`Syntax check failed for ${path}\n${output}`);
+  }
+}
+
 export async function checkSyntaxFiles(files, options = {}) {
-  for (const path of files) checkOneFile(path, options.spawn ?? spawnSync);
+  for (const path of files) {
+    if (/\.(?:jsx|tsx|ts)$/u.test(path)) {
+      await transformOneFile(path, options.transform ?? transform, options.readFile ?? readFile);
+    } else {
+      checkOneFile(path, options.spawn ?? spawnSync);
+    }
+  }
   return { checked: files.length };
 }
 
 export async function runSyntaxCheck(options = {}) {
   const files = await discoverSyntaxFiles(options.roots ?? DEFAULT_SYNTAX_ROOTS);
-  if (files.length === 0) throw new Error("No JavaScript syntax targets found");
+  if (files.length === 0) throw new Error("No JavaScript or TypeScript syntax targets found");
   return checkSyntaxFiles(files, options);
 }
 
@@ -60,5 +92,5 @@ const isDirectRun = process.argv[1]
 
 if (isDirectRun) {
   const result = await runSyntaxCheck();
-  console.log(`Syntax OK: ${result.checked} files`);
+  console.log(`JS/JSX/TS/TSX syntax OK: ${result.checked} files`);
 }
