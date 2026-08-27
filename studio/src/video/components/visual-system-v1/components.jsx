@@ -5,6 +5,9 @@ import {
   visualSystemV1AdaptiveCardTypography,
   visualSystemV1Layout
 } from "./layout.mjs";
+import {
+  VISUAL_SYSTEM_V1_INFORMATION_CARD_PRIMITIVES
+} from "./grammar-layout.mjs";
 import { visualSystemV1ChapterDisplayLabel } from "./chapter-progress.mjs";
 import {
   visualSystemV1ChapterProgressAtFrame,
@@ -17,6 +20,7 @@ import {
   visualSystemV1WallpaperMotionAtFrame
 } from "./motion.mjs";
 import { VISUAL_SYSTEM_V1, VISUAL_SYSTEM_V1_DEPTH_ROLES } from "./tokens.mjs";
+import { VisualSystemV1AiTechIcon } from "./icons/ai-tech-icon.jsx";
 
 const { palette, typography } = VISUAL_SYSTEM_V1;
 const SceneOpacityContext = React.createContext(1);
@@ -258,7 +262,12 @@ export function VisualSystemV1FlatNode({
   marker = null,
   accent = "mint",
   focusProgress = 0,
-  layoutMode = "content-sized"
+  layoutMode = "content-sized",
+  textWrapMode = "break-word",
+  contentOpacity = 1,
+  semanticRole = null,
+  semanticGroupId = null,
+  semanticClaimIds = []
 }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -277,6 +286,14 @@ export function VisualSystemV1FlatNode({
   if (!fillsSafeViewport && layoutMode !== "content-sized") {
     throw new TypeError(`未知平面卡片布局模式：${layoutMode}`);
   }
+  if (!["break-word", "phrase-safe"].includes(textWrapMode)) {
+    throw new TypeError(`未知平面卡片断行模式：${textWrapMode}`);
+  }
+  const phraseSafe = textWrapMode === "phrase-safe";
+  const normalizedContentOpacity = Math.max(
+    0,
+    Math.min(1, Number.isFinite(contentOpacity) ? contentOpacity : 1)
+  );
   const cardWidth = Number.isFinite(style.width) ? style.width : 300;
   const cardHeight = Number.isFinite(style.height) ? style.height : 166;
   const paddingX = fillsSafeViewport ? Math.max(24, Math.min(36, cardWidth * 0.08)) : 24;
@@ -292,13 +309,19 @@ export function VisualSystemV1FlatNode({
       data-visual-system-focus-progress={normalizedFocus}
       data-visual-system-card-layout={layoutMode}
       data-visual-system-card-typography={cardTypography?.mode ?? "legacy-content-sized"}
+      data-visual-system-card-text-wrap={textWrapMode}
+      data-visual-system-card-border="full-outline-3px"
+      data-semantic-id={nodeId}
+      data-semantic-group-id={semanticGroupId ?? undefined}
+      data-semantic-role={semanticRole ?? undefined}
+      data-semantic-claim-ids={semanticClaimIds.join(",") || undefined}
       data-card-marker-font-size={cardTypography?.markerFontSizePx}
       data-card-label-font-size={cardTypography?.labelFontSizePx}
       data-card-detail-font-size={cardTypography?.detailFontSizePx}
       style={{
         position: "absolute",
         boxSizing: "border-box",
-        border: `1px solid ${mixHexColors(palette.line, focusBorder, normalizedFocus)}`,
+        border: `3px solid ${mixHexColors(palette.lineStrong, focusBorder, normalizedFocus)}`,
         borderRadius: 18,
         backgroundColor: mixHexColors(palette.paperWarm, focusSurface, normalizedFocus, 0.76),
         backgroundImage: "none",
@@ -316,7 +339,8 @@ export function VisualSystemV1FlatNode({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: cardTypography?.dotMarkerGapPx ?? 12
+          gap: cardTypography?.dotMarkerGapPx ?? 12,
+          opacity: normalizedContentOpacity
         }}
       >
         <span
@@ -353,7 +377,9 @@ export function VisualSystemV1FlatNode({
           fontWeight: 860,
           lineHeight: cardTypography?.label.lineHeight ?? 1.12,
           letterSpacing: `${cardTypography?.label.letterSpacingEm ?? -0.025}em`,
-          overflowWrap: "break-word"
+          wordBreak: phraseSafe ? "keep-all" : "normal",
+          overflowWrap: phraseSafe ? "normal" : "break-word",
+          opacity: normalizedContentOpacity
         }}
       >
         {label}
@@ -368,7 +394,250 @@ export function VisualSystemV1FlatNode({
             fontSize: cardTypography?.detailFontSizePx ?? 18,
             fontWeight: 620,
             lineHeight: cardTypography?.detail.lineHeight ?? 1.35,
-            overflowWrap: "break-word"
+            wordBreak: phraseSafe ? "keep-all" : "normal",
+            overflowWrap: phraseSafe ? "normal" : "break-word",
+            opacity: normalizedContentOpacity
+          }}
+        >
+          {detail}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function semanticPrimitiveSurface(primitive, accentColor, focusColor, focusProgress, surfaceRole) {
+  const openDiagram = {
+    border: "none",
+    borderRadius: 0,
+    backgroundColor: "transparent",
+    boxShadow: "none"
+  };
+  const fullOutline = {
+    border: `3px solid ${mixHexColors(
+      palette.lineStrong,
+      accentColor,
+      Math.min(1, focusProgress * 0.82)
+    )}`,
+    borderRadius: 18,
+    backgroundColor: mixHexColors(
+      palette.paperWarm,
+      focusColor,
+      focusProgress,
+      0.92
+    ),
+    boxShadow: "none"
+  };
+  if (surfaceRole === "information-card") return fullOutline;
+  if (primitive === "timeline-anchor") {
+    return { ...openDiagram, borderTop: `3px solid ${accentColor}` };
+  }
+  if (primitive === "quantity-bar") {
+    return {
+      ...openDiagram,
+      borderRadius: 14,
+      backgroundColor: colorWithAlpha(accentColor, 0.12 + focusProgress * 0.16)
+    };
+  }
+  if (primitive === "spatial-marker") {
+    return { ...openDiagram, borderBottom: `3px solid ${accentColor}` };
+  }
+  return openDiagram;
+}
+
+export function VisualSystemV1StandaloneIcon({
+  conceptKind,
+  progress,
+  presentation = "open-diagram-symbol",
+  sizeRole = "support",
+  statusMarkVariant = "quiet",
+  label = "独立图标",
+  style = {}
+}) {
+  if (!["standalone-focus", "open-diagram-symbol"].includes(presentation)) {
+    throw new TypeError(`未知独立图标展示方式：${presentation}`);
+  }
+  return (
+    <div
+      data-ai-tech-icon-presentation={presentation}
+      data-ai-tech-icon-container="standalone"
+      style={{
+        position: "absolute",
+        display: "grid",
+        placeItems: "center",
+        pointerEvents: "none",
+        ...style
+      }}
+    >
+      <VisualSystemV1AiTechIcon
+        conceptKind={conceptKind}
+        sizeRole={sizeRole}
+        progress={progress}
+        statusMarkVariant={statusMarkVariant}
+        label={label}
+      />
+    </div>
+  );
+}
+
+export function VisualSystemV1SemanticNode({
+  nodeId,
+  label,
+  detail,
+  marker = null,
+  primitive = "node",
+  startFrame,
+  detailStartFrame = startFrame,
+  style = {},
+  accent = "mint",
+  focusProgress = 0,
+  visibilityProgress = 1,
+  contentOpacity = 1,
+  semanticRole = null,
+  surfaceRole = null,
+  surfacePurpose = null,
+  visualHierarchyLevel = null,
+  semanticClaimIds = [],
+  conceptKind = "none",
+  textWrapMode = "break-word"
+}) {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const state = visualSystemV1SpringMotionAtFrame(frame, startFrame, fps);
+  if (state.progress <= 0) return null;
+  const detailState = visualSystemV1TextMotionAtFrame(frame, detailStartFrame);
+  const normalizedFocus = Math.max(0, Math.min(1, focusProgress));
+  const normalizedVisibility = Math.max(0, Math.min(1, visibilityProgress));
+  const normalizedContentOpacity = Math.max(0, Math.min(1, contentOpacity));
+  const accentColor = accent === "purple" ? palette.purpleDeep : palette.mintDeep;
+  const focusColor = accent === "purple" ? palette.purpleSoft : palette.mintSoft;
+  const width = Number.isFinite(style.width) ? style.width : 320;
+  const height = Number.isFinite(style.height) ? style.height : 140;
+  if (surfaceRole != null && !["information-card", "open-canvas"].includes(surfaceRole)) {
+    throw new TypeError(`未知语义节点承载方式：${surfaceRole}`);
+  }
+  const resolvedSurfaceRole = surfaceRole ?? (
+    VISUAL_SYSTEM_V1_INFORMATION_CARD_PRIMITIVES.includes(primitive)
+      ? "information-card"
+      : "open-canvas"
+  );
+  const informationCard = resolvedSurfaceRole === "information-card";
+  if (conceptKind !== "none") {
+    throw new TypeError(
+      `${nodeId} 是带文字的语义节点，不能嵌入图标；请改用 VisualSystemV1StandaloneIcon`
+    );
+  }
+  const labelFontSize = informationCard
+    ? 32
+    : Math.max(28, Math.min(36, height * 0.3, width * 0.12));
+  const detailFontSize = informationCard
+    ? 20
+    : Math.max(18, Math.min(24, height * 0.19, width * 0.068));
+  const paddingX = informationCard ? 26 : Math.max(18, Math.min(26, width * 0.07));
+  const paddingY = Math.max(10, Math.min(26, height * 0.1));
+  const surface = semanticPrimitiveSurface(
+    primitive,
+    accentColor,
+    focusColor,
+    normalizedFocus,
+    resolvedSurfaceRole
+  );
+  const phraseSafe = textWrapMode === "phrase-safe";
+  if (!["break-word", "phrase-safe"].includes(textWrapMode)) {
+    throw new TypeError(`未知语义节点断行模式：${textWrapMode}`);
+  }
+  return (
+    <div
+      data-visual-system-surface="semantic-grammar"
+      data-visual-system-primitive={primitive}
+      data-visual-system-surface-role={resolvedSurfaceRole}
+      data-editorial-surface-purpose={surfacePurpose ?? undefined}
+      data-visual-hierarchy-level={visualHierarchyLevel ?? undefined}
+      data-visual-system-surface-border={surface.border === "none" ? "open-diagram" : "full-outline"}
+      data-visual-system-node-id={nodeId}
+      data-semantic-id={nodeId}
+      data-semantic-role={semanticRole ?? undefined}
+      data-semantic-claim-ids={semanticClaimIds.join(",") || undefined}
+      data-ai-tech-icon-presentation="none"
+      data-semantic-text-wrap={textWrapMode}
+      style={{
+        ...style,
+        ...surface,
+        position: "absolute",
+        boxSizing: "border-box",
+        top: Number.isFinite(style.top) ? style.top + state.translateY : style.top,
+        padding: `${paddingY}px ${paddingX}px`,
+        paddingLeft: paddingX,
+        opacity: state.opacity * normalizedVisibility,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        overflow: informationCard ? "hidden" : "visible"
+      }}
+    >
+      {primitive === "timeline-anchor" ? (
+        <span
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            top: -7,
+            left: "50%",
+            width: 14,
+            height: 14,
+            borderRadius: "50%",
+            backgroundColor: accentColor,
+            translate: "-50% 0"
+          }}
+        />
+      ) : null}
+      {marker ? (
+        <div
+          style={{
+            color: accentColor,
+            fontSize: 13,
+            fontWeight: 850,
+            letterSpacing: ".08em",
+            lineHeight: 1.1,
+            opacity: normalizedContentOpacity * 0.76
+          }}
+        >
+          {marker}
+        </div>
+      ) : null}
+      <div
+        style={{
+          marginTop: marker ? 7 : 0,
+          minWidth: 0,
+          opacity: normalizedContentOpacity
+        }}
+      >
+        <div
+          style={{
+            minWidth: 0,
+            color: palette.ink,
+            fontSize: labelFontSize,
+            fontWeight: 880,
+            lineHeight: 1.08,
+            letterSpacing: "-.025em",
+            whiteSpace: informationCard ? "nowrap" : undefined,
+            wordBreak: informationCard || phraseSafe ? "keep-all" : "normal",
+            overflowWrap: informationCard || phraseSafe ? "normal" : "break-word"
+          }}
+        >
+          {label}
+        </div>
+      </div>
+      {detail ? (
+        <div
+          style={{
+            marginTop: 7,
+            color: palette.muted,
+            fontSize: detailFontSize,
+            fontWeight: 620,
+            lineHeight: 1.22,
+            wordBreak: phraseSafe ? "keep-all" : "normal",
+            overflowWrap: phraseSafe ? "normal" : "break-word",
+            opacity: normalizedContentOpacity * detailState.opacity
           }}
         >
           {detail}

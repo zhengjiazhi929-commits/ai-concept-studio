@@ -9,28 +9,28 @@ import {
 
 import {
   VISUAL_SYSTEM_V1,
-  VisualSystemV1AiWatermark,
   VisualSystemV1ChapterProgress,
-  VisualSystemV1FlatNode,
   VisualSystemV1PlainSubtitle,
   VisualSystemV1PopText,
-  visualSystemV1AdaptiveCardLayout,
-  visualSystemV1SmoothStep
+  VisualSystemV1SemanticNode,
+  VisualSystemV1StandaloneIcon,
+  visualSystemV1ProgressAtFrame,
+  visualSystemV1StandaloneOverlaySlot
 } from "./components/visual-system-v1/index.jsx";
+import { VisualSystemV1WideBrandLayer } from "./components/visual-system-v1/brand-layer.jsx";
 import {
   AGENT_SKILL_LONG_REVIEW_CHAPTERS,
   AGENT_SKILL_LONG_REVIEW_SCENE_SPECS,
-  longReviewDiagramStateAtFrame,
-  longReviewSceneLayersAtFrame
+  longReviewDisplaySubtitles,
+  longReviewLayoutAtFrame,
+  longReviewSceneLayersAtFrame,
+  longReviewSemanticNodeRevealFrame,
+  longReviewStageCaptionLayout,
+  longReviewStageCaptionStateAtFrame,
+  longReviewSubtitleGateAtFrame
 } from "./agent-skill-long-review-plan.mjs";
 
 const { palette, typography } = VISUAL_SYSTEM_V1;
-const CARD_CONSTRAINTS = Object.freeze({
-  copyBottomPx: 318,
-  subtitleTopPx: 872,
-  minimumCardWidthPx: VISUAL_SYSTEM_V1.cardDeck.minimumCardWidthPx,
-  minimumCardHeightPx: VISUAL_SYSTEM_V1.cardDeck.minimumCardHeightPx
-});
 
 const humanNodePattern = /(?:\bhuman\b|人工(?:决定|确认)|等待人工)/iu;
 const WIDE_BACKDROP_LOOP_SECONDS = 25;
@@ -135,133 +135,97 @@ function isHumanNode(node) {
   return humanNodePattern.test(`${node.id} ${normalizeNodeCopy(node.label)} ${normalizeNodeCopy(node.detail)}`);
 }
 
-function nodeMarker(node, spec) {
-  if (isHumanNode(node)) return "HUMAN GATE";
-  if (node.dashed) return "BOUNDARY";
-  if (spec.kind === "native-evidence") return "EVIDENCE";
-  if (spec.kind === "summary") return "SUMMARY";
-  return "NODE";
+function nodeMarker(node) {
+  if (node.dashed) return "边界";
+  return null;
 }
 
-function uniqueNodeIds(stages) {
-  return [...new Set(stages.flatMap((stage) => stage.nodeIds))];
+function standaloneIconSize(icon) {
+  const size = icon.sizeRole === "focus" ? 104 : icon.sizeRole === "inline" ? 36 : 56;
+  return { width: size, height: size };
 }
 
-function cardGeometry(card) {
-  return {
-    left: card.left,
-    top: card.top,
-    width: card.width,
-    height: card.height
-  };
+function preferredOverlaySides(placement) {
+  const normalized = ({
+    "right-center": "right",
+    "left-center": "left",
+    "above-center": "top",
+    "below-center": "bottom"
+  })[placement] ?? placement;
+  const sides = ["right", "left", "top", "bottom"];
+  if (!sides.includes(normalized)) return sides;
+  return [normalized, ...sides.filter((side) => side !== normalized)];
 }
 
-function interpolateGeometry(from, to, progress) {
-  const amount = visualSystemV1SmoothStep(progress);
-  const interpolate = (start, end) => start + (end - start) * amount;
-  return {
-    left: interpolate(from.left, to.left),
-    top: interpolate(from.top, to.top),
-    width: interpolate(from.width, to.width),
-    height: interpolate(from.height, to.height)
-  };
-}
-
-function adaptiveNodeLayout(spec, state, width, height) {
-  const targetNodeIds = uniqueNodeIds(spec.stages.slice(0, state.stageIndex + 1));
-  if (targetNodeIds.length === 0) {
-    return { nodeIds: [], geometryById: {}, visibleCount: 0 };
-  }
-  const previousNodeIds = uniqueNodeIds(spec.stages.slice(0, state.stageIndex));
-  const targetDeck = visualSystemV1AdaptiveCardLayout(
-    width,
-    height,
-    targetNodeIds.length,
-    CARD_CONSTRAINTS
-  );
-  const targetGeometry = Object.fromEntries(
-    targetNodeIds.map((nodeId, index) => [nodeId, cardGeometry(targetDeck.cards[index])])
-  );
-  if (
-    previousNodeIds.length === 0 ||
-    previousNodeIds.length === targetNodeIds.length ||
-    state.stageTransitionProgress >= 1
-  ) {
-    return {
-      nodeIds: targetNodeIds,
-      geometryById: targetGeometry,
-      visibleCount: targetNodeIds.length
-    };
-  }
-  const previousDeck = visualSystemV1AdaptiveCardLayout(
-    width,
-    height,
-    previousNodeIds.length,
-    CARD_CONSTRAINTS
-  );
-  const previousGeometry = Object.fromEntries(
-    previousNodeIds.map((nodeId, index) => [nodeId, cardGeometry(previousDeck.cards[index])])
-  );
-  return {
-    nodeIds: targetNodeIds,
-    geometryById: Object.fromEntries(targetNodeIds.map((nodeId) => [
-      nodeId,
-      previousGeometry[nodeId]
-        ? interpolateGeometry(
-          previousGeometry[nodeId],
-          targetGeometry[nodeId],
-          state.stageTransitionProgress
-        )
-        : targetGeometry[nodeId]
-    ])),
-    visibleCount: targetNodeIds.length
-  };
-}
-
-function firstRevealFrame(spec, nodeId) {
-  return spec.stages.find((stage) => stage.nodeIds.includes(nodeId))?.startFrame ?? spec.startFrame;
-}
-
-function connectorEndpoints(from, to) {
-  const fromCenter = { x: from.left + from.width / 2, y: from.top + from.height / 2 };
-  const toCenter = { x: to.left + to.width / 2, y: to.top + to.height / 2 };
-  const dx = toCenter.x - fromCenter.x;
-  const dy = toCenter.y - fromCenter.y;
-  if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) return null;
-  const fromScale = Math.min(
-    from.width / (2 * Math.max(Math.abs(dx), 0.001)),
-    from.height / (2 * Math.max(Math.abs(dy), 0.001))
-  );
-  const toScale = Math.min(
-    to.width / (2 * Math.max(Math.abs(dx), 0.001)),
-    to.height / (2 * Math.max(Math.abs(dy), 0.001))
-  );
-  return {
-    from: {
-      x: fromCenter.x + dx * fromScale,
-      y: fromCenter.y + dy * fromScale
-    },
-    to: {
-      x: toCenter.x - dx * toScale,
-      y: toCenter.y - dy * toScale
-    }
-  };
+function AdaptiveSemanticGroups({ spec, layout }) {
+  const labelledGroups = (spec.groups ?? []).filter((group) => group.label);
+  if (labelledGroups.length === 0) return null;
+  return labelledGroups.map((group) => {
+    const members = group.nodeIds.flatMap((nodeId) => {
+      const geometry = layout.geometryById[nodeId];
+      return geometry ? [geometry] : [];
+    });
+    if (members.length === 0) return null;
+    const paddingX = 18;
+    const paddingTop = 34;
+    const paddingBottom = 16;
+    const left = Math.max(layout.safeArea.left, Math.min(...members.map((item) => item.left)) - paddingX);
+    const right = Math.min(layout.safeArea.right, Math.max(...members.map((item) => item.right)) + paddingX);
+    const top = Math.max(layout.safeArea.top, Math.min(...members.map((item) => item.top)) - paddingTop);
+    const bottom = Math.min(layout.safeArea.bottom, Math.max(...members.map((item) => item.bottom)) + paddingBottom);
+    return (
+      <div
+        key={group.id}
+        data-semantic-group-id={group.id}
+        data-semantic-group-role="swimlane"
+        style={{
+          position: "absolute",
+          left,
+          top,
+          width: right - left,
+          height: bottom - top,
+          boxSizing: "border-box",
+          border: `2px dashed ${palette.lineStrong}`,
+          borderRadius: 24,
+          zIndex: 0
+        }}
+      >
+        <span
+          style={{
+            position: "absolute",
+            left: 16,
+            top: 7,
+            color: palette.mintDeep,
+            fontSize: 15,
+            fontWeight: 820,
+            letterSpacing: ".06em",
+            lineHeight: 1
+          }}
+        >
+          {group.label}
+        </span>
+      </div>
+    );
+  });
 }
 
 function AdaptiveConnectors({ spec, state, layout, width, height }) {
+  const semanticRelations = new Map(
+    spec.visualPlan.semanticRelations.map((relation) => [relation.id, relation])
+  );
   return (
     <svg
-      data-visual-system-connectors="adaptive-flat-graph"
+      data-visual-system-connectors="orthogonal-semantic-graph"
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       style={{ position: "absolute", inset: 0, overflow: "visible", zIndex: 1 }}
     >
       <defs>
-        {spec.edges.map((edge) => (
+        {layout.connectors.filter((connector) => semanticRelations.get(connector.relationId)?.directed).map((connector) => (
           <marker
-            key={edge.id}
-            id={`long-review-arrow-${spec.id}-${edge.id}`}
+            key={connector.relationId}
+            id={`long-review-arrow-${spec.id}-${connector.relationId}`}
             viewBox="0 0 10 10"
             refX="8"
             refY="5"
@@ -272,34 +236,38 @@ function AdaptiveConnectors({ spec, state, layout, width, height }) {
             <path
               d="M 0 0 L 10 5 L 0 10 z"
               fill={palette.mintDeep}
-              opacity={state.edgeArrowProgress[edge.id] ?? 0}
+              opacity={state.edgeArrowProgress[connector.relationId] ?? 0}
             />
           </marker>
         ))}
       </defs>
-      {spec.edges.map((edge) => {
-        const from = layout.geometryById[edge.from];
-        const to = layout.geometryById[edge.to];
-        const endpoints = from && to ? connectorEndpoints(from, to) : null;
-        const progress = state.edgeProgress[edge.id] ?? 0;
-        const focus = state.edgeHighlightProgress[edge.id] ?? 0;
-        if (!endpoints || progress <= 0) return null;
+      {layout.connectors.map((connector) => {
+        const semanticRelation = semanticRelations.get(connector.relationId);
+        const progress = state.edgeProgress[connector.relationId] ?? 0;
+        const focus = state.edgeHighlightProgress[connector.relationId] ?? 0;
+        if (connector.route.length < 2 || progress <= 0) return null;
+        const connectorProps = {
+          "data-semantic-relation-id": semanticRelation?.id,
+          "data-semantic-directed": String(Boolean(semanticRelation?.directed)),
+          "data-connector-presentation": connector.presentationKind,
+          pathLength: 1,
+          fill: "none",
+          stroke: palette.mintDeep,
+          strokeWidth: 2 + focus,
+          strokeLinecap: "round",
+          strokeDasharray: 1,
+          strokeDashoffset: 1 - progress,
+          markerEnd: semanticRelation?.directed
+            ? `url(#long-review-arrow-${spec.id}-${connector.relationId})`
+            : undefined,
+          opacity: progress * (state.edgeVisibilityProgress[connector.relationId] ?? 0) * (0.42 + focus * 0.42),
+          vectorEffect: "non-scaling-stroke"
+        };
         return (
-          <line
-            key={edge.id}
-            x1={endpoints.from.x}
-            y1={endpoints.from.y}
-            x2={endpoints.to.x}
-            y2={endpoints.to.y}
-            pathLength={1}
-            stroke={palette.mintDeep}
-            strokeWidth={2 + focus}
-            strokeLinecap="round"
-            strokeDasharray={1}
-            strokeDashoffset={1 - progress}
-            markerEnd={`url(#long-review-arrow-${spec.id}-${edge.id})`}
-            opacity={progress * (0.42 + focus * 0.42)}
-            vectorEffect="non-scaling-stroke"
+          <polyline
+            key={connector.relationId}
+            {...connectorProps}
+            points={connector.route.map((point) => `${point.x},${point.y}`).join(" ")}
           />
         );
       })}
@@ -307,10 +275,7 @@ function AdaptiveConnectors({ spec, state, layout, width, height }) {
   );
 }
 
-function StageCaption({ state }) {
-  const progress = state.previousStageLabel == null
-    ? 1
-    : state.stageTransitionProgress ?? 1;
+function StageCaption({ caption, copyOpacity = 1 }) {
   const captionStyle = {
     position: "absolute",
     inset: 0,
@@ -322,7 +287,7 @@ function StageCaption({ state }) {
       <div
         style={{
           color: palette.mintDeep,
-          fontSize: 24,
+          fontSize: 28,
           fontWeight: 760,
           lineHeight: 1.25,
           letterSpacing: "-.015em"
@@ -333,66 +298,133 @@ function StageCaption({ state }) {
     </div>
   );
   return (
-    <div style={{ position: "relative", width: "100%", height: 34 }}>
-      {state.previousStageLabel != null
-        ? renderText(state.previousStageLabel, Math.max(0, state.stageIndex - 1), 1 - progress)
+    <div style={{ position: "relative", width: "100%", height: 34, opacity: copyOpacity }}>
+      {caption.previous != null
+        ? renderText(caption.previous.label, caption.stageIndex - 1, caption.previous.opacity)
         : null}
-      {renderText(state.stageLabel, state.stageIndex, progress)}
+      {renderText(caption.current.label, caption.stageIndex, caption.current.opacity)}
     </div>
   );
 }
 
-function TechnicalDiagram({ spec, globalFrame }) {
-  const state = longReviewDiagramStateAtFrame(spec.id, globalFrame);
+function TechnicalDiagram({ spec, globalFrame, copyOpacity = 1, diagramOpacity = 1 }) {
+  const detailOpacity = visualSystemV1ProgressAtFrame(
+    globalFrame,
+    spec.startFrame + spec.visualPlan.timing.detailCopyStartFrame,
+    12
+  );
   const { width, height } = useVideoConfig();
-  const adaptiveLayout = adaptiveNodeLayout(spec, state, width, height);
+  const semanticLayout = longReviewLayoutAtFrame(spec.id, globalFrame, { width, height });
+  const { state } = semanticLayout;
+  const stageCaptionLayout = longReviewStageCaptionLayout(width, height);
+  const stageCaption = longReviewStageCaptionStateAtFrame(spec.id, globalFrame);
   return (
     <div
-      style={{ position: "absolute", inset: 0 }}
+      data-layout-stability={spec.layoutStability}
+      style={{ position: "absolute", inset: 0, opacity: diagramOpacity }}
       data-scene-id={spec.id}
       data-stage-id={state.stageId ?? "none"}
       data-final-hold={state.finalHold ? "true" : "false"}
-      data-scene-adaptive-layout="visible-node-count"
-      data-visible-card-count={adaptiveLayout.visibleCount}
+      data-scene-layout="stable-final-visual-grammar"
+      data-visual-grammar={spec.visualPlan.structure}
+      data-editorial-visual-mode={spec.visualMode}
+      data-visible-semantic-count={semanticLayout.visibleCount}
       data-surface-mode="flat-only"
     >
+      <AdaptiveSemanticGroups spec={spec} layout={semanticLayout} />
       <AdaptiveConnectors
         spec={spec}
         state={state}
-        layout={adaptiveLayout}
+        layout={semanticLayout}
         width={width}
         height={height}
       />
-      {adaptiveLayout.nodeIds.map((nodeId) => {
+      {semanticLayout.nodeIds.map((nodeId) => {
         const node = spec.nodes.find((candidate) => candidate.id === nodeId);
-        const geometry = adaptiveLayout.geometryById[nodeId];
+        const semanticElement = spec.visualPlan.semanticElements.find(
+          (candidate) => candidate.id === nodeId
+        );
+        const geometry = semanticLayout.geometryById[nodeId];
+        const surfacePlan = spec.surfacePlanById[nodeId];
         if (!node || !geometry) return null;
+        const revealFrame = longReviewSemanticNodeRevealFrame(spec.id, node.id);
         return (
-          <VisualSystemV1FlatNode
+          <VisualSystemV1SemanticNode
             key={node.id}
             nodeId={node.id}
-            marker={nodeMarker(node, spec)}
+            marker={nodeMarker(node)}
             label={normalizeNodeCopy(node.label)}
             detail={normalizeNodeCopy(node.detail)}
-            startFrame={firstRevealFrame(spec, node.id)}
+            startFrame={revealFrame}
+            detailStartFrame={Math.max(
+              revealFrame,
+              spec.startFrame + spec.visualPlan.timing.detailCopyStartFrame
+            )}
+            primitive={semanticLayout.primitiveById[node.id]}
             accent={isHumanNode(node) ? "purple" : "mint"}
             focusProgress={state.nodeHighlightProgress[node.id] ?? 0}
-            layoutMode="fill-safe-viewport"
+            visibilityProgress={state.nodeVisibilityProgress[node.id] ?? 0}
+            contentOpacity={copyOpacity}
+            semanticRole={semanticElement?.semanticRole}
+            semanticGroupId={surfacePlan?.semanticGroupId}
+            surfaceRole={surfacePlan?.surfaceRole}
+            surfacePurpose={surfacePlan?.surfacePurpose}
+            visualHierarchyLevel={surfacePlan?.visualHierarchyLevel}
+            semanticClaimIds={semanticElement?.claimIds ?? []}
+            conceptKind="none"
+            textWrapMode={node.textWrapMode ?? "phrase-safe"}
             style={{ ...geometry, zIndex: 2 }}
+          />
+        );
+      })}
+      {spec.standaloneIcons.map((icon) => {
+        const anchor = semanticLayout.geometryById[icon.anchorId];
+        if (!anchor) return null;
+        const progress = icon.delayUntilFinalHold
+          ? visualSystemV1ProgressAtFrame(globalFrame, spec.holdStartFrame, 18)
+          : (state.nodeProgress[icon.anchorId] ?? 0) * (state.nodeVisibilityProgress[icon.anchorId] ?? 0);
+        if (progress <= 0) return null;
+        const slot = visualSystemV1StandaloneOverlaySlot({
+          anchorGeometry: anchor,
+          overlaySize: standaloneIconSize(icon),
+          safeArea: semanticLayout.safeArea,
+          geometryById: semanticLayout.fullGeometryById,
+          connectors: semanticLayout.allConnectors,
+          minimumGapPx: 18,
+          preferredSides: preferredOverlaySides(icon.placement)
+        });
+        if (!slot.render) return null;
+        const anchorNode = spec.nodes.find((node) => node.id === icon.anchorId);
+        return (
+          <VisualSystemV1StandaloneIcon
+            key={icon.id}
+            conceptKind={icon.conceptKind}
+            presentation={icon.presentation}
+            sizeRole={icon.sizeRole}
+            progress={progress}
+            statusMarkVariant={icon.statusMarkVariant}
+            label={`${anchorNode?.label ?? icon.anchorId} 独立状态图标`}
+            style={{
+              left: slot.bounds.x,
+              top: slot.bounds.y,
+              width: slot.bounds.width,
+              height: slot.bounds.height,
+              zIndex: 3
+            }}
           />
         );
       })}
       <div
         style={{
           position: "absolute",
-          left: 120,
-          right: 280,
-          top: 298,
-          height: 34,
+          left: stageCaptionLayout.left,
+          right: stageCaptionLayout.right,
+          top: stageCaptionLayout.top,
+          height: stageCaptionLayout.height,
           zIndex: 3
         }}
       >
-        <StageCaption state={state} />
+        <StageCaption caption={stageCaption} copyOpacity={copyOpacity * detailOpacity} />
       </div>
     </div>
   );
@@ -429,13 +461,14 @@ function SceneLayer({ episode, layer, globalFrame }) {
           fontWeight: 900,
           lineHeight: 1.08,
           letterSpacing: "-.045em",
-          whiteSpace: "nowrap"
+          whiteSpace: "nowrap",
+          opacity: layer.copyOpacity
         }}
       >
         {title}
       </VisualSystemV1PopText>
       <VisualSystemV1PopText
-        startFrame={spec.startFrame + 4}
+        startFrame={spec.startFrame + spec.visualPlan.timing.supportingCopyStartFrame}
         style={{
           position: "absolute",
           left: 122,
@@ -447,18 +480,24 @@ function SceneLayer({ episode, layer, globalFrame }) {
           fontWeight: 650,
           lineHeight: 1.34,
           letterSpacing: "-.02em",
-          whiteSpace: "nowrap"
+          whiteSpace: "nowrap",
+          opacity: layer.copyOpacity
         }}
       >
         {spec.deck ?? scene.statement ?? ""}
       </VisualSystemV1PopText>
-      <TechnicalDiagram spec={spec} globalFrame={globalFrame} />
+      <TechnicalDiagram
+        spec={spec}
+        globalFrame={globalFrame}
+        copyOpacity={layer.copyOpacity}
+        diagramOpacity={layer.diagramOpacity}
+      />
     </div>
   );
 }
 
 function subtitleCaptions(episode) {
-  return (episode?.subtitles ?? []).map((subtitle) => ({
+  return longReviewDisplaySubtitles(episode?.subtitles ?? []).map((subtitle) => ({
     text: subtitle.text,
     startMs: subtitle.start * 1000,
     endMs: subtitle.end * 1000,
@@ -471,6 +510,7 @@ export function AgentSkillLongReview({ episode }) {
   const frame = useCurrentFrame();
   const layers = longReviewSceneLayersAtFrame(frame);
   const captions = subtitleCaptions(episode);
+  const subtitleGate = longReviewSubtitleGateAtFrame(episode?.subtitles ?? [], frame);
   return (
     <AbsoluteFill
       lang="zh-CN"
@@ -487,7 +527,7 @@ export function AgentSkillLongReview({ episode }) {
         data-visual-system="visual-system-v1"
         data-visual-system-content="open-canvas"
         data-output-format="wide-only"
-        data-same-level-surfaces="flat"
+        data-same-level-surfaces="semantic-hierarchy-consistent"
         style={{ position: "absolute", inset: 0 }}
       >
         {layers.map((layer) => (
@@ -499,8 +539,13 @@ export function AgentSkillLongReview({ episode }) {
           />
         ))}
       </div>
-      <VisualSystemV1AiWatermark size={40} top={18} right={18} />
-      <VisualSystemV1PlainSubtitle captions={captions} />
+      <VisualSystemV1WideBrandLayer />
+      <div
+        data-subtitle-title-gate={subtitleGate.mode}
+        style={{ opacity: subtitleGate.opacity }}
+      >
+        <VisualSystemV1PlainSubtitle captions={captions} />
+      </div>
       <VisualSystemV1ChapterProgress chapters={AGENT_SKILL_LONG_REVIEW_CHAPTERS} />
     </AbsoluteFill>
   );

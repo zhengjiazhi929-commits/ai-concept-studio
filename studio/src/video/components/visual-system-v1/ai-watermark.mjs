@@ -15,6 +15,58 @@ export {
   aiWatermarkMotionAtFrame
 };
 
+export const VISUAL_SYSTEM_V1_AI_WATERMARK_DEFAULT_PROFILE_ID =
+  "approved-v013-stable-footprint";
+
+export const VISUAL_SYSTEM_V1_AI_WATERMARK_PROFILE_ALIASES = Object.freeze({
+  "review-v013-stable-footprint": "approved-v013-stable-footprint"
+});
+
+const approvedV012RasterSequence = Object.freeze({
+  assetVersion: 12,
+  frameCount: VISUAL_SYSTEM_V1_AI_WATERMARK_PROOF.cycleFrames,
+  width: 120,
+  height: 120,
+  assetRoot: "assets/visual-system-v1/ai-watermark-v012/frames"
+});
+
+const approvedV013RasterSequence = Object.freeze({
+  assetVersion: 13,
+  frameCount: VISUAL_SYSTEM_V1_AI_WATERMARK_PROOF.cycleFrames,
+  width: 120,
+  height: 120,
+  assetRoot: "assets/visual-system-v1/ai-watermark-v013/frames"
+});
+
+export const VISUAL_SYSTEM_V1_AI_WATERMARK_PROFILES = Object.freeze({
+  "approved-v012": Object.freeze({
+    id: "approved-v012",
+    approvalStatus: "approved",
+    reviewOnly: false,
+    rasterSequenceLabel: "approved-v012-120-frame-cycle",
+    rasterSequence: approvedV012RasterSequence
+  }),
+  "approved-v013-stable-footprint": Object.freeze({
+    id: "approved-v013-stable-footprint",
+    approvalStatus: "approved",
+    reviewOnly: false,
+    rasterSequenceLabel: "approved-v013-stable-footprint-120-frame-cycle",
+    rasterSequence: approvedV013RasterSequence
+  })
+});
+
+export function visualSystemV1AiWatermarkProfile(
+  profileId = VISUAL_SYSTEM_V1_AI_WATERMARK_DEFAULT_PROFILE_ID
+) {
+  const canonicalProfileId =
+    VISUAL_SYSTEM_V1_AI_WATERMARK_PROFILE_ALIASES[profileId] ?? profileId;
+  const profile = VISUAL_SYSTEM_V1_AI_WATERMARK_PROFILES[canonicalProfileId];
+  if (!profile) {
+    throw new Error(`未知的 visual-system-v1 AI 水印 profile: ${profileId}`);
+  }
+  return profile;
+}
+
 export const VISUAL_SYSTEM_V1_AI_WATERMARK = Object.freeze({
   schemaVersion: "visual-system-v1-ai-watermark-v1",
   motionSchemaVersion: VISUAL_SYSTEM_V1_AI_WATERMARK_PROOF.schemaVersion,
@@ -22,6 +74,10 @@ export const VISUAL_SYSTEM_V1_AI_WATERMARK = Object.freeze({
   role: "persistent-brand-watermark",
   contentSurfacePolicyExempt: true,
   renderMode: "validated-transparent-png-sequence",
+  defaultProfileId: VISUAL_SYSTEM_V1_AI_WATERMARK_DEFAULT_PROFILE_ID,
+  profileSelectionPolicy: "approved-v013-default-v012-explicit-legacy-fallback",
+  legacyProfileAliases: VISUAL_SYSTEM_V1_AI_WATERMARK_PROFILE_ALIASES,
+  profiles: VISUAL_SYSTEM_V1_AI_WATERMARK_PROFILES,
   placement: Object.freeze({
     size: 120,
     top: 40,
@@ -34,13 +90,7 @@ export const VISUAL_SYSTEM_V1_AI_WATERMARK = Object.freeze({
     perspectiveOrigin: "50% 46%",
     scaleAt120Px: 0.46
   }),
-  rasterSequence: Object.freeze({
-    assetVersion: 12,
-    frameCount: VISUAL_SYSTEM_V1_AI_WATERMARK_PROOF.cycleFrames,
-    width: 120,
-    height: 120,
-    assetRoot: "assets/visual-system-v1/ai-watermark-v012/frames"
-  }),
+  rasterSequence: approvedV013RasterSequence,
   motion: Object.freeze({
     cycleFrames: VISUAL_SYSTEM_V1_AI_WATERMARK_PROOF.cycleFrames,
     turnFrames: VISUAL_SYSTEM_V1_AI_WATERMARK_PROOF.turnFrames,
