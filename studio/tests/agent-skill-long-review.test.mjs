@@ -16,15 +16,13 @@ import {
   editorialSurfaceCohortKey
 } from "../src/shared/editorial-visual-policy.mjs";
 import {
-  visualSystemV1StandaloneOverlaySlot
-} from "../src/video/components/visual-system-v1/grammar-layout.mjs";
-import {
   AGENT_SKILL_LONG_REVIEW_CHAPTERS,
   AGENT_SKILL_LONG_REVIEW_CROSSFADE_FRAMES,
   AGENT_SKILL_LONG_REVIEW_DURATION_SECONDS,
   AGENT_SKILL_LONG_REVIEW_EDITORIAL_REVIEW,
   AGENT_SKILL_LONG_REVIEW_FPS,
   AGENT_SKILL_LONG_REVIEW_FRAME_COUNT,
+  AGENT_SKILL_LONG_REVIEW_ICON_LAYOUT_POLICY,
   AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES,
   AGENT_SKILL_LONG_REVIEW_ORPHAN_SUBTITLE_RULES,
   AGENT_SKILL_LONG_REVIEW_SCENE_SPECS,
@@ -117,30 +115,6 @@ function assertRelationEndpointsVisible(scene, nodeIds, edgeIds, label) {
     incidentNodes.add(relation.to);
   }
   return incidentNodes;
-}
-
-function rectanglesOverlap(left, right) {
-  const leftRight = left.right ?? left.x + left.width;
-  const leftBottom = left.bottom ?? left.y + left.height;
-  const rightRight = right.right ?? right.x + right.width;
-  const rightBottom = right.bottom ?? right.y + right.height;
-  return left.x < rightRight && leftRight > right.x && left.y < rightBottom && leftBottom > right.y;
-}
-
-function orthogonalSegmentIntersectsRect(start, end, rectangle) {
-  const right = rectangle.right ?? rectangle.x + rectangle.width;
-  const bottom = rectangle.bottom ?? rectangle.y + rectangle.height;
-  if (start.x === end.x) {
-    const minimumY = Math.min(start.y, end.y);
-    const maximumY = Math.max(start.y, end.y);
-    return start.x >= rectangle.x && start.x <= right && maximumY >= rectangle.y && minimumY <= bottom;
-  }
-  if (start.y === end.y) {
-    const minimumX = Math.min(start.x, end.x);
-    const maximumX = Math.max(start.x, end.x);
-    return start.y >= rectangle.y && start.y <= bottom && maximumX >= rectangle.x && minimumX <= right;
-  }
-  return true;
 }
 
 test("十分钟审阅版固定为 600 秒、30fps、18000 帧，并兼容 18 场景与 107 字幕合同", async () => {
@@ -502,7 +476,7 @@ test("运行时连接线把阶段说明作为保留带，且十八场每个阶�
   assert.doesNotMatch(component, /presentationKind === "smooth-curve"/u);
 });
 
-test("S18 关键窗口隐藏04与最终卡直至显隐交接完成，标题字幕和唯一celebrate保持", async () => {
+test("S18 关键窗口隐藏04与最终卡直至显隐交接完成，标题和字幕保持", async () => {
   const episode = await readFixtureEpisode();
   const summary = AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.find((item) => item.id === "S18");
   const rollbackStage = summary.stages.find((item) => item.id === "rollback");
@@ -558,12 +532,16 @@ test("S18 关键窗口隐藏04与最终卡直至显隐交接完成，标题字�
     assert.equal(subtitle.activeSubtitle?.text, "完成标准、权限边界和版本回退。");
   }
 
-  const celebrate = AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.flatMap((scene) =>
+  const forbiddenStatusBadges = AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.flatMap((scene) =>
     scene.standaloneIcons
-      .filter((icon) => icon.statusMarkVariant === "celebrate")
-      .map((icon) => `${scene.id}/${icon.id}/${icon.anchorId}/${icon.delayUntilFinalHold}`)
+      .filter((icon) =>
+        icon.conceptKind === "verified-success" ||
+        icon.statusMarkVariant === "celebrate" ||
+        icon.id === "adopt-success"
+      )
+      .map((icon) => `${scene.id}/${icon.id}/${icon.conceptKind}/${icon.statusMarkVariant}`)
   );
-  assert.deepEqual(celebrate, ["S18/adopt-success/adopt/true"]);
+  assert.deepEqual(forbiddenStatusBadges, []);
 });
 
 test("审阅计划用八章和十八个镜头连续覆盖完整时轴", () => {
@@ -730,6 +708,9 @@ test("正式长片信息卡保持纯文字，典型 AI 图标只能作为卡片�
       anchorId: icon.anchorId,
       conceptKind: icon.conceptKind,
       presentation: icon.presentation,
+      layoutRole: icon.layoutRole,
+      attachmentMode: icon.attachmentMode,
+      autoInsert: icon.autoInsert,
       delayed: icon.delayUntilFinalHold
     }))
   );
@@ -740,6 +721,9 @@ test("正式长片信息卡保持纯文字，典型 AI 图标只能作为卡片�
       anchorId: "context-budget",
       conceptKind: "context-window",
       presentation: "open-diagram-symbol",
+      layoutRole: "open-diagram-object",
+      attachmentMode: "independent",
+      autoInsert: false,
       delayed: false
     },
     {
@@ -748,6 +732,9 @@ test("正式长片信息卡保持纯文字，典型 AI 图标只能作为卡片�
       anchorId: "tool",
       conceptKind: "tool",
       presentation: "open-diagram-symbol",
+      layoutRole: "open-diagram-object",
+      attachmentMode: "independent",
+      autoInsert: false,
       delayed: false
     },
     {
@@ -756,6 +743,9 @@ test("正式长片信息卡保持纯文字，典型 AI 图标只能作为卡片�
       anchorId: "mcp",
       conceptKind: "mcp",
       presentation: "open-diagram-symbol",
+      layoutRole: "open-diagram-object",
+      attachmentMode: "independent",
+      autoInsert: false,
       delayed: false
     },
     {
@@ -764,16 +754,11 @@ test("正式长片信息卡保持纯文字，典型 AI 图标只能作为卡片�
       anchorId: "human",
       conceptKind: "human-approval",
       presentation: "open-diagram-symbol",
+      layoutRole: "open-diagram-object",
+      attachmentMode: "independent",
+      autoInsert: false,
       delayed: false
     },
-    {
-      sceneId: "S18",
-      id: "adopt-success",
-      anchorId: "adopt",
-      conceptKind: "verified-success",
-      presentation: "open-diagram-symbol",
-      delayed: true
-    }
   ]);
   assert.equal(
     AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.every((scene) => scene.layoutStability === "stable-final"),
@@ -1071,46 +1056,37 @@ test("已报告的关键问题帧保持语义清楚、卡片有完整边框且�
   }
 });
 
-test("S18 最终对号只在安全槽位出现，不覆盖文字卡片、边框或连接线", async () => {
+test("S18 最终保持帧不再挂载对号附属徽章，正式长片禁用 verified-success 与 celebrate", () => {
   const scene = sceneById("S18");
-  const icon = scene.standaloneIcons.find((item) => item.id === "adopt-success");
   const layout = longReviewLayoutAtFrame("S18", 17999);
   assert.equal(layout.state.finalHold, true);
-  assert.equal(icon.delayUntilFinalHold, true);
-  assert.equal(icon.statusMarkVariant, "celebrate");
-  const slot = visualSystemV1StandaloneOverlaySlot({
-    anchorGeometry: layout.fullGeometryById[icon.anchorId],
-    overlaySize: { width: 56, height: 56 },
-    safeArea: layout.safeArea,
-    geometryById: layout.fullGeometryById,
-    connectors: layout.allConnectors,
-    minimumGapPx: 18,
-    preferredSides: ["left", "right", "top", "bottom"]
+  assert.deepEqual(AGENT_SKILL_LONG_REVIEW_ICON_LAYOUT_POLICY, {
+    openDiagramSymbolsSupported: true,
+    dedicatedIconFocusSupported: false,
+    verifiedSuccessMode: "omitted"
   });
-  assert.equal(slot.render, true);
-  assert.equal(slot.side, "left");
-  for (const [nodeId, geometry] of Object.entries(layout.fullGeometryById)) {
-    assert.equal(rectanglesOverlap(slot.bounds, geometry), false, `S18 overlay covers ${nodeId}`);
-  }
-  for (const connector of layout.allConnectors) {
-    assertOrthogonalConnector(connector, `S18/${connector.relationId}`);
-    assert.equal(
-      routeSegments(connector.route).some(([start, end]) =>
-        orthogonalSegmentIntersectsRect(start, end, slot.bounds)
-      ),
-      false,
-      `S18 overlay covers connector ${connector.relationId}`
-    );
-  }
+  assert.equal(
+    scene.standaloneIcons.some((icon) =>
+      icon.id === "adopt-success" ||
+      icon.conceptKind === "verified-success" ||
+      icon.statusMarkVariant === "celebrate"
+    ),
+    false
+  );
+  assert.equal(
+    AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.some((candidate) =>
+      candidate.standaloneIcons.some((icon) =>
+        icon.conceptKind === "verified-success" || icon.statusMarkVariant === "celebrate"
+      )
+    ),
+    false
+  );
   for (const relation of scene.edges.filter((edge) => edge.directed)) {
     const connector = layout.allConnectors.find((item) => item.relationId === relation.id);
+    assertOrthogonalConnector(connector, `S18/${relation.id}`);
     assert.equal(connector.arrowhead, true, `S18/${relation.id} arrowhead`);
     assert.equal(layout.state.edgeArrowProgress[relation.id], 1, `S18/${relation.id} arrow reveal`);
   }
-  const component = await readFile(COMPONENT_PATH, "utf8");
-  assert.match(component, /left: slot\.bounds\.x/u);
-  assert.match(component, /top: slot\.bounds\.y/u);
-  assert.doesNotMatch(component, /slot\.bounds\.(?:left|top)/u);
 });
 
 test("场景标题、说明、阶段文字和语义节点正文都接入独立文字透明度", async () => {

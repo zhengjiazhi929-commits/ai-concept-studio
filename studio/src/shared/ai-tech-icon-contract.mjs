@@ -97,6 +97,14 @@ export const AI_TECH_ICON_POLICY = Object.freeze({
   informationCardContentMode: "text-only",
   productionPresentationMode: "standalone-only",
   allowedProductionPresentations: AI_TECH_ICON_PRODUCTION_PRESENTATIONS,
+  registeredIconHierarchy: "peer",
+  cardAttachmentMode: "forbidden",
+  verifiedSuccessUsage: Object.freeze({
+    autoInsert: false,
+    purpose: "state-proof",
+    presentation: "standalone-focus",
+    layoutRole: "dedicated-icon-focus"
+  }),
   maximumNonNeutralColorRolesPerIcon: 2,
   minimumHeadlineLeadFrames: 12,
   defaultEnterFrames: 16,
@@ -125,6 +133,10 @@ export const AI_TECH_ICON_ERROR_CODES = Object.freeze({
   CONCEPT_UNKNOWN: "ai-tech-icon-concept-unknown",
   SIZE_ROLE_UNKNOWN: "ai-tech-icon-size-role-unknown",
   STATE_ROLE_UNKNOWN: "ai-tech-icon-state-role-unknown",
+  PRESENTATION_UNKNOWN: "ai-tech-icon-presentation-unknown",
+  VERIFIED_SUCCESS_PRESENTATION_INVALID: "ai-tech-icon-verified-success-presentation-invalid",
+  CARD_ATTACHMENT_FORBIDDEN: "ai-tech-icon-card-attachment-forbidden",
+  VERIFIED_SUCCESS_USAGE_INVALID: "ai-tech-icon-verified-success-usage-invalid",
   PROGRESS_INVALID: "ai-tech-icon-progress-invalid"
 });
 
@@ -170,6 +182,81 @@ export function assertAiTechIconStateRole(stateRole = "neutral") {
     );
   }
   return stateRole;
+}
+
+export function assertAiTechIconProductionPresentation(conceptKind, presentation) {
+  assertAiTechIconConceptKind(conceptKind);
+  if (!AI_TECH_ICON_PRODUCTION_PRESENTATIONS.includes(presentation)) {
+    throw new AiTechIconContractError(
+      AI_TECH_ICON_ERROR_CODES.PRESENTATION_UNKNOWN,
+      `未知 AI 技术图标生产展示方式：${String(presentation)}`,
+      { presentation, allowed: AI_TECH_ICON_PRODUCTION_PRESENTATIONS }
+    );
+  }
+  if (
+    conceptKind === AI_TECH_ICON_POLICY.canonicalStatusMarkConcept &&
+    presentation !== AI_TECH_ICON_POLICY.verifiedSuccessUsage.presentation
+  ) {
+    throw new AiTechIconContractError(
+      AI_TECH_ICON_ERROR_CODES.VERIFIED_SUCCESS_PRESENTATION_INVALID,
+      "成功对号只能作为独立成功焦点，不能作为开放图解节点或卡片贴边附件",
+      {
+        conceptKind,
+        presentation,
+        allowed: [AI_TECH_ICON_POLICY.verifiedSuccessUsage.presentation]
+      }
+    );
+  }
+  return presentation;
+}
+
+export function assertAiTechIconProductionPlacement({
+  conceptKind,
+  purpose,
+  presentation,
+  layoutRole,
+  attachmentMode = "independent",
+  autoInsert = false
+}) {
+  const resolvedPresentation = assertAiTechIconProductionPresentation(conceptKind, presentation);
+  if (attachmentMode !== "independent") {
+    throw new AiTechIconContractError(
+      AI_TECH_ICON_ERROR_CODES.CARD_ATTACHMENT_FORBIDDEN,
+      "注册图标必须是独立视觉对象，不能嵌入卡片或作为卡片贴边附件",
+      { conceptKind, attachmentMode }
+    );
+  }
+  if (conceptKind === AI_TECH_ICON_POLICY.canonicalStatusMarkConcept) {
+    const expected = AI_TECH_ICON_POLICY.verifiedSuccessUsage;
+    if (
+      purpose !== expected.purpose ||
+      resolvedPresentation !== expected.presentation ||
+      layoutRole !== expected.layoutRole ||
+      autoInsert !== expected.autoInsert
+    ) {
+      throw new AiTechIconContractError(
+        AI_TECH_ICON_ERROR_CODES.VERIFIED_SUCCESS_USAGE_INVALID,
+        "成功对号必须由镜头显式规划为独立成功焦点，不能自动追加到结果卡或普通关系图",
+        {
+          conceptKind,
+          purpose,
+          presentation: resolvedPresentation,
+          layoutRole,
+          attachmentMode,
+          autoInsert,
+          expected
+        }
+      );
+    }
+  }
+  return Object.freeze({
+    conceptKind,
+    purpose,
+    presentation: resolvedPresentation,
+    layoutRole,
+    attachmentMode,
+    autoInsert
+  });
 }
 
 function clamp01(value) {

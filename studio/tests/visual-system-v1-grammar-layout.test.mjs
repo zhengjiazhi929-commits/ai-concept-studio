@@ -638,7 +638,7 @@ test("连线布局仅对显式关系输出 cubic pathD，其他关系保持正�
   );
 });
 
-test("S18 状态标记不进入结果卡，右侧越界时使用独立左侧安全槽", () => {
+test("通用开放图解图标不进入信息卡，右侧越界时使用独立左侧安全槽", () => {
   assert.deepEqual(VISUAL_SYSTEM_V1_STANDALONE_OVERLAY_SLOT_SIDES, [
     "right",
     "left",

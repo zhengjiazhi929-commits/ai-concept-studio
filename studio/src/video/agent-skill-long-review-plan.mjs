@@ -15,7 +15,8 @@ import {
 } from "./components/visual-system-v1/content-layout.mjs";
 import {
   AI_TECH_ICON_POLICY,
-  assertAiTechIconConceptKind
+  assertAiTechIconConceptKind,
+  assertAiTechIconProductionPlacement
 } from "../shared/ai-tech-icon-contract.mjs";
 import {
   EDITORIAL_ICON_PRESENTATIONS,
@@ -42,6 +43,11 @@ export const AGENT_SKILL_LONG_REVIEW_STAGE_DENSITY_POLICY = Object.freeze({
   maximumVisibleEdges: 6,
   maximumTransitionNodes: 6,
   maximumTransitionEdges: 6
+});
+export const AGENT_SKILL_LONG_REVIEW_ICON_LAYOUT_POLICY = Object.freeze({
+  openDiagramSymbolsSupported: true,
+  dedicatedIconFocusSupported: false,
+  verifiedSuccessMode: "omitted"
 });
 
 const AGENT_SKILL_LONG_REVIEW_REFERENCE_CANVAS = Object.freeze({ width: 1920, height: 1080 });
@@ -470,17 +476,30 @@ function edge(id, from, to, path, accent = "mint", options = {}) {
 }
 
 function standaloneIcon(id, anchorId, conceptKind, purpose, options = {}) {
+  const presentation = options.presentation ?? "open-diagram-symbol";
   return Object.freeze({
     id,
     anchorId,
     conceptKind,
     purpose,
-    presentation: options.presentation ?? "open-diagram-symbol",
+    presentation,
+    layoutRole: options.layoutRole ?? (
+      presentation === "standalone-focus" ? "dedicated-icon-focus" : "open-diagram-object"
+    ),
+    attachmentMode: options.attachmentMode ?? "independent",
+    autoInsert: options.autoInsert === true,
     placement: options.placement ?? "right",
     sizeRole: options.sizeRole ?? "support",
     statusMarkVariant: options.statusMarkVariant ?? "quiet",
     delayUntilFinalHold: options.delayUntilFinalHold === true
   });
+}
+
+function isUnsupportedLongReviewSuccessMark(item) {
+  return AGENT_SKILL_LONG_REVIEW_ICON_LAYOUT_POLICY.verifiedSuccessMode === "omitted" && (
+    item.conceptKind === AI_TECH_ICON_POLICY.canonicalStatusMarkConcept ||
+    item.statusMarkVariant === "celebrate"
+  );
 }
 
 function stage(id, atSecond, label, nodeIds = [], edgeIds = [], options = {}) {
@@ -654,6 +673,7 @@ function sceneSpec({
   }
   for (const item of standaloneIcons) {
     assertAiTechIconConceptKind(item.conceptKind);
+    assertAiTechIconProductionPlacement(item);
     if (!EDITORIAL_ICON_PURPOSES.includes(item.purpose)) {
       throw new Error(`${id}/${item.id} 的图标缺少合法解释目的`);
     }
@@ -665,6 +685,17 @@ function sceneSpec({
     }
     if (item.statusMarkVariant === "celebrate" && item.conceptKind !== "verified-success") {
       throw new Error(`${id}/${item.id} 只有 verified-success 才能声明 celebrate`);
+    }
+    if (
+      item.presentation === "standalone-focus" &&
+      !AGENT_SKILL_LONG_REVIEW_ICON_LAYOUT_POLICY.dedicatedIconFocusSupported
+    ) {
+      throw new Error(`${id}/${item.id} 当前长片 renderer 尚不支持真正独立的图标焦点布局`);
+    }
+    if (isUnsupportedLongReviewSuccessMark(item)) {
+      throw new Error(
+        `${id}/${item.id} 当前长片未规划独立成功焦点，禁止自动追加 verified-success/celebrate`
+      );
     }
     if (item.delayUntilFinalHold && item.statusMarkVariant !== "celebrate") {
       throw new Error(`${id}/${item.id} 延迟最终验收只允许 celebrate`);
@@ -1525,15 +1556,6 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       edge("permission-adopt", "permission", "adopt", "M 126 330 V 382 H 190 V 420", "purple"),
       edge("rollback-adopt", "rollback", "adopt", "M 354 330 V 382 H 290 V 420", "mint")
     ],
-    standaloneIcons: [
-      standaloneIcon("adopt-success", "adopt", "verified-success", "state-proof", {
-        presentation: "open-diagram-symbol",
-        placement: "left",
-        sizeRole: "support",
-        statusMarkVariant: "celebrate",
-        delayUntilFinalHold: true
-      })
-    ],
     stages: [
       stage("trigger", 574, "先定义触发条件", ["trigger"]),
       stage("acceptance", 579.5, "再明确完成标准", ["accept"]),
@@ -1552,24 +1574,19 @@ if (!AGENT_SKILL_LONG_REVIEW_EDITORIAL_REVIEW.valid) {
   );
 }
 
-const celebrateIcons = AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.flatMap((scene) =>
+const unsupportedSuccessMarks = AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.flatMap((scene) =>
   scene.standaloneIcons
-    .filter((item) => item.statusMarkVariant === "celebrate")
+    .filter(isUnsupportedLongReviewSuccessMark)
     .map((item) => ({
       sceneId: scene.id,
       iconId: item.id,
-      anchorId: item.anchorId,
-      delayed: item.delayUntilFinalHold
+      anchorId: item.anchorId
     }))
 );
-if (
-  celebrateIcons.length !== 1 ||
-  celebrateIcons[0].sceneId !== "S18" ||
-  celebrateIcons[0].iconId !== "adopt-success" ||
-  celebrateIcons[0].anchorId !== "adopt" ||
-  celebrateIcons[0].delayed !== true
-) {
-  throw new Error("完整长片必须且只能在 S18/adopt 卡片外执行一次独立 celebrate");
+if (unsupportedSuccessMarks.length > 0) {
+  throw new Error(
+    `完整长片未规划独立成功焦点，禁止自动结果对号：${JSON.stringify(unsupportedSuccessMarks)}`
+  );
 }
 
 const specById = new Map(AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.map((scene) => [scene.id, scene]));

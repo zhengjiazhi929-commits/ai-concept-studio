@@ -16,6 +16,8 @@ import {
   aiTechIconMotionStateAtProgress,
   aiTechIconSize,
   assertAiTechIconConceptKind,
+  assertAiTechIconProductionPlacement,
+  assertAiTechIconProductionPresentation,
   assertAiTechIconStateRole
 } from "../src/shared/ai-tech-icon-contract.mjs";
 
@@ -55,6 +57,80 @@ test("AI 技术图标合同固定28个语义、64视窗和三档尺寸", () => {
   assert.deepEqual(
     AI_TECH_ICON_POLICY.allowedProductionPresentations,
     AI_TECH_ICON_PRODUCTION_PRESENTATIONS
+  );
+  assert.equal(AI_TECH_ICON_POLICY.registeredIconHierarchy, "peer");
+  assert.equal(AI_TECH_ICON_POLICY.cardAttachmentMode, "forbidden");
+  assert.deepEqual(AI_TECH_ICON_POLICY.verifiedSuccessUsage, {
+    autoInsert: false,
+    purpose: "state-proof",
+    presentation: "standalone-focus",
+    layoutRole: "dedicated-icon-focus"
+  });
+});
+
+test("对号与其他注册图标同级，但只能作为独立成功焦点，不能贴在卡片或开放图解节点旁", () => {
+  assert.deepEqual(assertAiTechIconProductionPlacement({
+    conceptKind: "verified-success",
+    purpose: "state-proof",
+    presentation: "standalone-focus",
+    layoutRole: "dedicated-icon-focus",
+    attachmentMode: "independent",
+    autoInsert: false
+  }), {
+    conceptKind: "verified-success",
+    purpose: "state-proof",
+    presentation: "standalone-focus",
+    layoutRole: "dedicated-icon-focus",
+    attachmentMode: "independent",
+    autoInsert: false
+  });
+  assert.throws(
+    () => assertAiTechIconProductionPresentation("verified-success", "open-diagram-symbol"),
+    (error) => error instanceof AiTechIconContractError &&
+      error.code === AI_TECH_ICON_ERROR_CODES.VERIFIED_SUCCESS_PRESENTATION_INVALID
+  );
+  assert.equal(
+    assertAiTechIconProductionPresentation("routing", "open-diagram-symbol"),
+    "open-diagram-symbol"
+  );
+  assert.deepEqual(assertAiTechIconProductionPlacement({
+    conceptKind: "routing",
+    purpose: "semantic-anchor",
+    presentation: "open-diagram-symbol",
+    layoutRole: "open-diagram-object"
+  }), {
+    conceptKind: "routing",
+    purpose: "semantic-anchor",
+    presentation: "open-diagram-symbol",
+    layoutRole: "open-diagram-object",
+    attachmentMode: "independent",
+    autoInsert: false
+  });
+  assert.throws(
+    () => assertAiTechIconProductionPlacement({
+      conceptKind: "verified-success",
+      purpose: "state-proof",
+      presentation: "standalone-focus",
+      layoutRole: "open-diagram-object"
+    }),
+    (error) => error instanceof AiTechIconContractError &&
+      error.code === AI_TECH_ICON_ERROR_CODES.VERIFIED_SUCCESS_USAGE_INVALID
+  );
+  assert.throws(
+    () => assertAiTechIconProductionPlacement({
+      conceptKind: "routing",
+      purpose: "semantic-anchor",
+      presentation: "open-diagram-symbol",
+      layoutRole: "open-diagram-object",
+      attachmentMode: "card-accessory"
+    }),
+    (error) => error instanceof AiTechIconContractError &&
+      error.code === AI_TECH_ICON_ERROR_CODES.CARD_ATTACHMENT_FORBIDDEN
+  );
+  assert.throws(
+    () => assertAiTechIconProductionPresentation("routing", "card-badge"),
+    (error) => error instanceof AiTechIconContractError &&
+      error.code === AI_TECH_ICON_ERROR_CODES.PRESENTATION_UNKNOWN
   );
 });
 

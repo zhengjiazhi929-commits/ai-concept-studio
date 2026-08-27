@@ -21,6 +21,9 @@ import {
 } from "./motion.mjs";
 import { VISUAL_SYSTEM_V1, VISUAL_SYSTEM_V1_DEPTH_ROLES } from "./tokens.mjs";
 import { VisualSystemV1AiTechIcon } from "./icons/ai-tech-icon.jsx";
+import {
+  assertAiTechIconProductionPresentation
+} from "../../../shared/ai-tech-icon-contract.mjs";
 
 const { palette, typography } = VISUAL_SYSTEM_V1;
 const SceneOpacityContext = React.createContext(1);
@@ -454,12 +457,10 @@ export function VisualSystemV1StandaloneIcon({
   label = "独立图标",
   style = {}
 }) {
-  if (!["standalone-focus", "open-diagram-symbol"].includes(presentation)) {
-    throw new TypeError(`未知独立图标展示方式：${presentation}`);
-  }
+  const resolvedPresentation = assertAiTechIconProductionPresentation(conceptKind, presentation);
   return (
     <div
-      data-ai-tech-icon-presentation={presentation}
+      data-ai-tech-icon-presentation={resolvedPresentation}
       data-ai-tech-icon-container="standalone"
       style={{
         position: "absolute",

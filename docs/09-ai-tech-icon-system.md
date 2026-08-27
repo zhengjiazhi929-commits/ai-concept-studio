@@ -2,9 +2,9 @@
 
 这套系统解决“相同 AI 技术概念每次都画成同一个图标”的问题。它不是图标墙素材库，也不允许 Storyboard 从一个好看的图标开始倒推内容。
 
-当前状态：28 个语义映射、几何、状态与动效注册表保持 `approved-production-v1`；展示边界升级为 `ai-tech-icon-contract-v2`。Zhengjiazhi 已于 2026-08-26 接受 `ai-tech-icon-system-review-v002` 的注册图标方向；后续相同 `conceptKind` 必须复用同一注册图标，不能临时改画。v2 不改变这 28 个映射，而是明确正式成片中的信息卡纯文字、图标只在卡片外独立展示。2026-08-27 的最新 Git 决策允许把本轮视觉整改的精确任务代码、文档、测试和必要运行时资产选择性提交并推送到 `codex/agent-production-pipeline`；仍禁止创建 PR、merge 或把该代码同步误报为完整 v006 视觉验收。
+当前状态：28 个语义映射、几何、状态与动效注册表保持 `approved-production-v1`；展示边界升级为 `ai-tech-icon-contract-v2`。Zhengjiazhi 已于 2026-08-26 接受 `ai-tech-icon-system-review-v002` 的注册图标方向；后续相同 `conceptKind` 必须复用同一注册图标，不能临时改画。v2 不改变这 28 个映射，而是明确正式成片中的信息卡纯文字，注册图标只作为独立开放图解对象或专门规划的图标焦点展示。2026-08-27 的最新 Git 决策允许把本轮视觉整改的精确任务代码、文档、测试和必要运行时资产选择性提交并推送到 `codex/agent-production-pipeline`；仍禁止创建 PR、merge 或把该代码同步误报为完整 v006 视觉验收。
 
-2026-08-26 更新：Zhengjiazhi 已确认 v002 的注册几何视觉方向；图标注册表晋升为 `approved-production-v1`，稳定可见面积品牌水印 v013 同步晋升为默认生产 profile。批准记录的可执行真源是 `AI_TECH_ICON_REGISTRY_APPROVAL`；任何后续几何或 motion 变化都必须升版本并重新确认。卡片外独立展示的实际成片效果仍须通过新 MP4 视觉确认，不能用旧联系表代替。
+2026-08-26 更新：Zhengjiazhi 已确认 v002 的注册几何视觉方向；图标注册表晋升为 `approved-production-v1`，稳定可见面积品牌水印 v013 同步晋升为默认生产 profile。批准记录的可执行真源是 `AI_TECH_ICON_REGISTRY_APPROVAL`；任何后续几何或 motion 变化都必须升版本并重新确认。专门独立图标演示/焦点布局的实际成片效果仍须通过新 MP4 视觉确认，不能用旧联系表代替。
 
 可执行真源：
 
@@ -18,15 +18,15 @@
 
 ## 1. 使用边界
 
-Storyboard 的独立图标计划只声明 `conceptKind`，不能声明 `canonicalIconId`、SVG path、颜色、线宽或具体像素尺寸。`conceptKind` 不属于信息卡 node；resolver/renderer 才把卡片外的语义图标稳定映射为注册图标：
+Storyboard 的独立图标计划只声明 `conceptKind`，不能声明 `canonicalIconId`、SVG path、颜色、线宽或具体像素尺寸。`conceptKind` 不属于信息卡 node；resolver/renderer 只把独立开放图解对象或专门焦点稳定映射为注册图标：
 
 ```text
 conceptKind → canonicalIconId → geometry + token roles + motion recipe
 ```
 
-不能根据中文标题猜图标。未知 `conceptKind` 必须 fail closed；信息卡 node 固定使用 `none`。图标只有在能帮助识别对象、状态或动作时才允许出现，不能重复标题，也不能为了填空白形成图标墙。每个长视频独立图标还必须声明 `anchorId`、`purpose: "semantic-anchor" | "state-proof" | "interaction-cue"`，并选择 `presentation: "standalone-focus" | "open-diagram-symbol"`；缺少任一项都不渲染。
+不能根据中文标题猜图标。未知 `conceptKind` 必须 fail closed；信息卡 node 固定使用 `none`。图标只有在确实帮助观众识别对象、状态或动作时才允许出现，不能重复标题，也不能为了填空白形成图标墙。每个长视频独立图标还必须声明 `anchorId`、`purpose: "semantic-anchor" | "state-proof" | "interaction-cue"`，并选择 `presentation: "open-diagram-symbol" | "standalone-focus"`；缺少任一项都不渲染。`anchorId` 只建立语义追溯关系，不能被解释成把图标贴到该对象的卡片或边框上。
 
-图标的展示位置也采用 fail closed：renderer 只能从锚点右、左、上、下的候选槽位中选择完整位于安全区内，且与全部节点和连线保持净空的位置。没有安全槽时返回 `render: false`；禁止用 clamp、缩小文字、覆盖卡片、压住边框或穿过箭头的方式强行显示图标。
+`open-diagram-symbol` 的位置采用 fail closed：renderer 只能从锚点右、左、上、下的候选槽位中选择完整位于安全区内，且与全部节点和连线保持净空的位置。没有安全槽时返回 `render: false`。`standalone-focus` 必须使用真正预留独立区域的 `dedicated-icon-focus` 布局，不能复用卡片邻接槽位冒充焦点；两种展示都禁止用 clamp、缩小文字、覆盖卡片、压住边框或穿过箭头来强行显示。
 
 ## 2. 第一批 28 个稳定语义
 
@@ -69,19 +69,20 @@ conceptKind → canonicalIconId → geometry + token roles + motion recipe
 - 默认主色为正文色，辅助色为薄荷强调；紫色只用于人工确认，成功、警告和错误色只用于真实状态。
 - 禁止 emoji、Unicode 状态符号、场景私有 SVG 图标、伪 3D、厚重阴影和装饰渐变。
 - 信息卡内容模式固定为 `text-only`，每张信息卡的图标预算为 0；不得在卡片标题、正文或预留槽位中嵌入图标。
-- 正式成片中的 AI 技术图标只允许 `standalone-focus` 或 `open-diagram-symbol` 两种卡片外展示方式；长视频普通镜头默认 0–2 个可见独立图标。
+- 正式成片中的 AI 技术注册图标只允许 `open-diagram-symbol` 或 `standalone-focus`：前者是真正承担对象、动作或交互识别的独立开放图解对象，后者是专门预留区域的单一图标焦点。信息卡内部的图标预算始终为 0。
 - 开放图解中的流程锚点、决策点、输出和关系线属于语法布局的结构几何，不是 AI 技术图标，也不能退化成标题旁的装饰符号。图标只能通过独立图标计划和共享注册表进入画面。
 - 图标联系表、关键片段和既有输出只用于历史评审与回归，不是生产构图模板，也不能用其旧位置恢复卡片图标。
 - 图标必须保持辅助层级：文字尺寸、对比度和信息面积高于图标，图标不能替代大标题、解释文字、关系图或证据。
 - 是否使用信息卡仍由语义职责和层级决定，不能简化成整屏“全用卡片”或“全不用卡片”；一旦对象选择信息卡，它就保持纯文字。需要解释过程、关系、分支或状态时，优先穿插 `mixed-diagram` / `open-diagram` 图解，而不是继续增加图标。
 - 同一 `semanticGroupId + semanticRole + visualHierarchyLevel` cohort 内的对象必须保持相同承载方式；这保证同组一致，但不要求不同语义组或整屏机械地全部套卡片。
 - 独立图标必须消费统一的尺寸角色、注册几何和安全槽，不得按场景临时改颜色、比例、线宽、位置算法或嵌入方式。
+- 注册图标不得用作卡片徽章、贴边附件、标题前缀、节点装饰或结果卡注释；需要展示图标时必须切换到为图标预留独立空间的构图。
 
 尺寸只允许使用三种角色：
 
 - `inline = 36px`：只用于旧图标审阅联系表的小号独立展示，正式成片不得嵌入卡片文字；
-- `support = 56px`：开放图解中的独立语义对象；
-- `focus = 104px`：卡片外的单一概念焦点，每屏最多一个。
+- `support = 56px`：开放图解中的独立语义图标，不得依附卡片边框、标题或正文；
+- `focus = 104px`：单一图标焦点布局中的主概念，每屏最多一个。
 
 可见比例还需同时满足：
 
@@ -100,31 +101,31 @@ conceptKind → canonicalIconId → geometry + token roles + motion recipe
 ```jsx
 <VisualSystemV1StandaloneIcon
   conceptKind="search-retrieval"
-  presentation="open-diagram-symbol"
-  sizeRole="support"
+  presentation="standalone-focus"
+  sizeRole="focus"
   progress={progress}
   style={{left, top}}
 />
 ```
 
-信息卡不调用该组件，也不为图标预留布局空间。明确不需要独立图标时不创建图标计划；未知值直接抛出合同错误。
+信息卡不调用该组件，也不为图标预留贴边空间。开放图解只有在图标本身能独立增强对象、动作或交互识别时才创建 `open-diagram-symbol` 计划；镜头明确预留焦点区域时才创建 `standalone-focus` 计划；未知值直接抛出合同错误。
 
-实际长片 renderer 在调用独立图标组件前还会执行安全槽检查。检查使用完整最终布局的所有节点和所有关系线，而不是只看当前阶段已显示的少量元素；这样后续阶段出现的卡片或箭头也不会与先放入的图标争抢同一位置。
+`open-diagram-symbol` 在调用组件前须执行安全槽检查，使用完整最终布局的全部文字区、图形与关系线，而不是只看当前阶段已显示的少量元素。`standalone-focus` 必须使用 `dedicated-icon-focus` 专用布局；安全槽只是防止开放图解图标遮挡的最后防线，不能把普通卡片镜头自动改造成图标贴边或焦点布局。
 
 ## 5. 对号规则
 
-`verified-success → verified-status-mark → VisualSystemV1StatusMark` 是唯一成功对号路径。它基于 Zhengjiazhi 指定的 [Uiverse / cssbuttons-io / short-shrimp-54](https://uiverse.io/cssbuttons-io/short-shrimp-54) 视觉方向做了 Remotion 帧驱动重实现；运行时不复制网页 CSS 动画，不使用 Unicode、emoji 或场景私有 SVG 对号。
+`verified-success → verified-status-mark → VisualSystemV1StatusMark` 是唯一成功对号路径。它基于 Zhengjiazhi 指定的 [Uiverse / cssbuttons-io / short-shrimp-54](https://uiverse.io/cssbuttons-io/short-shrimp-54) 视觉方向做了 Remotion 帧驱动重实现；运行时不复制网页 CSS 动画，不使用 Unicode、emoji 或场景私有 SVG 对号。这个注册关系只定义“需要专门展示成功图标时画哪一个”，不授权把对号贴到结果卡上。
 
 共享状态对号只允许两种语义动效：
 
 - `quiet`：普通清单逐项完成，用约 6 帧克制绘制后稳定保持；
 - `celebrate`：只用于一次关键最终验收，用约 18 帧单次 jelly 建立后稳定保持，不能循环。
 
-人工 Gate 图标不再内置小对号；审计清单改用项目圆点。任何真正需要对号的地方都必须组合 `VisualSystemV1StatusMark`，因此同一视频不会再出现圆形对号、手写对号和方形对号三套视觉。对号只能在真实验收项全部完成后出现，禁止无证据成功态。
+人工 Gate 图标不再内置小对号；审计清单改用项目圆点。任何专门的成功图标演示都必须组合 `VisualSystemV1StatusMark`，因此同一视频不会再出现圆形对号、手写对号和方形对号三套视觉。对号只能在真实验收项全部完成、且镜头明确采用独立成功状态焦点布局时出现，禁止无证据成功态。
 
-当前长片 S18 只保留一个 `verified-success`：它以 `open-diagram-symbol` 锚定最终 `adopt` 结果，是位于结果卡外的独立状态图标，并在最终保持阶段才出现。不得把该对号塞回结果卡，也不得复制给中间步骤。
+对号与数据库、路由、模型、工具等其他注册图标处于同一层级，没有“结果完成就自动追加”的特殊地位。它不得作为卡片徽章、贴边附件、标题前缀或结果卡注释；若确实需要展示，必须单独设计成功状态图标演示/焦点镜头。
 
-对号没有特殊的遮挡豁免：它必须与普通独立图标一样通过安全槽检查，并避开结果卡的编号、标题、正文、完整边框和相邻箭头。没有合法槽位时宁可不渲染，也不能覆盖文字或破坏关系表达。
+当前长片 S18 不显示对号。S18 只通过完整边框信息卡、正交关系和文字层级表达最终治理结论；不得再把对号作为结果卡注释、卡片外贴边附件或结尾徽章加回去。
 
 ## 6. 审批与版本门禁
 
