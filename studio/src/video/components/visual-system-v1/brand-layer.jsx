@@ -7,6 +7,11 @@ const placement = VISUAL_SYSTEM_V1_AI_WATERMARK.placement;
 const safeZonePadding = 40;
 const safeZoneSize = placement.size + safeZonePadding * 2;
 
+export const VISUAL_SYSTEM_V1_WIDE_BRAND_TONES = Object.freeze({
+  standard: Object.freeze({ opacity: 1 }),
+  quiet: Object.freeze({ opacity: 0.76 })
+});
+
 export const VISUAL_SYSTEM_V1_WIDE_BRAND_SAFE_ZONE = Object.freeze({
   id: "top-right-brand-exclusion-zone",
   outputFormat: "wide-only",
@@ -41,14 +46,19 @@ export const VISUAL_SYSTEM_V1_WIDE_BRAND_LAYER = Object.freeze({
   instancePolicy: "exactly-one-per-composition",
   defaultWatermarkProfileId: VISUAL_SYSTEM_V1_AI_WATERMARK.defaultProfileId,
   watermarkProfilePolicy: "approved-v013-default-v012-explicit-legacy-fallback",
+  watermarkTonePolicy: "standard-default-quiet-explicit-longform",
+  watermarkTones: VISUAL_SYSTEM_V1_WIDE_BRAND_TONES,
   watermarkPlacement: placement,
   safeZone: VISUAL_SYSTEM_V1_WIDE_BRAND_SAFE_ZONE
 });
 
 export function VisualSystemV1WideBrandLayer({
-  profile = VISUAL_SYSTEM_V1_AI_WATERMARK.defaultProfileId
+  profile = VISUAL_SYSTEM_V1_AI_WATERMARK.defaultProfileId,
+  tone = "standard"
 } = {}) {
   const { safeZone } = VISUAL_SYSTEM_V1_WIDE_BRAND_LAYER;
+  const resolvedTone = VISUAL_SYSTEM_V1_WIDE_BRAND_TONES[tone];
+  if (!resolvedTone) throw new Error(`未知的 visual-system-v1 品牌水印 tone: ${tone}`);
   return (
     <div
       aria-hidden="true"
@@ -62,10 +72,13 @@ export function VisualSystemV1WideBrandLayer({
       data-brand-safe-zone-height={safeZone.bounds.height}
       data-brand-safe-zone-content-policy="reserved-no-content"
       data-brand-watermark-profile={profile}
+      data-brand-watermark-tone={tone}
+      data-brand-watermark-opacity={resolvedTone.opacity}
       style={{
         position: "absolute",
         inset: 0,
         zIndex: placement.zIndex,
+        opacity: resolvedTone.opacity,
         pointerEvents: "none"
       }}
     >

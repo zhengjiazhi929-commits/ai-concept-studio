@@ -1,4 +1,4 @@
-export const AI_TECH_ICON_CONTRACT_VERSION = "ai-tech-icon-contract-v2";
+export const AI_TECH_ICON_CONTRACT_VERSION = "ai-tech-icon-contract-v4";
 export const AI_TECH_ICON_REGISTRY_VERSION = "ai-tech-icon-registry-v1";
 export const AI_TECH_ICON_REGISTRY_APPROVAL = Object.freeze({
   status: "approved-production-v1",
@@ -52,12 +52,22 @@ export const AI_TECH_ICON_SIZE_ROLES = Object.freeze({
     purpose: "旧图标审阅联系表的小号独立展示；正式成片不得嵌入卡片文字"
   }),
   support: Object.freeze({ sizePx: 56, purpose: "开放图解中的独立语义对象" }),
+  "longform-support": Object.freeze({
+    sizePx: 88,
+    purpose: "横版长视频明确预留的大型图解节点；不得进入远端边栏或贴附信息卡"
+  }),
   focus: Object.freeze({ sizePx: 104, purpose: "单一概念焦点，不替代大标题" })
 });
 
 export const AI_TECH_ICON_PRODUCTION_PRESENTATIONS = Object.freeze([
   "standalone-focus",
   "open-diagram-symbol"
+]);
+
+export const AI_TECH_ICON_PARTICIPATION_ROLES = Object.freeze([
+  "graph-node",
+  "owned-callout",
+  "dedicated-focus"
 ]);
 
 export const AI_TECH_ICON_STATE_ROLES = Object.freeze([
@@ -99,11 +109,31 @@ export const AI_TECH_ICON_POLICY = Object.freeze({
   allowedProductionPresentations: AI_TECH_ICON_PRODUCTION_PRESENTATIONS,
   registeredIconHierarchy: "peer",
   cardAttachmentMode: "forbidden",
+  duplicateSemanticRepresentationMode: "fail-closed",
+  maximumOwnedCalloutGapPx: 48,
+  maximumIconLabelRevealDeltaFrames: 1,
+  openDiagramUsage: Object.freeze({
+    graphNodeLayoutRole: "semantic-icon-node",
+    graphNodePlacement: "anchor-bounds",
+    graphNodeGeometryMode: "measured-visible-content",
+    graphNodeRelationEntryMode: "connector-arrow-first",
+    graphNodeMultipleIncomingMode: "wait-for-all-establishing-arrows",
+    ownedCalloutLayoutRole: "owned-icon-callout",
+    allowedOwnedCalloutPlacements: Object.freeze([
+      "right-center",
+      "left-center",
+      "above-center",
+      "below-center"
+    ]),
+    remoteRailPlacement: "forbidden"
+  }),
   verifiedSuccessUsage: Object.freeze({
     autoInsert: false,
     purpose: "state-proof",
     presentation: "standalone-focus",
-    layoutRole: "dedicated-icon-focus"
+    layoutRole: "dedicated-icon-focus",
+    participation: "dedicated-focus",
+    placement: "dedicated-focus"
   }),
   maximumNonNeutralColorRolesPerIcon: 2,
   minimumHeadlineLeadFrames: 12,
@@ -137,6 +167,11 @@ export const AI_TECH_ICON_ERROR_CODES = Object.freeze({
   VERIFIED_SUCCESS_PRESENTATION_INVALID: "ai-tech-icon-verified-success-presentation-invalid",
   CARD_ATTACHMENT_FORBIDDEN: "ai-tech-icon-card-attachment-forbidden",
   VERIFIED_SUCCESS_USAGE_INVALID: "ai-tech-icon-verified-success-usage-invalid",
+  PARTICIPATION_INVALID: "ai-tech-icon-participation-invalid",
+  SEMANTIC_BINDING_INVALID: "ai-tech-icon-semantic-binding-invalid",
+  OWNED_CALLOUT_GAP_INVALID: "ai-tech-icon-owned-callout-gap-invalid",
+  REMOTE_RAIL_FORBIDDEN: "ai-tech-icon-remote-rail-forbidden",
+  LABEL_REVEAL_SYNC_INVALID: "ai-tech-icon-label-reveal-sync-invalid",
   PROGRESS_INVALID: "ai-tech-icon-progress-invalid"
 });
 
@@ -215,6 +250,12 @@ export function assertAiTechIconProductionPlacement({
   purpose,
   presentation,
   layoutRole,
+  participation,
+  semanticObjectId,
+  ownerId = null,
+  placement,
+  maximumGapPx = null,
+  labelRevealDeltaFrames = 0,
   attachmentMode = "independent",
   autoInsert = false
 }) {
@@ -226,12 +267,91 @@ export function assertAiTechIconProductionPlacement({
       { conceptKind, attachmentMode }
     );
   }
+  if (!AI_TECH_ICON_PARTICIPATION_ROLES.includes(participation)) {
+    throw new AiTechIconContractError(
+      AI_TECH_ICON_ERROR_CODES.PARTICIPATION_INVALID,
+      `未知 AI 技术图标关系角色：${String(participation)}`,
+      { participation, allowed: AI_TECH_ICON_PARTICIPATION_ROLES }
+    );
+  }
+  if (!Number.isInteger(labelRevealDeltaFrames) || labelRevealDeltaFrames < 0 ||
+      labelRevealDeltaFrames > AI_TECH_ICON_POLICY.maximumIconLabelRevealDeltaFrames) {
+    throw new AiTechIconContractError(
+      AI_TECH_ICON_ERROR_CODES.LABEL_REVEAL_SYNC_INVALID,
+      `图标与文字首次可见帧差不得超过 ${AI_TECH_ICON_POLICY.maximumIconLabelRevealDeltaFrames} 帧`,
+      { labelRevealDeltaFrames }
+    );
+  }
+  if (typeof placement === "string" && placement.endsWith("-rail")) {
+    throw new AiTechIconContractError(
+      AI_TECH_ICON_ERROR_CODES.REMOTE_RAIL_FORBIDDEN,
+      "生产图标不得放入与语义对象脱离的远端边栏",
+      { conceptKind, placement }
+    );
+  }
+  if (resolvedPresentation === "open-diagram-symbol") {
+    if (participation === "graph-node") {
+      if (
+        typeof semanticObjectId !== "string" || semanticObjectId.length === 0 ||
+        ownerId != null ||
+        layoutRole !== AI_TECH_ICON_POLICY.openDiagramUsage.graphNodeLayoutRole ||
+        placement !== AI_TECH_ICON_POLICY.openDiagramUsage.graphNodePlacement
+      ) {
+        throw new AiTechIconContractError(
+          AI_TECH_ICON_ERROR_CODES.SEMANTIC_BINDING_INVALID,
+          "关系图图标必须替代一个明确语义节点，并让关系线直接连接该节点",
+          { conceptKind, participation, semanticObjectId, ownerId, layoutRole, placement }
+        );
+      }
+    } else if (participation === "owned-callout") {
+      const allowedPlacements = AI_TECH_ICON_POLICY.openDiagramUsage.allowedOwnedCalloutPlacements;
+      if (
+        typeof semanticObjectId !== "string" || semanticObjectId.length === 0 ||
+        typeof ownerId !== "string" || ownerId.length === 0 ||
+        layoutRole !== AI_TECH_ICON_POLICY.openDiagramUsage.ownedCalloutLayoutRole ||
+        !allowedPlacements.includes(placement)
+      ) {
+        throw new AiTechIconContractError(
+          AI_TECH_ICON_ERROR_CODES.SEMANTIC_BINDING_INVALID,
+          "补充图标必须绑定明确 owner，并使用 owner 附近的受控方向",
+          { conceptKind, participation, semanticObjectId, ownerId, layoutRole, placement }
+        );
+      }
+      if (!Number.isFinite(maximumGapPx) || maximumGapPx < 0 ||
+          maximumGapPx > AI_TECH_ICON_POLICY.maximumOwnedCalloutGapPx) {
+        throw new AiTechIconContractError(
+          AI_TECH_ICON_ERROR_CODES.OWNED_CALLOUT_GAP_INVALID,
+          `补充图标与 owner 的边界距离不得超过 ${AI_TECH_ICON_POLICY.maximumOwnedCalloutGapPx}px`,
+          { conceptKind, ownerId, maximumGapPx }
+        );
+      }
+    } else {
+      throw new AiTechIconContractError(
+        AI_TECH_ICON_ERROR_CODES.PARTICIPATION_INVALID,
+        "开放图解图标只能作为关系节点或近距归属标注",
+        { conceptKind, participation }
+      );
+    }
+  } else if (
+    participation !== "dedicated-focus" ||
+    ownerId != null ||
+    layoutRole !== "dedicated-icon-focus" ||
+    placement !== "dedicated-focus"
+  ) {
+    throw new AiTechIconContractError(
+      AI_TECH_ICON_ERROR_CODES.SEMANTIC_BINDING_INVALID,
+      "独立焦点图标只能用于专门焦点镜头，不能绑定普通卡片或关系节点",
+      { conceptKind, participation, ownerId, layoutRole, placement }
+    );
+  }
   if (conceptKind === AI_TECH_ICON_POLICY.canonicalStatusMarkConcept) {
     const expected = AI_TECH_ICON_POLICY.verifiedSuccessUsage;
     if (
       purpose !== expected.purpose ||
       resolvedPresentation !== expected.presentation ||
       layoutRole !== expected.layoutRole ||
+      participation !== expected.participation ||
+      placement !== expected.placement ||
       autoInsert !== expected.autoInsert
     ) {
       throw new AiTechIconContractError(
@@ -242,6 +362,8 @@ export function assertAiTechIconProductionPlacement({
           purpose,
           presentation: resolvedPresentation,
           layoutRole,
+          participation,
+          placement,
           attachmentMode,
           autoInsert,
           expected
@@ -254,6 +376,12 @@ export function assertAiTechIconProductionPlacement({
     purpose,
     presentation: resolvedPresentation,
     layoutRole,
+    participation,
+    semanticObjectId,
+    ownerId,
+    placement,
+    maximumGapPx,
+    labelRevealDeltaFrames,
     attachmentMode,
     autoInsert
   });

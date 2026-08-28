@@ -81,18 +81,23 @@ function stableAssets(assets = []) {
 }
 
 function stableStoryboardScenes(scenes = []) {
-  return scenes.map((scene) => ({
-    id: scene.id ?? null,
-    start: scene.start ?? null,
-    end: scene.end ?? null,
-    type: scene.type ?? null,
-    kicker: scene.kicker ?? null,
-    title: scene.title ?? null,
-    statement: scene.statement ?? null,
-    subtitle: scene.subtitle ?? null,
-    label: scene.label ?? null,
-    assetHint: scene.assetHint ?? null
-  }));
+  return scenes.map((scene) => {
+    const stable = {
+      id: scene.id ?? null,
+      start: scene.start ?? null,
+      end: scene.end ?? null,
+      type: scene.type ?? null,
+      kicker: scene.kicker ?? null,
+      title: scene.title ?? null,
+      statement: scene.statement ?? null,
+      subtitle: scene.subtitle ?? null,
+      label: scene.label ?? null,
+      assetHint: scene.assetHint ?? null
+    };
+    if (scene.visualIntent != null) stable.visualIntent = scene.visualIntent;
+    if (scene.visualPlan != null) stable.visualPlan = scene.visualPlan;
+    return stable;
+  });
 }
 
 export function gateArtifactPayload(episode, gate) {

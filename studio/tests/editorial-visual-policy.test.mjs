@@ -14,6 +14,7 @@ import {
   EditorialVisualPolicyError,
   editorialSurfaceCohortKey,
   planEditorialCardTitleLayout,
+  validateEditorialRelationSurfaceConsistency,
   validateEditorialScene,
   validateEditorialSequence
 } from "../src/shared/editorial-visual-policy.mjs";
@@ -73,12 +74,13 @@ function scene(id, overrides = {}) {
     cards: [],
     diagrams: [],
     icons: [],
+    relations: [],
     ...overrides
   };
 }
 
-test("长视频图文编排合同固定纯文字卡片、独立图标和三场图解节奏", () => {
-  assert.equal(EDITORIAL_VISUAL_POLICY_VERSION, "editorial-visual-policy-v4");
+test("长视频图文编排合同固定纯文字卡片、语义绑定图标和三场图解节奏", () => {
+  assert.equal(EDITORIAL_VISUAL_POLICY_VERSION, "editorial-visual-policy-v6");
   assert.equal(EDITORIAL_SEQUENCE_PROFILE, "ai-tech-longform");
   assert.equal(EDITORIAL_VISUAL_POLICY.sequenceProfile, "ai-tech-longform");
   assert.equal(EDITORIAL_VISUAL_POLICY.maximumCardLedSceneRatio, 0.5);
@@ -114,8 +116,17 @@ test("长视频图文编排合同固定纯文字卡片、独立图标和三场�
   assert.equal(EDITORIAL_VISUAL_POLICY.maximumIconsPerInformationCard, 0);
   assert.equal(EDITORIAL_VISUAL_POLICY.informationCardContentMode, "text-only");
   assert.equal(EDITORIAL_VISUAL_POLICY.iconPresentationMode, "standalone-only");
+  assert.equal(EDITORIAL_VISUAL_POLICY.iconSemanticBindingMode, "graph-node-or-owned-callout");
+  assert.equal(EDITORIAL_VISUAL_POLICY.duplicateSemanticRepresentationMode, "fail-closed");
+  assert.equal(EDITORIAL_VISUAL_POLICY.maximumOwnedCalloutGapPx, 48);
+  assert.equal(EDITORIAL_VISUAL_POLICY.maximumIconLabelRevealDeltaFrames, 1);
   assert.equal(EDITORIAL_VISUAL_POLICY.diagramWindowSize, 3);
   assert.equal(EDITORIAL_VISUAL_POLICY.informationCardBorderMode, "full-outline");
+  assert.equal(EDITORIAL_VISUAL_POLICY.relationSurfaceConsistencyMode, "connected-component");
+  assert.equal(
+    EDITORIAL_VISUAL_POLICY.relationSurfaceBoundaryMode,
+    "explicit-semantic-subgroup-transition"
+  );
   assert.deepEqual(EDITORIAL_VISUAL_POLICY.cardTitleOverflowOrder, [
     "grow-card",
     "reflow-layout"
@@ -199,9 +210,14 @@ test("mixed-diagram 只允许卡片外的独立图标，并区分信息卡与开
     icons: [{
       id: "tool-anchor",
       conceptKind: "tool",
+      semanticObjectId: "execution-relay",
+      participation: "graph-node",
       anchorId: "execution-relay",
       purpose: "semantic-anchor",
-      presentation: "open-diagram-symbol"
+      presentation: "open-diagram-symbol",
+      layoutRole: "semantic-icon-node",
+      placement: "anchor-bounds",
+      labelRevealDeltaFrames: 0
     }]
   }));
   assert.equal(review.valid, true);
@@ -235,6 +251,88 @@ test("同语义组、同角色、同层级必须统一承载方式", () => {
     })),
     "execution-path::process-step::secondary"
   );
+});
+
+test("同一条连续关系路径必须统一承载方式，不因角色或层级不同而放行", () => {
+  const review = validateEditorialScene(scene("S-connected-mix", {
+    visualMode: "mixed-diagram",
+    cards: [card("inspect", {
+      semanticGroupId: "adoption-evidence",
+      semanticRole: "evidence",
+      surfacePurpose: "focus-result",
+      visualHierarchyLevel: "primary"
+    })],
+    diagrams: [diagram("trial", {
+      semanticGroupId: "adoption-process",
+      semanticRole: "process-step"
+    })],
+    relations: [{ id: "trial-inspect", from: "trial", to: "inspect" }]
+  }));
+  assert.equal(review.valid, false);
+  const mismatch = review.issues.find(
+    (item) => item.code === EDITORIAL_VISUAL_ERROR_CODES.RELATION_SURFACE_COMPONENT_MISMATCH
+  );
+  assert.ok(mismatch);
+  assert.deepEqual(new Set(mismatch.details.surfaceRoles), new Set([
+    "information-card",
+    "open-canvas"
+  ]));
+});
+
+test("连续开放路径通过；互不连接的卡片和图解仍可在同一场合理并存", () => {
+  const continuousOpen = validateEditorialRelationSurfaceConsistency({
+    cards: [],
+    diagrams: [diagram("trial"), diagram("inspect")],
+    relations: [{ id: "trial-inspect", from: "trial", to: "inspect" }]
+  });
+  assert.deepEqual(continuousOpen, []);
+
+  const disconnectedMixed = validateEditorialScene(scene("S-disconnected-mix", {
+    visualMode: "mixed-diagram",
+    cards: [card("result", {
+      semanticGroupId: "summary-result",
+      surfacePurpose: "focus-result"
+    })],
+    diagrams: [diagram("process", { semanticGroupId: "process-path" })]
+  }));
+  assert.equal(disconnectedMixed.valid, true);
+});
+
+test("只有带解释的语义子组转换可以显式切换承载方式", () => {
+  const cards = [card("result", {
+    semanticGroupId: "summary-result",
+    surfacePurpose: "focus-result"
+  })];
+  const diagrams = [diagram("process", { semanticGroupId: "process-path" })];
+  const validBoundary = {
+    kind: "semantic-subgroup-transition",
+    cue: "surface-change",
+    rationale: "从过程关系切换到需要独立读取的完整结果。"
+  };
+  assert.deepEqual(validateEditorialRelationSurfaceConsistency({
+    cards,
+    diagrams,
+    relations: [{
+      id: "process-result",
+      from: "process",
+      to: "result",
+      surfaceBoundary: validBoundary
+    }]
+  }), []);
+
+  const invalid = validateEditorialRelationSurfaceConsistency({
+    cards,
+    diagrams,
+    relations: [{
+      id: "process-result",
+      from: "process",
+      to: "result",
+      surfaceBoundary: { ...validBoundary, rationale: "" }
+    }]
+  });
+  assert.ok(invalid.some(
+    (item) => item.code === EDITORIAL_VISUAL_ERROR_CODES.RELATION_SURFACE_BOUNDARY_INVALID
+  ));
 });
 
 test("同角色同层级但不同语义组可以合理混合，卡片目的仍须属于内容职责", () => {
@@ -282,16 +380,26 @@ test("mixed-diagram 必须由开放图解真正承载关系，独立图标数量
       {
         id: "icon-a",
         conceptKind: "routing",
+        semanticObjectId: "decorative-symbol",
+        participation: "graph-node",
         anchorId: "decorative-symbol",
         purpose: "interaction-cue",
-        presentation: "open-diagram-symbol"
+        presentation: "open-diagram-symbol",
+        layoutRole: "semantic-icon-node",
+        placement: "anchor-bounds",
+        labelRevealDeltaFrames: 0
       },
       {
         id: "icon-b",
         conceptKind: "agent",
+        semanticObjectId: "focus-agent",
+        participation: "dedicated-focus",
         anchorId: "result",
         purpose: "semantic-anchor",
-        presentation: "standalone-focus"
+        presentation: "standalone-focus",
+        layoutRole: "dedicated-icon-focus",
+        placement: "dedicated-focus",
+        labelRevealDeltaFrames: 0
       }
     ]
   }));
@@ -310,9 +418,14 @@ test("mixed-diagram 必须由开放图解真正承载关系，独立图标数量
       icons: [{
         id: "sequence-icon",
         conceptKind: "routing",
+        semanticObjectId: "sequence-decoration",
+        participation: "graph-node",
         anchorId: "sequence-decoration",
         purpose: "interaction-cue",
-        presentation: "open-diagram-symbol"
+        presentation: "open-diagram-symbol",
+        layoutRole: "semantic-icon-node",
+        placement: "anchor-bounds",
+        labelRevealDeltaFrames: 0
       }]
     }),
     scene("S03")
@@ -367,9 +480,22 @@ test("卡片内图标、图标目的、展示方式、锚点和数量都会被�
       card("c")
     ],
     icons: [
-      { id: "i-a", conceptKind: "agent", anchorId: "a", purpose: "decoration", presentation: "inline" },
-      { id: "i-b", conceptKind: "tool", anchorId: "b", purpose: "semantic-anchor", presentation: "standalone-focus" },
-      { id: "i-c", conceptKind: "mcp", anchorId: "c", purpose: "interaction-cue", presentation: "open-diagram-symbol" }
+      {
+        id: "i-a", conceptKind: "agent", semanticObjectId: "a", participation: "graph-node",
+        anchorId: "a", purpose: "decoration", presentation: "inline",
+        layoutRole: "semantic-icon-node", placement: "anchor-bounds", labelRevealDeltaFrames: 0
+      },
+      {
+        id: "i-b", conceptKind: "tool", semanticObjectId: "focus-tool", participation: "dedicated-focus",
+        anchorId: "b", purpose: "semantic-anchor", presentation: "standalone-focus",
+        layoutRole: "dedicated-icon-focus", placement: "dedicated-focus", labelRevealDeltaFrames: 0
+      },
+      {
+        id: "i-c", conceptKind: "mcp", semanticObjectId: "mcp-callout", participation: "owned-callout",
+        anchorId: "c", ownerId: "c", purpose: "interaction-cue", presentation: "open-diagram-symbol",
+        layoutRole: "owned-icon-callout", placement: "right-center", maximumGapPx: 24,
+        labelRevealDeltaFrames: 0
+      }
     ]
   }));
   const codes = issueCodes(review);
@@ -384,12 +510,42 @@ test("卡片内图标、图标目的、展示方式、锚点和数量都会被�
     icons: [{
       id: "orphan",
       conceptKind: "routing",
+      semanticObjectId: "missing",
+      participation: "graph-node",
       anchorId: "missing",
       purpose: "interaction-cue",
-      presentation: "open-diagram-symbol"
+      presentation: "open-diagram-symbol",
+      layoutRole: "semantic-icon-node",
+      placement: "anchor-bounds",
+      labelRevealDeltaFrames: 0
     }]
   }));
   assert.ok(issueCodes(unbound).includes(EDITORIAL_VISUAL_ERROR_CODES.ICON_ANCHOR_INVALID));
+});
+
+test("图标语义绑定拒绝重复主表现、远端 rail、超距 owner 和文字提前", () => {
+  const review = validateEditorialScene(scene("S-icon-binding", {
+    visualMode: "open-diagram",
+    diagrams: [diagram("router"), diagram("target")],
+    icons: [
+      {
+        id: "router-a", conceptKind: "routing", semanticObjectId: "router", participation: "graph-node",
+        anchorId: "router", purpose: "semantic-anchor", presentation: "open-diagram-symbol",
+        layoutRole: "semantic-icon-node", placement: "left-rail", labelRevealDeltaFrames: 2
+      },
+      {
+        id: "router-b", conceptKind: "workflow", semanticObjectId: "router", participation: "owned-callout",
+        anchorId: "target", ownerId: "target", purpose: "interaction-cue", presentation: "open-diagram-symbol",
+        layoutRole: "owned-icon-callout", placement: "right-center", maximumGapPx: 64,
+        labelRevealDeltaFrames: 0
+      }
+    ]
+  }));
+  const codes = issueCodes(review);
+  assert.ok(codes.includes(EDITORIAL_VISUAL_ERROR_CODES.ICON_DUPLICATE_SEMANTIC_OBJECT));
+  assert.ok(codes.includes(EDITORIAL_VISUAL_ERROR_CODES.ICON_REMOTE_PLACEMENT_FORBIDDEN));
+  assert.ok(codes.includes(EDITORIAL_VISUAL_ERROR_CODES.ICON_BINDING_INVALID));
+  assert.ok(codes.includes(EDITORIAL_VISUAL_ERROR_CODES.ICON_LABEL_SYNC_INVALID));
 });
 
 test("每个连续三场窗口至少包含一场开放或混合图解", () => {

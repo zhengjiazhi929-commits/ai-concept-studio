@@ -1,8 +1,8 @@
-# AI 技术视频图标系统 v2
+# AI 技术视频图标系统 v4
 
 这套系统解决“相同 AI 技术概念每次都画成同一个图标”的问题。它不是图标墙素材库，也不允许 Storyboard 从一个好看的图标开始倒推内容。
 
-当前状态：28 个语义映射、几何、状态与动效注册表保持 `approved-production-v1`；展示边界升级为 `ai-tech-icon-contract-v2`。Zhengjiazhi 已于 2026-08-26 接受 `ai-tech-icon-system-review-v002` 的注册图标方向；后续相同 `conceptKind` 必须复用同一注册图标，不能临时改画。v2 不改变这 28 个映射，而是明确正式成片中的信息卡纯文字，注册图标只作为独立开放图解对象或专门规划的图标焦点展示。2026-08-27 的最新 Git 决策允许把本轮视觉整改的精确任务代码、文档、测试和必要运行时资产选择性提交并推送到 `codex/agent-production-pipeline`；仍禁止创建 PR、merge 或把该代码同步误报为完整 v006 视觉验收。
+当前状态：28 个语义映射、几何、状态与动效注册表保持 `approved-production-v1`；当前工作树的展示边界候选升级为 `ai-tech-icon-contract-v4`，须经新 MP4 视觉确认后才能成为生产默认。Zhengjiazhi 已于 2026-08-26 接受 `ai-tech-icon-system-review-v002` 的注册图标方向；后续相同 `conceptKind` 必须复用同一注册图标，不能临时改画。v4 不改变这 28 个映射，而是把图标的语义参与方式收敛为“关系节点、近距归属说明、专门焦点”三类，并禁止造成重复表达和因果断裂的远端边栏。2026-08-27 的最新 Git 决策允许把本轮视觉整改的精确任务代码、文档、测试和必要运行时资产选择性提交并推送到 `codex/agent-production-pipeline`；仍禁止创建 PR、merge 或把代码同步误报为完整视觉验收。
 
 2026-08-26 更新：Zhengjiazhi 已确认 v002 的注册几何视觉方向；图标注册表晋升为 `approved-production-v1`，稳定可见面积品牌水印 v013 同步晋升为默认生产 profile。批准记录的可执行真源是 `AI_TECH_ICON_REGISTRY_APPROVAL`；任何后续几何或 motion 变化都必须升版本并重新确认。专门独立图标演示/焦点布局的实际成片效果仍须通过新 MP4 视觉确认，不能用旧联系表代替。
 
@@ -24,9 +24,11 @@ Storyboard 的独立图标计划只声明 `conceptKind`，不能声明 `canonica
 conceptKind → canonicalIconId → geometry + token roles + motion recipe
 ```
 
-不能根据中文标题猜图标。未知 `conceptKind` 必须 fail closed；信息卡 node 固定使用 `none`。图标只有在确实帮助观众识别对象、状态或动作时才允许出现，不能重复标题，也不能为了填空白形成图标墙。每个长视频独立图标还必须声明 `anchorId`、`purpose: "semantic-anchor" | "state-proof" | "interaction-cue"`，并选择 `presentation: "open-diagram-symbol" | "standalone-focus"`；缺少任一项都不渲染。`anchorId` 只建立语义追溯关系，不能被解释成把图标贴到该对象的卡片或边框上。
+不能根据中文标题猜图标。未知 `conceptKind` 必须 fail closed；信息卡 node 固定使用 `none`。图标只有在确实帮助观众识别对象、状态或动作时才允许出现，不能重复标题，也不能为了填空白形成图标墙。每个长视频独立图标还必须声明 `semanticObjectId`、`anchorId`、`purpose: "semantic-anchor" | "state-proof" | "interaction-cue"`、`participation: "graph-node" | "owned-callout" | "dedicated-focus"`，并选择 `presentation: "open-diagram-symbol" | "standalone-focus"`；缺少任一项都不渲染。同一 `semanticObjectId` 只能有一个主表现，不能同时保留同名文字节点和另一处图标。
 
-`open-diagram-symbol` 的位置采用 fail closed：renderer 只能从锚点右、左、上、下的候选槽位中选择完整位于安全区内，且与全部节点和连线保持净空的位置。没有安全槽时返回 `render: false`。`standalone-focus` 必须使用真正预留独立区域的 `dedicated-icon-focus` 布局，不能复用卡片邻接槽位冒充焦点；两种展示都禁止用 clamp、缩小文字、覆盖卡片、压住边框或穿过箭头来强行显示。
+`graph-node` 直接替换对应开放图解文字节点，继承其稳定布局位置和全部入射/出射关系线；文字标题与说明在图标节点内部排版，图标和标签揭示时间差不得超过 1 帧。稳定布局锚点只负责占位，实际 DOM 与连接线必须共同消费由注册图标尺寸、统一字号、间距和 padding 测出的紧致可见几何；测量结果放不进锚点时 fail closed，不能缩字或裁切。`owned-callout` 必须显式声明 owner，距 owner 最多 48px，并使用清楚的归属线；`dedicated-focus` 必须使用真正预留独立区域的 `dedicated-icon-focus` 布局。远端左右 rail、无 owner 漂浮、同时保留同名节点都直接 fail closed；任何模式都禁止用 clamp、缩小文字、覆盖卡片、压住边框或穿过箭头来强行显示。
+
+关系入场采用 `connector-arrow-first`：已有 source 可先向预留端点绘制关系，新 target 的图标与文字在最后一条必要入边的箭头抵达时同步显现；新 source 则必须与出边同帧出现。同阶段两跳以上关系按拓扑波次执行，例如 `Skill → Agent → Tool` 必须先建立 Agent，再从 Agent 画向 Tool。没有明确入口的循环关系、提前漂浮的 target、从未建立的中间节点发出的线都直接 fail closed。
 
 ## 2. 第一批 28 个稳定语义
 
@@ -75,18 +77,21 @@ conceptKind → canonicalIconId → geometry + token roles + motion recipe
 - 图标必须保持辅助层级：文字尺寸、对比度和信息面积高于图标，图标不能替代大标题、解释文字、关系图或证据。
 - 是否使用信息卡仍由语义职责和层级决定，不能简化成整屏“全用卡片”或“全不用卡片”；一旦对象选择信息卡，它就保持纯文字。需要解释过程、关系、分支或状态时，优先穿插 `mixed-diagram` / `open-diagram` 图解，而不是继续增加图标。
 - 同一 `semanticGroupId + semanticRole + visualHierarchyLevel` cohort 内的对象必须保持相同承载方式；这保证同组一致，但不要求不同语义组或整屏机械地全部套卡片。
+- 图标所在关系路径还受连通拓扑一致性约束：一条未声明语义子组边界的连续流程只允许一种承载方式；`graph-node` 图标继承 anchor 节点的开放图解身份，不能让相邻主流程节点一部分有卡片、一部分无卡片。
+- 不同承载方式只有在关系明确声明 `semantic-subgroup-transition + surface-change + rationale` 时才能相连；互不连接的子图或独立结果容器仍可不同，避免把规则误写成全屏绝对化。
 - 独立图标必须消费统一的尺寸角色、注册几何和安全槽，不得按场景临时改颜色、比例、线宽、位置算法或嵌入方式。
 - 注册图标不得用作卡片徽章、贴边附件、标题前缀、节点装饰或结果卡注释；需要展示图标时必须切换到为图标预留独立空间的构图。
 
-尺寸只允许使用三种角色：
+尺寸只允许使用四种角色：
 
 - `inline = 36px`：只用于旧图标审阅联系表的小号独立展示，正式成片不得嵌入卡片文字；
 - `support = 56px`：开放图解中的独立语义图标，不得依附卡片边框、标题或正文；
+- `longform-support = 88px`：仅用于横版长视频明确预留的大型图解节点；不得进入远端边栏，也不得作为卡片 owner、徽章或附件；
 - `focus = 104px`：单一图标焦点布局中的主概念，每屏最多一个。
 
 可见比例还需同时满足：
 
-- 正式成片不使用行内图标；`support` 独立图标不能侵入标题或信息卡主阅读区；
+- 正式成片不使用行内图标；`support` 与 `longform-support` 独立图标不能侵入标题或信息卡主阅读区；
 - `focus` 只用于整屏唯一概念锚点，不能与多张卡片或大段说明文字竞争；
 - 图标、文字和容器的缩放只能消费共享尺寸角色和布局测量结果，禁止场景临时放大图标、缩小文字或改变线宽。
 
@@ -110,7 +115,7 @@ conceptKind → canonicalIconId → geometry + token roles + motion recipe
 
 信息卡不调用该组件，也不为图标预留贴边空间。开放图解只有在图标本身能独立增强对象、动作或交互识别时才创建 `open-diagram-symbol` 计划；镜头明确预留焦点区域时才创建 `standalone-focus` 计划；未知值直接抛出合同错误。
 
-`open-diagram-symbol` 在调用组件前须执行安全槽检查，使用完整最终布局的全部文字区、图形与关系线，而不是只看当前阶段已显示的少量元素。`standalone-focus` 必须使用 `dedicated-icon-focus` 专用布局；安全槽只是防止开放图解图标遮挡的最后防线，不能把普通卡片镜头自动改造成图标贴边或焦点布局。
+`open-diagram-symbol` 在调用组件前必须先决定它是 `graph-node` 还是 `owned-callout`。前者占用被替换节点的真实关系位置并成为连接线端点；后者只能进入 owner 周围 48px 内的受控槽位，并绘制归属线。横版长视频禁止 `open-diagram-rail`、`left-rail`、`right-rail` 等远端边栏摆放。`standalone-focus` 必须使用 `dedicated-icon-focus` 专用布局；安全槽不能把普通卡片镜头自动改造成图标贴边或焦点布局。
 
 ## 5. 对号规则
 
@@ -129,7 +134,7 @@ conceptKind → canonicalIconId → geometry + token roles + motion recipe
 
 ## 6. 审批与版本门禁
 
-1. 先生成 28 图标静态联系表：三档尺寸、默认色和状态色；它只验证注册图标，不定义生产摆放方式。
+1. 先生成 28 图标静态联系表：注册尺寸、默认色和状态色；它只验证注册图标，不定义生产摆放方式。
 2. 再生成成功、检索、路由、模型调用、MCP、人工确认等动态图标关键片段。
 3. 对真实 PNG/MP4 检查语义对应、辨识度、文字比例、裁切、重叠、颜色和最终稳定帧。
 4. Zhengjiazhi 确认后，注册表状态和几何版本才能晋升；不符合时生成不可覆盖的新候选。
@@ -147,5 +152,7 @@ conceptKind → canonicalIconId → geometry + token roles + motion recipe
 - 旧候选名 `review-v013-stable-footprint` 仅作为向后兼容别名解析到已批准 v013，不能再据此判断审批状态；
 - v013 manifest 必须同时声明 `approved=true`、`reviewOnly=false`、审批方向与 canonical profile；
 - 后续几何、尺寸或节奏调整必须生成新版本，不能覆盖 v012、v013 或任何既有成片。
+
+长片可以显式使用 `VisualSystemV1WideBrandLayer tone="quiet"`，当前 quiet opacity 为 `0.76`。tone 只降低视觉权重，不改变 v013 profile、120×120 尺寸、`top=40/right=40` 位置、120 帧循环、可见 footprint 或右上 200px 品牌安全区；其他 composition 不传 tone 时仍为 `standard=1.0`。每个正式片段仍必须恰好包含一个品牌层。
 
 可执行真源：`studio/src/video/components/visual-system-v1/ai-watermark.mjs`、`studio/src/video/components/visual-system-v1/brand-layer.jsx`、`studio/public/assets/visual-system-v1/ai-watermark-v013/manifest.json`。

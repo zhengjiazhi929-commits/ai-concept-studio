@@ -294,21 +294,26 @@ test("本地代码候选使用独立读取器绑定实现摘要，异常摘要 f
   assert.equal(reviewed.checkpoint.status, "waiting_approval");
   assert.equal(implementationCheck?.passed, true);
   assert.equal(planReads, 1);
-  assert.equal(implementationReads, 8);
+  assert.equal(implementationReads, 13);
   assert.equal(
     reviewed.checkpoint.currentCandidate.localCodeImplementation.schemaVersion,
-    "local-code-implementation-v4"
+    "local-code-implementation-v5"
   );
   assert.deepEqual(
     reviewed.checkpoint.currentCandidate.localCodeImplementation.files.map((file) => file.path),
     [
+      "studio/config/visual-system.json",
       "studio/src/video/index.jsx",
       "studio/src/video/root.jsx",
       "studio/src/video/episode-preview.jsx",
+      "studio/src/video/production-semantic-preview.mjs",
+      "studio/src/video/production-semantic-preview.jsx",
       "studio/src/video/agent-skill-short.jsx",
       "studio/src/video/agent-skill-short-plan.mjs",
+      "studio/src/video/components/visual-system-v1/grammar-layout.mjs",
       "studio/src/video/components/chrome.jsx",
       "studio/src/video/text-layout.mjs",
+      "studio/src/shared/visual-expression-contract.mjs",
       "studio/src/shared/technical-diagram-contract.mjs"
     ]
   );
@@ -317,9 +322,13 @@ test("本地代码候选使用独立读取器绑定实现摘要，异常摘要 f
     readFile: async (filePath) => Buffer.from(`local implementation: ${filePath}`, "utf8")
   });
   for (const changedPath of [
+    "visual-system.json",
     "index.jsx",
     "root.jsx",
+    "production-semantic-preview.jsx",
+    "grammar-layout.mjs",
     "text-layout.mjs",
+    "visual-expression-contract.mjs",
     "technical-diagram-contract.mjs"
   ]) {
     const changedImplementation = await inspectLocalCodeImplementation({

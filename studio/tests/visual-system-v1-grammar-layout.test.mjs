@@ -308,7 +308,7 @@ test("内容驱动 flow 只为开放图解 glyph 扩宽，普通文字卡不再�
     labelFontSizePx: 32,
     detailFontSizePx: 20,
     horizontalPaddingPx: 26,
-    minimumCardWidthPx: 288
+    minimumCardWidthPx: 300
   };
 
   for (const id of ["parked", "skill", "agent"]) {
@@ -359,7 +359,7 @@ test("开放图解占位参与最小宽度计算，而不是渲染后再挤进�
   });
 
   assert.ok(diagramLayout.geometryById.parked.width > cardLayout.geometryById.parked.width);
-  assert.equal(cardLayout.geometryById.parked.width, 288);
+  assert.equal(cardLayout.geometryById.parked.width, 300);
   assert.equal(diagramLayout.primitiveById.parked, "diagram-output");
 });
 

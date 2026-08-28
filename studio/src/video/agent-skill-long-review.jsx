@@ -17,9 +17,11 @@ import {
   visualSystemV1ProgressAtFrame,
   visualSystemV1StandaloneOverlaySlot
 } from "./components/visual-system-v1/index.jsx";
+import { aiTechIconSize } from "../shared/ai-tech-icon-contract.mjs";
 import { VisualSystemV1WideBrandLayer } from "./components/visual-system-v1/brand-layer.jsx";
 import {
   AGENT_SKILL_LONG_REVIEW_CHAPTERS,
+  AGENT_SKILL_LONG_REVIEW_CONNECTOR_TONES,
   AGENT_SKILL_LONG_REVIEW_SCENE_SPECS,
   longReviewDisplaySubtitles,
   longReviewLayoutAtFrame,
@@ -141,8 +143,9 @@ function nodeMarker(node) {
 }
 
 function standaloneIconSize(icon) {
-  const size = icon.sizeRole === "focus" ? 104 : icon.sizeRole === "inline" ? 36 : 56;
-  return { width: size, height: size };
+  const size = aiTechIconSize(icon.sizeRole).sizePx;
+  if (!icon.caption) return { width: size, height: size };
+  return { width: Math.max(120, size), height: size + 36 };
 }
 
 function preferredOverlaySides(placement) {
@@ -155,6 +158,19 @@ function preferredOverlaySides(placement) {
   const sides = ["right", "left", "top", "bottom"];
   if (!sides.includes(normalized)) return sides;
   return [normalized, ...sides.filter((side) => side !== normalized)];
+}
+
+function ownedCalloutLeaderPoints(bounds, anchor, side) {
+  if (side === "left") {
+    return `${bounds.x + bounds.width},${bounds.y + bounds.height / 2} ${anchor.x},${anchor.centerY}`;
+  }
+  if (side === "right") {
+    return `${bounds.x},${bounds.y + bounds.height / 2} ${anchor.right},${anchor.centerY}`;
+  }
+  if (side === "top") {
+    return `${bounds.x + bounds.width / 2},${bounds.y + bounds.height} ${anchor.centerX},${anchor.y}`;
+  }
+  return `${bounds.x + bounds.width / 2},${bounds.y} ${anchor.centerX},${anchor.bottom}`;
 }
 
 function AdaptiveSemanticGroups({ spec, layout }) {
@@ -210,6 +226,8 @@ function AdaptiveSemanticGroups({ spec, layout }) {
 }
 
 function AdaptiveConnectors({ spec, state, layout, width, height }) {
+  const connectorTone = AGENT_SKILL_LONG_REVIEW_CONNECTOR_TONES[spec.connectorTone];
+  if (!connectorTone) throw new Error(`${spec.id} 使用了未知连接线 tone：${spec.connectorTone}`);
   const semanticRelations = new Map(
     spec.visualPlan.semanticRelations.map((relation) => [relation.id, relation])
   );
@@ -229,8 +247,8 @@ function AdaptiveConnectors({ spec, state, layout, width, height }) {
             viewBox="0 0 10 10"
             refX="8"
             refY="5"
-            markerWidth="5.5"
-            markerHeight="5.5"
+            markerWidth={connectorTone.markerSizePx}
+            markerHeight={connectorTone.markerSizePx}
             orient="auto"
           >
             <path
@@ -253,14 +271,17 @@ function AdaptiveConnectors({ spec, state, layout, width, height }) {
           pathLength: 1,
           fill: "none",
           stroke: palette.mintDeep,
-          strokeWidth: 2 + focus,
+          strokeWidth: connectorTone.strokeWidthPx + focus * 0.5,
           strokeLinecap: "round",
           strokeDasharray: 1,
           strokeDashoffset: 1 - progress,
           markerEnd: semanticRelation?.directed
             ? `url(#long-review-arrow-${spec.id}-${connector.relationId})`
             : undefined,
-          opacity: progress * (state.edgeVisibilityProgress[connector.relationId] ?? 0) * (0.42 + focus * 0.42),
+          opacity: progress * (state.edgeVisibilityProgress[connector.relationId] ?? 0) * (
+            connectorTone.restingOpacity +
+            focus * (connectorTone.focusedOpacity - connectorTone.restingOpacity)
+          ),
           vectorEffect: "non-scaling-stroke"
         };
         return (
@@ -316,6 +337,11 @@ function TechnicalDiagram({ spec, globalFrame, copyOpacity = 1, diagramOpacity =
   const { width, height } = useVideoConfig();
   const semanticLayout = longReviewLayoutAtFrame(spec.id, globalFrame, { width, height });
   const { state } = semanticLayout;
+  const graphIconByAnchorId = new Map(
+    spec.standaloneIcons
+      .filter((icon) => icon.participation === "graph-node")
+      .map((icon) => [icon.anchorId, icon])
+  );
   const stageCaptionLayout = longReviewStageCaptionLayout(width, height);
   const stageCaption = longReviewStageCaptionStateAtFrame(spec.id, globalFrame);
   return (
@@ -341,6 +367,7 @@ function TechnicalDiagram({ spec, globalFrame, copyOpacity = 1, diagramOpacity =
       />
       {semanticLayout.nodeIds.map((nodeId) => {
         const node = spec.nodes.find((candidate) => candidate.id === nodeId);
+        if (graphIconByAnchorId.has(nodeId)) return null;
         const semanticElement = spec.visualPlan.semanticElements.find(
           (candidate) => candidate.id === nodeId
         );
@@ -372,7 +399,10 @@ function TechnicalDiagram({ spec, globalFrame, copyOpacity = 1, diagramOpacity =
             visualHierarchyLevel={surfacePlan?.visualHierarchyLevel}
             semanticClaimIds={semanticElement?.claimIds ?? []}
             conceptKind="none"
-            textWrapMode={node.textWrapMode ?? "phrase-safe"}
+            textWrapMode={node.textWrapMode ?? "break-word"}
+            typographyProfile={spec.typographyProfile === "longform-emphasis"
+              ? "longformEmphasis"
+              : "standard"}
             style={{ ...geometry, zIndex: 2 }}
           />
         );
@@ -384,34 +414,69 @@ function TechnicalDiagram({ spec, globalFrame, copyOpacity = 1, diagramOpacity =
           ? visualSystemV1ProgressAtFrame(globalFrame, spec.holdStartFrame, 18)
           : (state.nodeProgress[icon.anchorId] ?? 0) * (state.nodeVisibilityProgress[icon.anchorId] ?? 0);
         if (progress <= 0) return null;
-        const slot = visualSystemV1StandaloneOverlaySlot({
-          anchorGeometry: anchor,
-          overlaySize: standaloneIconSize(icon),
-          safeArea: semanticLayout.safeArea,
-          geometryById: semanticLayout.fullGeometryById,
-          connectors: semanticLayout.allConnectors,
-          minimumGapPx: 18,
-          preferredSides: preferredOverlaySides(icon.placement)
-        });
+        const graphNode = icon.participation === "graph-node";
+        const graphNodeBounds = graphNode
+          ? semanticLayout.visibleGeometryById[icon.anchorId]
+          : null;
+        if (graphNode && !graphNodeBounds) {
+          throw new Error(`${spec.id}/${icon.id} 缺少与连线同源的图标可见几何`);
+        }
+        const slot = graphNode
+          ? { render: true, reason: "semantic-icon-visible-bounds", side: null, bounds: graphNodeBounds }
+          : visualSystemV1StandaloneOverlaySlot({
+              anchorGeometry: anchor,
+              overlaySize: standaloneIconSize(icon),
+              safeArea: semanticLayout.safeArea,
+              geometryById: semanticLayout.fullGeometryById,
+              connectors: semanticLayout.allConnectors,
+              minimumGapPx: icon.maximumGapPx,
+              preferredSides: preferredOverlaySides(icon.placement)
+            });
         if (!slot.render) return null;
         const anchorNode = spec.nodes.find((node) => node.id === icon.anchorId);
         return (
-          <VisualSystemV1StandaloneIcon
-            key={icon.id}
-            conceptKind={icon.conceptKind}
-            presentation={icon.presentation}
-            sizeRole={icon.sizeRole}
-            progress={progress}
-            statusMarkVariant={icon.statusMarkVariant}
-            label={`${anchorNode?.label ?? icon.anchorId} 独立状态图标`}
-            style={{
-              left: slot.bounds.x,
-              top: slot.bounds.y,
-              width: slot.bounds.width,
-              height: slot.bounds.height,
-              zIndex: 3
-            }}
-          />
+          <React.Fragment key={icon.id}>
+            {icon.participation === "owned-callout" ? (
+              <svg
+                data-ai-tech-icon-owner-link={icon.id}
+                width={width}
+                height={height}
+                viewBox={`0 0 ${width} ${height}`}
+                style={{ position: "absolute", inset: 0, overflow: "visible", zIndex: 2 }}
+              >
+                <polyline
+                  points={ownedCalloutLeaderPoints(slot.bounds, anchor, slot.side)}
+                  fill="none"
+                  stroke={palette.mintDeep}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  opacity={progress * 0.58}
+                />
+              </svg>
+            ) : null}
+            <VisualSystemV1StandaloneIcon
+              conceptKind={icon.conceptKind}
+              presentation={icon.presentation}
+              sizeRole={icon.sizeRole}
+              progress={progress}
+              statusMarkVariant={icon.statusMarkVariant}
+              caption={graphNode ? normalizeNodeCopy(anchorNode?.label) : icon.caption}
+              detail={graphNode ? normalizeNodeCopy(anchorNode?.detail) : null}
+              layoutRole={icon.layoutRole}
+              placement={icon.placement}
+              participation={icon.participation}
+              semanticObjectId={icon.semanticObjectId}
+              ownerId={icon.ownerId}
+              label={`${anchorNode?.label ?? icon.anchorId} 独立状态图标`}
+              style={{
+                left: slot.bounds.x,
+                top: slot.bounds.y,
+                width: slot.bounds.width,
+                height: slot.bounds.height,
+                zIndex: 3
+              }}
+            />
+          </React.Fragment>
         );
       })}
       <div
@@ -539,7 +604,7 @@ export function AgentSkillLongReview({ episode }) {
           />
         ))}
       </div>
-      <VisualSystemV1WideBrandLayer />
+      <VisualSystemV1WideBrandLayer tone="quiet" />
       <div
         data-subtitle-title-gate={subtitleGate.mode}
         style={{ opacity: subtitleGate.opacity }}

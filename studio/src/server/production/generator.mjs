@@ -7,6 +7,13 @@ import { latestReviewFeedback } from "../../shared/workflow.mjs";
 import { ensureInside, workspaceRoot } from "../../shared/paths.mjs";
 import { productionProfileForEpisode } from "../../shared/production-profiles.mjs";
 import {
+  VISUAL_EXPRESSION_CONTRACT_VERSION,
+  VISUAL_EXPRESSION_INTENT_JSON_SCHEMA,
+  VISUAL_EXPRESSION_STYLE_PROFILE_ID,
+  resolveVisualExpressionPlan,
+  visualExpressionPromptDirective
+} from "../../shared/visual-expression-contract.mjs";
+import {
   adaptApprovedSourceToShortScript,
   APPROVED_SOURCE_SHORT_SCRIPT_ADAPTER_VERSION
 } from "./short-script-adapter.mjs";
@@ -56,6 +63,14 @@ function scriptSchemaForProfile(profile) {
 
 function storyboardSchemaForProfile(profile) {
   return closedObject({
+  visualContractVersion: {
+    type: "string",
+    enum: [VISUAL_EXPRESSION_CONTRACT_VERSION]
+  },
+  visualStyleProfileId: {
+    type: "string",
+    enum: [VISUAL_EXPRESSION_STYLE_PROFILE_ID]
+  },
   targetDurationSeconds: {
     type: "integer",
     minimum: profile.targetDurationSeconds.minimum,
@@ -78,6 +93,7 @@ function storyboardSchemaForProfile(profile) {
       subtitle: { type: "string" },
       label: { type: "string" },
       assetHint: { type: "string" },
+      visualIntent: VISUAL_EXPRESSION_INTENT_JSON_SCHEMA,
       subtitleLines: {
         type: "array",
         minItems: 1,
@@ -347,6 +363,14 @@ export async function generateScriptDraft(episode, options = {}) {
 }
 
 function buildTimeline(draft, profile) {
+  if (draft.visualContractVersion !== VISUAL_EXPRESSION_CONTRACT_VERSION) {
+    throw new Error(
+      `分镜缺少当前视觉表达合同：${VISUAL_EXPRESSION_CONTRACT_VERSION}`
+    );
+  }
+  if (draft.visualStyleProfileId !== VISUAL_EXPRESSION_STYLE_PROFILE_ID) {
+    throw new Error(`分镜未绑定已批准视觉参数真源：${VISUAL_EXPRESSION_STYLE_PROFILE_ID}`);
+  }
   const target = Math.max(
     profile.targetDurationSeconds.minimum,
     Math.min(profile.targetDurationSeconds.maximum, draft.targetDurationSeconds)
@@ -361,6 +385,12 @@ function buildTimeline(draft, profile) {
     rawCursor += scene.durationSeconds;
     const end = isLast ? target : Number(((rawCursor / rawTotal) * target).toFixed(3));
     const id = `S${String(index + 1).padStart(2, "0")}`;
+    const visualIntent = structuredClone(scene.visualIntent);
+    const visualPlan = resolveVisualExpressionPlan({
+      sceneId: id,
+      visualIntent,
+      styleProfileId: draft.visualStyleProfileId
+    });
     scenes.push({
       id,
       start: cursor,
@@ -371,7 +401,9 @@ function buildTimeline(draft, profile) {
       statement: scene.statement,
       subtitle: scene.subtitle,
       label: scene.label,
-      assetHint: scene.assetHint
+      assetHint: scene.assetHint,
+      visualIntent,
+      visualPlan
     });
 
     const weights = scene.subtitleLines.map((line) => line.weight);
@@ -438,7 +470,7 @@ export async function generateStoryboardDraft(episode, options = {}) {
     schemaName: "episode_storyboard_draft",
     schema: storyboardSchemaForProfile(profile),
     instructions:
-      `你是中文竖屏视频的分镜导演。${profile.storyboardInstruction}。必须包含 title、evidence、statement、summary 场景；证据场景写清素材提示和来源标签。字幕需拆成适合阅读的短句，不得声称素材已经存在。输出仍需机器审核与人类视觉审批。`,
+      `你是中文竖屏视频的分镜导演。${profile.storyboardInstruction}。必须包含 title、evidence、statement、summary 场景；证据场景写清素材提示和来源标签。字幕需拆成适合阅读的短句，不得声称素材已经存在。${visualExpressionPromptDirective()} 输出仍需机器审核与人类视觉审批。`,
     input: JSON.stringify({
       episode: episodeContext(episode),
       script: scriptDraft,
@@ -523,7 +555,7 @@ export async function generateAssetPlan(episode, options = {}) {
     schemaName: "episode_asset_plan",
     schema: assetPlanSchema,
     instructions:
-      "你是 AI 知识视频的素材制片。为已批准分镜建立逐项素材清单。真实产品界面、操作结果和证据画面必须来自真实截图或录屏，禁止用生成式 UI 冒充；概念图解可以使用浅色技术图。沿用已锁定的视觉系统，不重新设计风格。每项必须写清来源、版权、对应场景、制作方式和费用上限；任何外部生成调用必须登记 Provider、模型、端点、完整提示词、输出尺寸/格式/时长、调用次数、价格来源和最大费用。生成提示词必须明确禁止模型生成文字、品牌、Logo、真实产品 UI 和截图，概念标签与事实关系由本地代码叠加。价格未确认时不得标记 pricingConfirmed；输出只是一份待机器审核与人工批准的方案，不得执行素材生成。",
+      "你是 AI 知识视频的素材制片。为已批准分镜建立逐项素材清单。真实产品界面、操作结果和证据画面必须来自真实截图或录屏，禁止用生成式 UI 冒充；概念图解可以使用浅色技术图。每个素材必须执行已批准场景的 visualIntent 与 visualPlan，只实现其中的语义对象和关系，不得临时发明新比喻或把全部场景改成卡片。沿用已锁定的视觉系统，不重新设计风格。每项必须写清来源、版权、对应场景、制作方式和费用上限；任何外部生成调用必须登记 Provider、模型、端点、完整提示词、输出尺寸/格式/时长、调用次数、价格来源和最大费用。生成提示词必须明确禁止模型生成文字、品牌、Logo、真实产品 UI 和截图，概念标签与事实关系由本地代码叠加。价格未确认时不得标记 pricingConfirmed；输出只是一份待机器审核与人工批准的方案，不得执行素材生成。",
     input: JSON.stringify({
       episode: episodeContext(episode),
       scenes: episode.scenes,
@@ -541,6 +573,12 @@ export async function generateAssetPlan(episode, options = {}) {
   };
   const value = {
     ...result.value,
+    ...(episode.production?.storyboardDraft?.visualContractVersion
+      ? { visualContractVersion: episode.production.storyboardDraft.visualContractVersion }
+      : {}),
+    ...(episode.production?.storyboardDraft?.visualStyleProfileId
+      ? { visualStyleProfileId: episode.production.storyboardDraft.visualStyleProfileId }
+      : {}),
     visualRules: [...(episode.production?.storyboardDraft?.visualRules ?? [])],
     sourceStoryboard
   };

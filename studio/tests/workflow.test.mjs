@@ -143,6 +143,15 @@ test("下游素材绑定不会篡改已批准分镜的内容哈希", async () =>
   assert.equal(currentGateArtifactHash(episode, "storyboard"), before);
 });
 
+test("结构化视觉意图和解析计划进入 Storyboard Gate 哈希", async () => {
+  const episode = structuredClone(await readEpisode("golden-001"));
+  episode.scenes[0].visualIntent = { schemaVersion: "visual-expression-contract-v1", takeaway: "原结论" };
+  episode.scenes[0].visualPlan = { structure: "none", styleProfileId: "visual-system-v1" };
+  const before = currentGateArtifactHash(episode, "storyboard");
+  episode.scenes[0].visualIntent.takeaway = "改变后的结论";
+  assert.notEqual(currentGateArtifactHash(episode, "storyboard"), before);
+});
+
 test("最终成片批准后整期进入 approved 状态", async () => {
   const source = await readEpisode("golden-001");
   source.qa.status = "passed";

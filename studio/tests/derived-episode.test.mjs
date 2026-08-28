@@ -260,6 +260,9 @@ test("60 秒 Storyboard Agent 只拆分已批准脚本并绑定审核哈希，�
     generated.timeline.subtitles.every((subtitle) => !/^\s/u.test(subtitle.text))
   );
   assert.deepEqual(generated.value.visualRules, SHORT_STORYBOARD_VISUAL_RULES);
+  assert.equal(generated.value.visualContractVersion, "visual-expression-contract-v1");
+  assert.equal(generated.value.visualStyleProfileId, "desktop-light-window-editorial-v3");
+  assert.ok(generated.timeline.scenes.every((scene) => scene.visualIntent && scene.visualPlan));
   assert.ok(generated.timeline.scenes.every((scene) => scene.kicker === "" && scene.label === ""));
   assert.ok(generated.timeline.scenes.every((scene) => !scene.assetHint.includes("比喻")));
 });
@@ -284,6 +287,8 @@ test("派生分镜质量规则会拦截脚本哈希漂移和未经批准的镜�
     sourceScriptVersion: generated.sourceScriptVersion,
     sourceScriptArtifactHash: generated.sourceScriptArtifactHash,
     sourceScriptReviewReportId: generated.sourceScriptReviewReportId,
+    visualContractVersion: generated.value.visualContractVersion,
+    visualStyleProfileId: generated.value.visualStyleProfileId,
     visualRules: generated.value.visualRules,
     versions: []
   };
@@ -291,6 +296,7 @@ test("派生分镜质量规则会拦截脚本哈希漂移和未经批准的镜�
   assert.equal(quality.checks.find((check) => check.id === "storyboard-derived-script-binding").passed, true);
   assert.equal(quality.checks.find((check) => check.id === "storyboard-derived-script-fidelity").passed, true);
   assert.equal(quality.checks.find((check) => check.id === "storyboard-derived-visual-contract").passed, true);
+  assert.equal(quality.checks.find((check) => check.id === "visual-expression-contract").passed, true);
   assert.equal(quality.checks.find((check) => check.id === "storyboard-derived-display-chrome").passed, true);
 
   episode.production.storyboardDraft.sourceScriptArtifactHash = "0".repeat(64);

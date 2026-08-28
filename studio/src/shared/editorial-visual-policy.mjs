@@ -1,4 +1,4 @@
-export const EDITORIAL_VISUAL_POLICY_VERSION = "editorial-visual-policy-v4";
+export const EDITORIAL_VISUAL_POLICY_VERSION = "editorial-visual-policy-v6";
 
 export const EDITORIAL_SEQUENCE_PROFILE = "ai-tech-longform";
 
@@ -69,10 +69,16 @@ export const EDITORIAL_VISUAL_POLICY = Object.freeze({
   maximumIconsPerInformationCard: 0,
   informationCardContentMode: "text-only",
   iconPresentationMode: "standalone-only",
+  iconSemanticBindingMode: "graph-node-or-owned-callout",
+  duplicateSemanticRepresentationMode: "fail-closed",
+  maximumOwnedCalloutGapPx: 48,
+  maximumIconLabelRevealDeltaFrames: 1,
   diagramWindowSize: 3,
   informationCardBorderMode: "full-outline",
   minimumInformationCardBorderWidthPx: 2,
   maximumInformationCardBorderWidthPx: 3,
+  relationSurfaceConsistencyMode: "connected-component",
+  relationSurfaceBoundaryMode: "explicit-semantic-subgroup-transition",
   openDiagramSurfaceRole: "open-canvas",
   cardTitleLineCount: 1,
   cardTitleWhiteSpace: "nowrap",
@@ -94,6 +100,9 @@ export const EDITORIAL_VISUAL_ERROR_CODES = Object.freeze({
   CARD_SURFACE_PURPOSE_INVALID: "editorial-card-surface-purpose-invalid",
   DIAGRAM_SURFACE_PURPOSE_INVALID: "editorial-diagram-surface-purpose-invalid",
   SURFACE_COHORT_MISMATCH: "editorial-surface-cohort-mismatch",
+  RELATION_SURFACE_SCHEMA_INVALID: "editorial-relation-surface-schema-invalid",
+  RELATION_SURFACE_COMPONENT_MISMATCH: "editorial-relation-surface-component-mismatch",
+  RELATION_SURFACE_BOUNDARY_INVALID: "editorial-relation-surface-boundary-invalid",
   DIAGRAM_CLASSIFICATION_INVALID: "editorial-diagram-classification-invalid",
   MIXED_DIAGRAM_RELATION_MISSING: "editorial-mixed-diagram-relation-missing",
   CARD_LED_RATIO_EXCEEDED: "editorial-card-led-ratio-exceeded",
@@ -102,6 +111,10 @@ export const EDITORIAL_VISUAL_ERROR_CODES = Object.freeze({
   ICON_PURPOSE_INVALID: "editorial-icon-purpose-invalid",
   ICON_PRESENTATION_INVALID: "editorial-icon-presentation-invalid",
   ICON_ANCHOR_INVALID: "editorial-icon-anchor-invalid",
+  ICON_BINDING_INVALID: "editorial-icon-binding-invalid",
+  ICON_DUPLICATE_SEMANTIC_OBJECT: "editorial-icon-duplicate-semantic-object",
+  ICON_REMOTE_PLACEMENT_FORBIDDEN: "editorial-icon-remote-placement-forbidden",
+  ICON_LABEL_SYNC_INVALID: "editorial-icon-label-sync-invalid",
   CARD_ICON_FORBIDDEN: "editorial-card-icon-forbidden",
   ICON_LIMIT_EXCEEDED: "editorial-icon-limit-exceeded",
   DIAGRAM_WINDOW_MISSING: "editorial-diagram-window-missing",
@@ -461,18 +474,145 @@ function validateSurfaceHierarchy(cards, diagrams) {
   });
 }
 
-function validateIcon(icon, index, validAnchorIds) {
+/**
+ * Keeps one connected explanatory path on one visual carrier. A scene may
+ * still combine cards and open diagrams when they are disconnected semantic
+ * subgroups, or when a relation explicitly declares a meaningful subgroup
+ * transition. This prevents arbitrary carrier changes without imposing a
+ * scene-wide "all cards" / "all open" rule.
+ */
+export function validateEditorialRelationSurfaceConsistency({
+  cards = [],
+  diagrams = [],
+  relations = []
+} = {}) {
+  const issues = [];
+  const surfaces = [...cards, ...diagrams].filter(isObject);
+  const surfaceById = new Map(
+    surfaces.filter((item) => nonEmptyString(item.id)).map((item) => [item.id, item])
+  );
+  const parentById = new Map([...surfaceById.keys()].map((id) => [id, id]));
+
+  const find = (id) => {
+    let current = id;
+    while (parentById.get(current) !== current) {
+      current = parentById.get(current);
+    }
+    let cursor = id;
+    while (parentById.get(cursor) !== current) {
+      const next = parentById.get(cursor);
+      parentById.set(cursor, current);
+      cursor = next;
+    }
+    return current;
+  };
+  const union = (from, to) => {
+    const fromRoot = find(from);
+    const toRoot = find(to);
+    if (fromRoot !== toRoot) parentById.set(toRoot, fromRoot);
+  };
+
+  relations.forEach((relation, index) => {
+    const location = `relations[${index}]`;
+    const fromSurface = surfaceById.get(relation?.from);
+    const toSurface = surfaceById.get(relation?.to);
+    if (
+      !isObject(relation) ||
+      !nonEmptyString(relation.id) ||
+      !nonEmptyString(relation.from) ||
+      !nonEmptyString(relation.to) ||
+      !fromSurface ||
+      !toSurface
+    ) {
+      issues.push(makeIssue(
+        EDITORIAL_VISUAL_ERROR_CODES.RELATION_SURFACE_SCHEMA_INVALID,
+        "关系必须包含非空 id、有效 from 与有效 to，且两端都属于受治理视觉对象",
+        location,
+        {
+          id: relation?.id ?? null,
+          from: relation?.from ?? null,
+          to: relation?.to ?? null
+        }
+      ));
+      return;
+    }
+
+    let validBoundary = false;
+    if (relation.surfaceBoundary != null) {
+      const boundary = relation.surfaceBoundary;
+      validBoundary = isObject(boundary) &&
+        boundary.kind === "semantic-subgroup-transition" &&
+        boundary.cue === "surface-change" &&
+        nonEmptyString(boundary.rationale) &&
+        fromSurface.semanticGroupId !== toSurface.semanticGroupId &&
+        fromSurface.surfaceRole !== toSurface.surfaceRole;
+      if (!validBoundary) {
+        issues.push(makeIssue(
+          EDITORIAL_VISUAL_ERROR_CODES.RELATION_SURFACE_BOUNDARY_INVALID,
+          "承载方式切换只能发生在明确的语义子组转换处，并必须说明它如何增强理解",
+          `${location}.surfaceBoundary`,
+          {
+            boundary,
+            from: {
+              id: fromSurface.id,
+              semanticGroupId: fromSurface.semanticGroupId,
+              surfaceRole: fromSurface.surfaceRole
+            },
+            to: {
+              id: toSurface.id,
+              semanticGroupId: toSurface.semanticGroupId,
+              surfaceRole: toSurface.surfaceRole
+            }
+          }
+        ));
+      }
+    }
+    if (!validBoundary) union(relation.from, relation.to);
+  });
+
+  const components = new Map();
+  for (const surface of surfaces) {
+    if (!nonEmptyString(surface.id) || !parentById.has(surface.id)) continue;
+    const root = find(surface.id);
+    const members = components.get(root) ?? [];
+    members.push(surface);
+    components.set(root, members);
+  }
+  for (const members of components.values()) {
+    const surfaceRoles = [...new Set(members.map((item) => item.surfaceRole))];
+    if (surfaceRoles.length <= 1) continue;
+    issues.push(makeIssue(
+      EDITORIAL_VISUAL_ERROR_CODES.RELATION_SURFACE_COMPONENT_MISMATCH,
+      "同一条连续关系路径必须使用同一种承载方式；不要在主流程中随机混用卡片和开放节点",
+      "relations",
+      {
+        surfaceRoles,
+        members: members.map((item) => ({
+          id: item.id,
+          semanticGroupId: item.semanticGroupId,
+          semanticRole: item.semanticRole,
+          surfaceRole: item.surfaceRole
+        }))
+      }
+    ));
+  }
+  return issues;
+}
+
+function validateIcon(icon, index, { validAnchorIds, cardIds, diagramIds }) {
   const issues = [];
   const location = `icons[${index}]`;
   if (
     !isObject(icon) ||
     !nonEmptyString(icon.id) ||
     !nonEmptyString(icon.conceptKind) ||
+    !nonEmptyString(icon.semanticObjectId) ||
+    !nonEmptyString(icon.participation) ||
     !nonEmptyString(icon.anchorId)
   ) {
     issues.push(makeIssue(
       EDITORIAL_VISUAL_ERROR_CODES.ICON_SCHEMA_INVALID,
-      "独立图标必须包含 id、conceptKind 与 anchorId",
+      "独立图标必须包含 id、conceptKind、semanticObjectId、participation 与 anchorId",
       location
     ));
     return issues;
@@ -501,12 +641,96 @@ function validateIcon(icon, index, validAnchorIds) {
       { anchorId: icon.anchorId }
     ));
   }
-  if (nonEmptyString(icon.ownerId)) {
+  if (typeof icon.placement === "string" && icon.placement.endsWith("-rail")) {
     issues.push(makeIssue(
-      EDITORIAL_VISUAL_ERROR_CODES.ICON_PRESENTATION_INVALID,
-      "独立图标只允许使用 anchorId 定位，不得声明会把图标嵌入内容容器的 ownerId",
-      `${location}.ownerId`,
-      { ownerId: icon.ownerId }
+      EDITORIAL_VISUAL_ERROR_CODES.ICON_REMOTE_PLACEMENT_FORBIDDEN,
+      "生产图标不得放进与语义对象脱离的远端边栏",
+      `${location}.placement`,
+      { placement: icon.placement }
+    ));
+  }
+  if (
+    !Number.isInteger(icon.labelRevealDeltaFrames) ||
+    icon.labelRevealDeltaFrames < 0 ||
+    icon.labelRevealDeltaFrames > EDITORIAL_VISUAL_POLICY.maximumIconLabelRevealDeltaFrames
+  ) {
+    issues.push(makeIssue(
+      EDITORIAL_VISUAL_ERROR_CODES.ICON_LABEL_SYNC_INVALID,
+      `图标和文字首次可见帧差不得超过 ${EDITORIAL_VISUAL_POLICY.maximumIconLabelRevealDeltaFrames} 帧`,
+      `${location}.labelRevealDeltaFrames`,
+      { labelRevealDeltaFrames: icon.labelRevealDeltaFrames }
+    ));
+  }
+  if (icon.participation === "graph-node") {
+    if (
+      icon.semanticObjectId !== icon.anchorId ||
+      nonEmptyString(icon.ownerId) ||
+      !diagramIds.has(icon.anchorId) ||
+      icon.layoutRole !== "semantic-icon-node" ||
+      icon.placement !== "anchor-bounds"
+    ) {
+      issues.push(makeIssue(
+        EDITORIAL_VISUAL_ERROR_CODES.ICON_BINDING_INVALID,
+        "关系图图标必须替代开放图解中的同一语义节点，并继承该节点的连接关系",
+        location,
+        {
+          semanticObjectId: icon.semanticObjectId,
+          anchorId: icon.anchorId,
+          ownerId: icon.ownerId ?? null,
+          layoutRole: icon.layoutRole,
+          placement: icon.placement
+        }
+      ));
+    }
+  } else if (icon.participation === "owned-callout") {
+    if (
+      !nonEmptyString(icon.ownerId) ||
+      icon.ownerId !== icon.anchorId ||
+      !validAnchorIds.has(icon.ownerId) ||
+      icon.layoutRole !== "owned-icon-callout" ||
+      !["right-center", "left-center", "above-center", "below-center"].includes(icon.placement) ||
+      !finiteNonNegative(icon.maximumGapPx) ||
+      icon.maximumGapPx > EDITORIAL_VISUAL_POLICY.maximumOwnedCalloutGapPx
+    ) {
+      issues.push(makeIssue(
+        EDITORIAL_VISUAL_ERROR_CODES.ICON_BINDING_INVALID,
+        "补充图标必须在 48px 内明确归属于一个场内 owner，且不能嵌入卡片",
+        location,
+        {
+          ownerId: icon.ownerId ?? null,
+          anchorId: icon.anchorId,
+          maximumGapPx: icon.maximumGapPx,
+          layoutRole: icon.layoutRole,
+          placement: icon.placement
+        }
+      ));
+    }
+  } else if (icon.participation === "dedicated-focus") {
+    if (
+      nonEmptyString(icon.ownerId) ||
+      icon.layoutRole !== "dedicated-icon-focus" ||
+      icon.placement !== "dedicated-focus"
+    ) {
+      issues.push(makeIssue(
+        EDITORIAL_VISUAL_ERROR_CODES.ICON_BINDING_INVALID,
+        "专门焦点图标不得绑定普通卡片或关系节点",
+        location
+      ));
+    }
+  } else {
+    issues.push(makeIssue(
+      EDITORIAL_VISUAL_ERROR_CODES.ICON_BINDING_INVALID,
+      "图标 participation 只能是 graph-node、owned-callout 或 dedicated-focus",
+      `${location}.participation`,
+      { participation: icon.participation }
+    ));
+  }
+  if (icon.participation === "graph-node" && cardIds.has(icon.anchorId)) {
+    issues.push(makeIssue(
+      EDITORIAL_VISUAL_ERROR_CODES.CARD_ICON_FORBIDDEN,
+      "关系节点图标不能替代信息卡；请改为开放图解节点或近距归属标注",
+      `${location}.anchorId`,
+      { anchorId: icon.anchorId }
     ));
   }
   return issues;
@@ -586,10 +810,16 @@ export function validateEditorialScene(scene, options = {}) {
   const cards = Array.isArray(scene.cards) ? scene.cards : [];
   const diagrams = Array.isArray(scene.diagrams) ? scene.diagrams : [];
   const icons = Array.isArray(scene.icons) ? scene.icons : [];
-  if (!Array.isArray(scene.cards) || !Array.isArray(scene.diagrams) || !Array.isArray(scene.icons)) {
+  const relations = Array.isArray(scene.relations) ? scene.relations : [];
+  if (
+    !Array.isArray(scene.cards) ||
+    !Array.isArray(scene.diagrams) ||
+    !Array.isArray(scene.icons) ||
+    !Array.isArray(scene.relations)
+  ) {
     issues.push(makeIssue(
       EDITORIAL_VISUAL_ERROR_CODES.SCENE_SCHEMA_INVALID,
-      "场景必须显式提供 cards、diagrams 与 icons 数组",
+      "场景必须显式提供 cards、diagrams、icons 与 relations 数组",
       "scene"
     ));
   }
@@ -597,6 +827,7 @@ export function validateEditorialScene(scene, options = {}) {
   cards.forEach((card, index) => issues.push(...validateCard(card, index)));
   diagrams.forEach((diagram, index) => issues.push(...validateDiagram(diagram, index)));
   issues.push(...validateSurfaceHierarchy(cards, diagrams));
+  issues.push(...validateEditorialRelationSurfaceConsistency({ cards, diagrams, relations }));
   if (EDITORIAL_VISUAL_MODES.includes(scene.visualMode)) {
     issues.push(...validateModeContent(scene, cards, diagrams));
     issues.push(...validateMixedDiagramRelation(scene, diagrams));
@@ -606,8 +837,23 @@ export function validateEditorialScene(scene, options = {}) {
   const diagramIds = new Set(diagrams.filter(isObject).map((diagram) => diagram.id).filter(nonEmptyString));
   const validAnchorIds = new Set([...cardIds, ...diagramIds]);
   icons.forEach((icon, index) => {
-    issues.push(...validateIcon(icon, index, validAnchorIds));
+    issues.push(...validateIcon(icon, index, { validAnchorIds, cardIds, diagramIds }));
   });
+  const semanticObjectIds = icons
+    .filter(isObject)
+    .map((icon) => icon.semanticObjectId)
+    .filter(nonEmptyString);
+  const duplicateSemanticObjectIds = [...new Set(semanticObjectIds.filter(
+    (semanticObjectId, index) => semanticObjectIds.indexOf(semanticObjectId) !== index
+  ))];
+  if (duplicateSemanticObjectIds.length > 0) {
+    issues.push(makeIssue(
+      EDITORIAL_VISUAL_ERROR_CODES.ICON_DUPLICATE_SEMANTIC_OBJECT,
+      "同一语义对象只能有一个图标主表现",
+      "icons",
+      { semanticObjectIds: duplicateSemanticObjectIds }
+    ));
+  }
 
   if (!Number.isSafeInteger(maximumIconsPerScene) || maximumIconsPerScene < 0) {
     issues.push(makeIssue(

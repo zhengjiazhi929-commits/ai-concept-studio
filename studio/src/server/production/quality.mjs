@@ -1,5 +1,15 @@
 import { productionProfileForEpisode } from "../../shared/production-profiles.mjs";
 import {
+  DETERMINISTIC_LAYOUT_SAMPLE_ASSURANCE,
+  DETERMINISTIC_LAYOUT_SAMPLE_SCHEMA_VERSION,
+  DETERMINISTIC_LAYOUT_SAMPLE_TYPE,
+  VISUAL_EXPRESSION_CONTRACT_VERSION,
+  VISUAL_EXPRESSION_RENDERER_CONTRACT_VERSION,
+  VISUAL_EXPRESSION_STYLE_PROFILE_ID,
+  validateDeterministicLayoutSampleSet,
+  validateVisualExpressionPlan
+} from "../../shared/visual-expression-contract.mjs";
+import {
   derivedNarrationDuplication,
   derivedScriptFidelity,
   derivedVisualDirectionFidelity
@@ -276,6 +286,125 @@ export function evaluateProductionQuality(episode, options = {}) {
 
   if (hasStage(stage, "storyboard", "voice", "qa")) {
     const generatedStoryboard = Boolean(episode.production?.storyboardDraft?.artifactPath);
+    const storyboardVisualContractVersion =
+      episode.production?.storyboardDraft?.visualContractVersion ?? null;
+    const storyboardVisualStyleProfileId =
+      episode.production?.storyboardDraft?.visualStyleProfileId ?? null;
+    const visualExpressionRequired =
+      storyboardVisualContractVersion != null || scenes.some((scene) => scene.visualIntent != null);
+    const deterministicLayoutSampleReview = stage === "qa" && visualExpressionRequired
+      ? validateDeterministicLayoutSampleSet(
+          episode.render?.deterministicLayoutSampleSet,
+          {
+            scenes,
+            rendererContractVersion: VISUAL_EXPRESSION_RENDERER_CONTRACT_VERSION,
+            styleProfileId:
+              storyboardVisualStyleProfileId ?? VISUAL_EXPRESSION_STYLE_PROFILE_ID,
+            compositionId: episode.render?.compositionId ?? null,
+            renderVersion: episode.render?.version ?? null,
+            renderedArtifactSha256: episode.render?.sha256 ?? null,
+            durationInFrames:
+              Number.isFinite(Number(episode.render?.fps)) &&
+              Number.isFinite(Number(episode.render?.durationSeconds))
+                ? Math.round(
+                    Number(episode.render.fps) * Number(episode.render.durationSeconds)
+                  )
+                : null
+          }
+        )
+      : { passed: true, issues: [], layoutSamplesByScene: {} };
+    const visualExpressionScenes = stage === "qa" && visualExpressionRequired
+      ? scenes.map((scene) => ({
+          ...scene,
+          layoutSamples:
+            deterministicLayoutSampleReview.layoutSamplesByScene[scene.id] ?? []
+        }))
+      : scenes;
+    const visualExpressionReview = visualExpressionRequired
+      ? validateVisualExpressionPlan({ scenes: visualExpressionScenes }, {
+          requireResolvedPlans: true,
+          requireLayoutSamples: stage === "qa",
+          styleProfileId: storyboardVisualStyleProfileId ?? VISUAL_EXPRESSION_STYLE_PROFILE_ID
+        })
+      : { passed: true, issues: [] };
+    const visualExpressionPassed =
+      !visualExpressionRequired ||
+      (
+        storyboardVisualContractVersion === VISUAL_EXPRESSION_CONTRACT_VERSION &&
+        storyboardVisualStyleProfileId === VISUAL_EXPRESSION_STYLE_PROFILE_ID &&
+        deterministicLayoutSampleReview.passed &&
+        visualExpressionReview.passed
+      );
+    if (stage === "qa" && visualExpressionRequired) {
+      add(
+        "deterministic-layout-samples",
+        "渲染后确定性布局样本绑定当前成片",
+        deterministicLayoutSampleReview.passed,
+        "error",
+        {
+          sampleType:
+            episode.render?.deterministicLayoutSampleSet?.sampleType ?? null,
+          schemaVersion:
+            episode.render?.deterministicLayoutSampleSet?.schemaVersion ?? null,
+          rendererContractVersion:
+            episode.render?.deterministicLayoutSampleSet?.rendererContractVersion ?? null,
+          styleProfileId:
+            episode.render?.deterministicLayoutSampleSet?.styleProfileId ?? null,
+          renderVersion:
+            episode.render?.deterministicLayoutSampleSet?.renderVersion ?? null,
+          issueCodes: deterministicLayoutSampleReview.issues.map((item) => item.code)
+        },
+        {
+          sampleType: DETERMINISTIC_LAYOUT_SAMPLE_TYPE,
+          schemaVersion: DETERMINISTIC_LAYOUT_SAMPLE_SCHEMA_VERSION,
+          rendererContractVersion: VISUAL_EXPRESSION_RENDERER_CONTRACT_VERSION,
+          styleProfileId: VISUAL_EXPRESSION_STYLE_PROFILE_ID,
+          renderVersion: episode.render?.version ?? null,
+          assurance: DETERMINISTIC_LAYOUT_SAMPLE_ASSURANCE,
+          pixelInspection: false,
+          humanVisualQa: false
+        },
+        deterministicLayoutSampleReview.passed
+          ? ""
+          : "QA 拒绝缺失、旧版本、错误 renderer/style 或未绑定当前成片 SHA-256 的确定性布局样本",
+        {
+          ownerAgentId: "render-agent",
+          location: "render.deterministicLayoutSampleSet",
+          suggestedFix: "从当前批准分镜重新运行 render-agent；该样本仅是确定性布局证据，仍需像素检查与人工完整观看"
+        }
+      );
+    }
+    add(
+      "visual-expression-contract",
+      "分镜使用统一的语义视觉合同",
+      visualExpressionPassed,
+      "error",
+      visualExpressionRequired
+        ? {
+            version: storyboardVisualContractVersion,
+            styleProfileId: storyboardVisualStyleProfileId,
+            issueCodes: visualExpressionReview.issues.map((item) => item.code)
+          }
+        : "legacy-storyboard",
+      visualExpressionRequired
+        ? {
+            version: VISUAL_EXPRESSION_CONTRACT_VERSION,
+            styleProfileId: VISUAL_EXPRESSION_STYLE_PROFILE_ID,
+            layoutSamplesRequired: stage === "qa",
+            issueCount: 0
+          }
+        : "历史分镜保持兼容；新生成分镜必须使用合同",
+      visualExpressionPassed
+        ? ""
+        : `视觉表达合同未通过：${[
+            ...new Set(visualExpressionReview.issues.map((item) => item.code))
+          ].join("、")}`,
+      {
+        ownerAgentId: "storyboard-agent",
+        location: "scenes[].visualIntent|visualPlan",
+        suggestedFix: "先修正观众问题、图形贡献、语义对象和关系，再由统一 resolver 生成视觉计划"
+      }
+    );
     const sceneCountPassed = generatedStoryboard
       ? scenes.length >= profile.storyboardScenes.minimum &&
         scenes.length <= profile.storyboardScenes.maximum

@@ -11,10 +11,14 @@ import {
   visualSystemV1GrammarLayout
 } from "./components/visual-system-v1/grammar-layout.mjs";
 import {
-  visualSystemV1ContentCardMetrics
+  visualSystemV1ContentCardMetrics,
+  visualSystemV1SemanticIconNodeMetrics,
+  visualSystemV1SemanticTextBoxMetrics
 } from "./components/visual-system-v1/content-layout.mjs";
+import { VISUAL_SYSTEM_V1 } from "./components/visual-system-v1/tokens.mjs";
 import {
   AI_TECH_ICON_POLICY,
+  aiTechIconSize,
   assertAiTechIconConceptKind,
   assertAiTechIconProductionPlacement
 } from "../shared/ai-tech-icon-contract.mjs";
@@ -38,6 +42,8 @@ export const AGENT_SKILL_LONG_REVIEW_EDGE_DELAY_FRAMES = 3;
 export const AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES = 14;
 export const AGENT_SKILL_LONG_REVIEW_ARROW_FADE_FRAMES = 4;
 export const AGENT_SKILL_LONG_REVIEW_STAGE_CAPTION_PHASE_FRAMES = 10;
+export const AGENT_SKILL_LONG_REVIEW_CONNECTED_ENTRY_MODE =
+  AI_TECH_ICON_POLICY.openDiagramUsage.graphNodeRelationEntryMode;
 export const AGENT_SKILL_LONG_REVIEW_STAGE_DENSITY_POLICY = Object.freeze({
   maximumVisibleNodes: 6,
   maximumVisibleEdges: 6,
@@ -48,6 +54,58 @@ export const AGENT_SKILL_LONG_REVIEW_ICON_LAYOUT_POLICY = Object.freeze({
   openDiagramSymbolsSupported: true,
   dedicatedIconFocusSupported: false,
   verifiedSuccessMode: "omitted"
+});
+
+const standardSemanticNodeTokens = VISUAL_SYSTEM_V1.semanticNode.standard;
+const longformSemanticNodeTokens = VISUAL_SYSTEM_V1.semanticNode.longformEmphasis;
+
+function longReviewFlowLayoutProfile({ rowGroups, rowDirections, rowHeightPx, rowGapPx, gapPx }) {
+  return Object.freeze({
+    schemaVersion: "agent-skill-long-review-flow-layout-profile-v1",
+    rowGroups: Object.freeze(rowGroups.map((row) => Object.freeze([...row]))),
+    rowDirections: Object.freeze([...rowDirections]),
+    rowHeightPx,
+    rowGapPx,
+    gapPx,
+    targetRowFillRatio: 0.78,
+    maximumCardWidthPx: 576,
+    singletonMaximumWidthPx: 640,
+    minimumCardWidthPx: 288,
+    labelFontSizePx: longformSemanticNodeTokens.informationCard.labelFontSizePx,
+    detailFontSizePx: longformSemanticNodeTokens.informationCard.detailFontSizePx,
+    horizontalPaddingPx: longformSemanticNodeTokens.informationCard.horizontalPaddingPx
+  });
+}
+
+export const AGENT_SKILL_LONG_REVIEW_FLOW_LAYOUT_PROFILES = Object.freeze({
+  S01: longReviewFlowLayoutProfile({
+    rowGroups: [["prompt-a", "prompt-b", "prompt-c"], ["skill-unit"]],
+    rowDirections: ["ltr", "ltr"], rowHeightPx: 164, rowGapPx: 40, gapPx: 40
+  }),
+  S08: longReviewFlowLayoutProfile({
+    rowGroups: [
+      ["metadata-slot", "instruction-slot", "resource-slot"],
+      ["focus"],
+      ["context-budget", "parked"]
+    ],
+    rowDirections: ["ltr", "ltr", "ltr"], rowHeightPx: 132, rowGapPx: 30, gapPx: 32
+  }),
+  S10: longReviewFlowLayoutProfile({
+    rowGroups: [["skill", "agent", "tool"], ["mcp", "external"], ["combine", "weekly"]],
+    rowDirections: ["ltr", "ltr", "ltr"], rowHeightPx: 132, rowGapPx: 30, gapPx: 32
+  }),
+  S14: longReviewFlowLayoutProfile({
+    rowGroups: [["publisher", "installer", "operator"], ["reviewer", "scanner", "owner"]],
+    rowDirections: ["ltr", "rtl"], rowHeightPx: 164, rowGapPx: 40, gapPx: 40
+  }),
+  S17: longReviewFlowLayoutProfile({
+    rowGroups: [["understand", "trial", "inspect"], ["machine", "human", "revise"]],
+    rowDirections: ["ltr", "rtl"], rowHeightPx: 164, rowGapPx: 40, gapPx: 40
+  }),
+  S18: longReviewFlowLayoutProfile({
+    rowGroups: [["trigger", "accept"], ["permission", "rollback"], ["adopt"]],
+    rowDirections: ["ltr", "ltr", "ltr"], rowHeightPx: 132, rowGapPx: 30, gapPx: 32
+  })
 });
 
 const AGENT_SKILL_LONG_REVIEW_REFERENCE_CANVAS = Object.freeze({ width: 1920, height: 1080 });
@@ -63,6 +121,21 @@ export const AGENT_SKILL_LONG_REVIEW_STAGE_CAPTION_BAND = Object.freeze({
 export const AGENT_SKILL_LONG_REVIEW_CONNECTOR_ROUTE_POLICY = Object.freeze({
   horizontalOuterLaneRatio: 0.03125,
   bottomOuterLaneRatio: 0.0556
+});
+
+export const AGENT_SKILL_LONG_REVIEW_CONNECTOR_TONES = Object.freeze({
+  standard: Object.freeze({
+    strokeWidthPx: 2.3,
+    markerSizePx: 6.2,
+    restingOpacity: 0.54,
+    focusedOpacity: 0.84
+  }),
+  "sequence-critical": Object.freeze({
+    strokeWidthPx: 2.6,
+    markerSizePx: 7,
+    restingOpacity: 0.64,
+    focusedOpacity: 0.9
+  })
 });
 
 export function longReviewStageCaptionLayout(width, height) {
@@ -378,20 +451,33 @@ export function longReviewSurfacePlanById({ nodes, visualPlan, primitiveById }) 
   })));
 }
 
-function editorialSceneFromLayout({ id, requestedVisualMode, nodes, standaloneIcons, visualPlan, layoutSample }) {
+function editorialSceneFromLayout({
+  id,
+  requestedVisualMode,
+  nodes,
+  relations,
+  standaloneIcons,
+  visualPlan,
+  layoutSample,
+  typographyProfile
+}) {
   const nodeById = new Map(nodes.map((item) => [item.id, item]));
+  const typographyTokens = typographyProfile === "longform-emphasis"
+    ? longformSemanticNodeTokens
+    : standardSemanticNodeTokens;
   const cards = layoutSample.elements.filter((item) => item.surfaceRole === "information-card").map((item) => {
     const source = nodeById.get(item.id);
-    const paddingX = 26;
+    const paddingX = typographyTokens.informationCard.horizontalPaddingPx;
     const metrics = visualSystemV1ContentCardMetrics({
       id: item.id,
       label: normalizedNodeText(source?.label),
       detail: normalizedNodeText(source?.detail),
       conceptKind: "none"
     }, {
-      labelFontSizePx: 32,
-      detailFontSizePx: 20,
-      horizontalPaddingPx: paddingX
+      labelFontSizePx: typographyTokens.informationCard.labelFontSizePx,
+      detailFontSizePx: typographyTokens.informationCard.detailFontSizePx,
+      horizontalPaddingPx: paddingX,
+      horizontalBorderPx: 6
     });
     return Object.freeze({
       id: item.id,
@@ -409,7 +495,7 @@ function editorialSceneFromLayout({ id, requestedVisualMode, nodes, standaloneIc
         currentCardWidthPx: item.bounds.width,
         remainingRowWidthPx: item.bounds.width,
         maximumCardWidthPx: item.bounds.width,
-        horizontalPaddingPx: paddingX * 2
+        horizontalPaddingPx: paddingX * 2 + 6
       }),
       border: Object.freeze({ mode: "full-outline", widthPx: 3 })
     });
@@ -417,6 +503,7 @@ function editorialSceneFromLayout({ id, requestedVisualMode, nodes, standaloneIc
   const diagrams = layoutSample.elements.filter((item) => item.surfaceRole !== "information-card").map((item) =>
     Object.freeze({
       id: item.id,
+      title: normalizedNodeText(nodeById.get(item.id)?.label),
       kind: "open-diagram",
       informationCard: false,
       surfaceRole: item.surfaceRole,
@@ -432,9 +519,17 @@ function editorialSceneFromLayout({ id, requestedVisualMode, nodes, standaloneIc
   const icons = standaloneIcons.map((item) => Object.freeze({
     id: item.id,
     anchorId: item.anchorId,
+    semanticObjectId: item.semanticObjectId,
+    ownerId: item.ownerId,
+    participation: item.participation,
     conceptKind: item.conceptKind,
     purpose: item.purpose,
-    presentation: item.presentation
+    presentation: item.presentation,
+    layoutRole: item.layoutRole,
+    placement: item.placement,
+    maximumGapPx: item.maximumGapPx,
+    labelRevealDeltaFrames: item.labelRevealDeltaFrames,
+    caption: item.caption
   }));
   const inferredVisualMode = cards.length > 0 && diagrams.length > 0
     ? "mixed-diagram"
@@ -448,7 +543,13 @@ function editorialSceneFromLayout({ id, requestedVisualMode, nodes, standaloneIc
     visualMode: requestedVisualMode ?? inferredVisualMode,
     cards: Object.freeze(cards),
     diagrams: Object.freeze(diagrams),
-    icons: Object.freeze(icons)
+    icons: Object.freeze(icons),
+    relations: Object.freeze(relations.map((relation) => Object.freeze({
+      id: relation.id,
+      from: relation.from,
+      to: relation.to,
+      surfaceBoundary: relation.surfaceBoundary ?? null
+    })))
   });
   const review = validateEditorialScene(editorialScene);
   if (!review.valid) {
@@ -475,21 +576,51 @@ function edge(id, from, to, path, accent = "mint", options = {}) {
   });
 }
 
+function relationSurfaceBoundary(rationale) {
+  return Object.freeze({
+    kind: "semantic-subgroup-transition",
+    cue: "surface-change",
+    rationale
+  });
+}
+
 function standaloneIcon(id, anchorId, conceptKind, purpose, options = {}) {
   const presentation = options.presentation ?? "open-diagram-symbol";
+  const participation = options.participation ?? (
+    presentation === "standalone-focus" ? "dedicated-focus" : "graph-node"
+  );
+  const placement = options.placement ?? (
+    participation === "graph-node"
+      ? "anchor-bounds"
+      : participation === "owned-callout"
+        ? "right-center"
+        : "dedicated-focus"
+  );
   return Object.freeze({
     id,
     anchorId,
+    semanticObjectId: options.semanticObjectId ?? (
+      participation === "graph-node" ? anchorId : id
+    ),
+    ownerId: options.ownerId ?? (participation === "owned-callout" ? anchorId : null),
+    participation,
     conceptKind,
     purpose,
     presentation,
     layoutRole: options.layoutRole ?? (
-      presentation === "standalone-focus" ? "dedicated-icon-focus" : "open-diagram-object"
+      presentation === "standalone-focus"
+        ? "dedicated-icon-focus"
+        : participation === "graph-node"
+          ? "semantic-icon-node"
+          : "owned-icon-callout"
     ),
     attachmentMode: options.attachmentMode ?? "independent",
     autoInsert: options.autoInsert === true,
-    placement: options.placement ?? "right",
+    placement,
+    caption: options.caption ?? null,
     sizeRole: options.sizeRole ?? "support",
+    maximumGapPx: options.maximumGapPx ?? (participation === "owned-callout" ? 24 : null),
+    labelRevealDeltaFrames: options.labelRevealDeltaFrames ?? 0,
     statusMarkVariant: options.statusMarkVariant ?? "quiet",
     delayUntilFinalHold: options.delayUntilFinalHold === true
   });
@@ -683,6 +814,17 @@ function sceneSpec({
     if (!nodeIds.has(item.anchorId)) {
       throw new Error(`${id}/${item.id} 的独立图标缺少有效 anchorId`);
     }
+    if (item.participation === "graph-node") {
+      const relationCount = edges.filter(
+        (edgeItem) => edgeItem.from === item.anchorId || edgeItem.to === item.anchorId
+      ).length;
+      if (relationCount === 0) {
+        throw new Error(`${id}/${item.id} 作为关系图节点却没有连接任何关系`);
+      }
+    }
+    if (item.participation === "owned-callout" && item.ownerId !== item.anchorId) {
+      throw new Error(`${id}/${item.id} 的近距图标 ownerId 必须与定位 anchorId 一致`);
+    }
     if (item.statusMarkVariant === "celebrate" && item.conceptKind !== "verified-success") {
       throw new Error(`${id}/${item.id} 只有 verified-success 才能声明 celebrate`);
     }
@@ -701,19 +843,28 @@ function sceneSpec({
       throw new Error(`${id}/${item.id} 延迟最终验收只允许 celebrate`);
     }
   }
+  const semanticObjectIds = standaloneIcons.map((item) => item.semanticObjectId);
+  if (new Set(semanticObjectIds).size !== semanticObjectIds.length) {
+    throw new Error(`${id} 的同一语义对象不能出现两套图标主表现`);
+  }
   const visualIntent = longReviewVisualIntent({ id, kind, title, deck, material, nodes, edges });
   const visualPlan = resolveVisualExpressionPlan({
     sceneId: id,
     visualIntent,
     styleProfileId: VISUAL_EXPRESSION_REVIEW_CANDIDATE_STYLE_PROFILE_ID
   });
+  const flowLayoutProfile = AGENT_SKILL_LONG_REVIEW_FLOW_LAYOUT_PROFILES[id] ?? null;
+  if (flowLayoutProfile != null && visualPlan.structure !== "flow") {
+    throw new Error(`${id} 声明了 flowLayoutProfile，但视觉结构不是 flow`);
+  }
   const initialLayout = visualSystemV1GrammarLayout({
     width: 1920,
     height: 1080,
     visualPlan,
     visibleElementIds: nodes.map((item) => item.id),
     semanticContentById: longReviewSemanticContentById(nodes),
-    primitiveOverrideById: longReviewPrimitiveOverrideById(nodes)
+    primitiveOverrideById: longReviewPrimitiveOverrideById(nodes),
+    flowLayoutProfile
   });
   const surfacePlanById = longReviewSurfacePlanById({
     nodes,
@@ -727,15 +878,43 @@ function sceneSpec({
     visibleElementIds: nodes.map((item) => item.id),
     semanticContentById: longReviewSemanticContentById(nodes),
     primitiveOverrideById: longReviewPrimitiveOverrideById(nodes),
-    surfacePlanById
+    surfacePlanById,
+    flowLayoutProfile
   }).layoutSample;
+  const typographyProfile = flowLayoutProfile ? "longform-emphasis" : "standard";
+  const typographyTokenProfile = flowLayoutProfile ? "longformEmphasis" : "standard";
+  const nodeById = new Map(nodes.map((item) => [item.id, item]));
+  const textBoxMetrics = Object.freeze(layoutSample.elements.map((element) => {
+    const source = nodeById.get(element.id);
+    if (!source) throw new Error(`${id}/${element.id} 缺少语义文字来源`);
+    const metrics = visualSystemV1SemanticTextBoxMetrics({
+      id: `${id}/${element.id}`,
+      label: normalizedNodeText(source.label),
+      detail: normalizedNodeText(source.detail),
+      marker: source.dashed ? "边界" : null,
+      surfaceRole: element.surfaceRole,
+      textWrapMode: source.textWrapMode ?? "break-word",
+      width: element.bounds.width,
+      height: element.bounds.height,
+      typographyProfile: typographyTokenProfile
+    });
+    if (!metrics.fits) {
+      throw new Error(
+        `${id}/${element.id} 的真实文字盒超出节点：` +
+        `${metrics.requiredContentHeightPx}/${metrics.availableHeightPx}px`
+      );
+    }
+    return metrics;
+  }));
   const editorial = editorialSceneFromLayout({
     id,
     requestedVisualMode: visualMode,
     nodes,
+    relations: edges,
     standaloneIcons,
     visualPlan,
-    layoutSample
+    layoutSample,
+    typographyProfile
   });
   return Object.freeze({
     id,
@@ -761,6 +940,10 @@ function sceneSpec({
     holdStartFrame,
     visualIntent,
     visualPlan,
+    flowLayoutProfile,
+    typographyProfile,
+    textBoxMetrics,
+    connectorTone: id === "S14" ? "sequence-critical" : "standard",
     surfacePlanById,
     editorialScene: editorial.editorialScene,
     editorialReview: editorial.review,
@@ -905,11 +1088,22 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       })
     ],
     edges: [
-      edge("discover-pack", "discoverable", "process-pack", "M 78 108 V 150 H 190 V 188", "blue"),
-      edge("demand-pack", "on-demand", "process-pack", "M 240 108 V 188", "orange"),
-      edge("compose-pack", "composable", "process-pack", "M 402 108 V 150 H 290 V 188", "purple"),
-      edge("pack-method", "process-pack", "method", "M 190 288 V 338 H 144 V 382", "mint"),
-      edge("pack-weights", "process-pack", "weights", "M 290 288 V 338 H 336 V 382", "orange", { relation: "warning" }),
+      edge("discover-pack", "discoverable", "process-pack", "M 78 108 V 150 H 190 V 188", "blue", {
+        surfaceBoundary: relationSurfaceBoundary("把分散能力特征收束为一个可交付的完整方法包。")
+      }),
+      edge("demand-pack", "on-demand", "process-pack", "M 240 108 V 188", "orange", {
+        surfaceBoundary: relationSurfaceBoundary("把分散能力特征收束为一个可交付的完整方法包。")
+      }),
+      edge("compose-pack", "composable", "process-pack", "M 402 108 V 150 H 290 V 188", "purple", {
+        surfaceBoundary: relationSurfaceBoundary("把分散能力特征收束为一个可交付的完整方法包。")
+      }),
+      edge("pack-method", "process-pack", "method", "M 190 288 V 338 H 144 V 382", "mint", {
+        surfaceBoundary: relationSurfaceBoundary("从完整方法包切换到它产生的外部方法效果。")
+      }),
+      edge("pack-weights", "process-pack", "weights", "M 290 288 V 338 H 336 V 382", "orange", {
+        relation: "warning",
+        surfaceBoundary: relationSurfaceBoundary("从完整方法包切换到需要排除的模型参数变化。")
+      }),
       edge("description-discover", "description", "discoverable", "M 146 535 H 38 V 108", "blue")
     ],
     stages: [
@@ -994,11 +1188,21 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       })
     ],
     edges: [
-      edge("prompt-skill", "prompt", "skill", "M 116 122 V 286 H 192 V 326", "orange"),
-      edge("metadata-skill", "metadata", "skill", "M 364 122 V 286 H 288 V 326", "blue"),
-      edge("structure-skill", "structure", "skill", "M 116 252 V 290 H 192 V 326", "purple"),
-      edge("resources-skill", "resources", "skill", "M 364 252 V 290 H 288 V 326", "mint"),
-      edge("skill-affordance", "skill", "affordance", "M 240 418 V 478", "blue")
+      edge("prompt-skill", "prompt", "skill", "M 116 122 V 286 H 192 V 326", "orange", {
+        surfaceBoundary: relationSurfaceBoundary("把组成材料收束为可独立读取和复用的 Skill 包。")
+      }),
+      edge("metadata-skill", "metadata", "skill", "M 364 122 V 286 H 288 V 326", "blue", {
+        surfaceBoundary: relationSurfaceBoundary("把组成材料收束为可独立读取和复用的 Skill 包。")
+      }),
+      edge("structure-skill", "structure", "skill", "M 116 252 V 290 H 192 V 326", "purple", {
+        surfaceBoundary: relationSurfaceBoundary("把组成材料收束为可独立读取和复用的 Skill 包。")
+      }),
+      edge("resources-skill", "resources", "skill", "M 364 252 V 290 H 288 V 326", "mint", {
+        surfaceBoundary: relationSurfaceBoundary("把组成材料收束为可独立读取和复用的 Skill 包。")
+      }),
+      edge("skill-affordance", "skill", "affordance", "M 240 418 V 478", "blue", {
+        surfaceBoundary: relationSurfaceBoundary("从 Skill 包切换到它提供的生命周期能力。")
+      })
     ],
     stages: [
       stage("prompt", 166, "Prompt 往往只服务一次交互", ["prompt"], [], {
@@ -1076,39 +1280,50 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
     id: "S08", kind: "native-evidence", title: "渐进式加载怎样工作", deck: "批准证据转译：上下文只装当前需要的层", material: material(2), visualMode: "mixed-diagram",
     nodes: [
       node("metadata-slot", 12, 32, 140, 84, "名称 + 描述", "全量轻量索引", "blue", {
-        semanticGroupId: "adoption-path", semanticRole: "step", surfaceSemanticRole: "process-step", surfaceRole: "open-canvas", surfacePurpose: "process-anchor", visualPresentation: "process-anchor"
+        semanticGroupId: "adoption-path", semanticRole: "step", surfaceSemanticRole: "process-step", surfaceRole: "information-card", surfacePurpose: "actionable-object"
       }),
       node("instruction-slot", 170, 32, 140, 84, "SKILL.md", "仅命中的 Skill", "purple", {
-        semanticGroupId: "adoption-path", semanticRole: "step", surfaceSemanticRole: "process-step", surfaceRole: "open-canvas", surfacePurpose: "process-anchor", visualPresentation: "process-anchor"
+        semanticGroupId: "adoption-path", semanticRole: "step", surfaceSemanticRole: "process-step", surfaceRole: "information-card", surfacePurpose: "actionable-object"
       }),
       node("resource-slot", 328, 32, 140, 84, "必要资源", "仅当前步骤", "mint", {
-        semanticRole: "step", surfaceSemanticRole: "process-step", surfaceRole: "open-canvas", surfacePurpose: "process-anchor", visualPresentation: "process-anchor"
+        semanticRole: "step", surfaceSemanticRole: "process-step", surfaceRole: "information-card", surfacePurpose: "actionable-object"
       }),
-      node("focus", 148, 198, 184, 84, "当前任务", "上下文焦点", "orange", {
+      node("focus", 148, 198, 184, 84, "上下文窗口", "只聚焦当前任务", "orange", {
         semanticRole: "decision", surfaceRole: "open-canvas", surfacePurpose: "relationship-structure", visualPresentation: "decision-gate"
       }),
       node("context-budget", 86, 356, 308, 100, "上下文预算", "只装当前任务需要的层", "mint", {
         semanticRole: "state", surfaceRole: "information-card", surfacePurpose: "state-container"
       }),
       node("parked", 126, 500, 228, 64, "其余材料未加载", "不占当前上下文", "orange", {
-        dashed: true, semanticRole: "result", surfaceRole: "open-canvas", surfacePurpose: "transition-output", visualPresentation: "diagram-output"
+        dashed: true, semanticRole: "result", surfaceRole: "information-card", surfacePurpose: "state-container"
       })
     ],
     edges: [
-      edge("metadata-focus", "metadata-slot", "focus", "M 82 116 V 158 H 194 V 198", "blue"),
-      edge("instruction-focus", "instruction-slot", "focus", "M 240 116 V 198", "purple"),
-      edge("resource-focus", "resource-slot", "focus", "M 398 116 V 158 H 286 V 198", "mint"),
-      edge("focus-budget", "focus", "context-budget", "M 240 282 V 356", "mint")
+      edge("metadata-focus", "metadata-slot", "focus", "M 82 116 V 158 H 194 V 198", "blue", {
+        surfaceBoundary: relationSurfaceBoundary("从可加载内容容器切换到按需聚焦动作。")
+      }),
+      edge("instruction-focus", "instruction-slot", "focus", "M 240 116 V 198", "purple", {
+        surfaceBoundary: relationSurfaceBoundary("从可加载内容容器切换到按需聚焦动作。")
+      }),
+      edge("resource-focus", "resource-slot", "focus", "M 398 116 V 158 H 286 V 198", "mint", {
+        surfaceBoundary: relationSurfaceBoundary("从可加载内容容器切换到按需聚焦动作。")
+      }),
+      edge("focus-budget", "focus", "context-budget", "M 240 282 V 356", "mint", {
+        surfaceBoundary: relationSurfaceBoundary("从聚焦动作切换到被保护的上下文预算结果。")
+      }),
+      edge("budget-parked", "context-budget", "parked", "M 394 406 H 420 V 532 H 354", "orange")
     ],
     standaloneIcons: [
-      standaloneIcon("context-window-symbol", "context-budget", "context-window", "semantic-anchor", { placement: "left" })
+      standaloneIcon("context-window-symbol", "focus", "context-window", "semantic-anchor", {
+        participation: "graph-node"
+      })
     ],
     stages: [
       stage("metadata", 234, "Agent 始终只看到所有 Skill 的名称与描述", ["metadata-slot"]),
       stage("route", 239.956, "少量元数据先完成任务路由", ["focus"], ["metadata-focus"]),
       stage("instruction", 245.912, "命中后才读取完整 SKILL.md", ["instruction-slot"], ["instruction-focus"]),
       stage("resources", 251.869, "脚本、参考和素材只在确实需要时加载", ["resource-slot"], ["resource-focus"]),
-      stage("budget", 257.577, "专业细节被保留，但不会一次占满上下文", ["context-budget", "parked"], ["focus-budget"]),
+      stage("budget", 257.577, "专业细节被保留，但不会一次占满上下文", ["context-budget", "parked"], ["focus-budget", "budget-parked"]),
       stage("description", 263.533, "描述写法决定误触发和漏召回", [], [], { activeNodeIds: ["metadata-slot", "focus", "context-budget"] })
     ]
   }),
@@ -1182,23 +1397,37 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       edge("agent-tool", "agent", "tool", "M 220 184 V 144 H 240 V 112", "blue"),
       edge("agent-mcp", "agent", "mcp", "M 310 225 H 330", "purple"),
       edge("mcp-external", "mcp", "external", "M 400 112 V 184", "purple"),
-      edge("skill-combine", "skill", "combine", "M 80 112 V 304 H 170 V 328", "mint"),
-      edge("tool-combine", "tool", "combine", "M 240 112 V 328", "blue"),
-      edge("mcp-combine", "mcp", "combine", "M 400 112 V 304 H 310 V 328", "purple"),
+      edge("skill-combine", "skill", "combine", "M 80 112 V 304 H 170 V 328", "mint", {
+        surfaceBoundary: relationSurfaceBoundary("从角色分工节点切换到组合后的完整执行方案。")
+      }),
+      edge("tool-combine", "tool", "combine", "M 240 112 V 328", "blue", {
+        surfaceBoundary: relationSurfaceBoundary("从角色分工节点切换到组合后的完整执行方案。")
+      }),
+      edge("mcp-combine", "mcp", "combine", "M 400 112 V 304 H 310 V 328", "purple", {
+        surfaceBoundary: relationSurfaceBoundary("从角色分工节点切换到组合后的完整执行方案。")
+      }),
       edge("combine-weekly", "combine", "weekly", "M 240 420 V 488", "blue")
     ],
     standaloneIcons: [
-      standaloneIcon("tool-symbol", "tool", "tool", "semantic-anchor", { placement: "top" }),
-      standaloneIcon("mcp-symbol", "mcp", "mcp", "semantic-anchor", { placement: "top" })
+      standaloneIcon("tool-symbol", "tool", "tool", "semantic-anchor", {
+        participation: "graph-node"
+      }),
+      standaloneIcon("mcp-symbol", "mcp", "mcp", "semantic-anchor", {
+        participation: "graph-node"
+      })
     ],
     stages: [
       stage("skill", 302, "Skill 说明怎样完成一类任务", ["skill"], [], { visibleNodeIds: ["skill"] }),
-      stage("tool", 307.013, "Tool 提供一个可执行动作", ["tool"], [], { visibleNodeIds: ["skill", "tool"] }),
-      stage("mcp", 312.244, "MCP 标准化 prompts、resources 和 tools", ["mcp"], [], { visibleNodeIds: ["skill", "tool", "mcp"] }),
+      stage("tool", 307.013, "Tool 提供一个可执行动作", ["agent", "tool"], ["skill-agent", "agent-tool"], {
+        visibleNodeIds: ["skill", "agent", "tool"], visibleEdgeIds: ["skill-agent", "agent-tool"]
+      }),
+      stage("mcp", 312.244, "MCP 标准化 prompts、resources 和 tools", ["mcp"], ["agent-mcp"], {
+        visibleNodeIds: ["skill", "agent", "tool", "mcp"], visibleEdgeIds: ["skill-agent", "agent-tool", "agent-mcp"]
+      }),
       stage("external", 317.038, "外部系统通过协议暴露和调用能力", ["external"], ["mcp-external"], {
         visibleNodeIds: ["mcp", "external"], visibleEdgeIds: ["mcp-external"]
       }),
-      stage("orchestration", 321.833, "Skill 可以规定 Agent 何时调用 MCP Tool", ["agent"], ["skill-agent", "agent-tool", "agent-mcp"], {
+      stage("orchestration", 321.833, "Skill 可以规定 Agent 何时调用 MCP Tool", [], [], {
         visibleNodeIds: ["skill", "tool", "mcp", "agent"], visibleEdgeIds: ["skill-agent", "agent-tool", "agent-mcp"]
       }),
       stage("layers", 326.846, "Skill 与 MCP 解决的不是同一层问题", ["combine"], ["skill-combine", "tool-combine", "mcp-combine"], {
@@ -1237,10 +1466,18 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
     edges: [
       edge("user-skill", "user", "skill", "M 240 76 V 108", "blue"),
       edge("skill-agent", "skill", "agent", "M 240 186 V 218", "mint"),
-      edge("agent-tool", "agent", "tool", "M 190 296 V 326 H 87 V 350", "blue"),
-      edge("agent-mcp", "agent", "mcp", "M 290 296 V 326 H 393 V 350", "purple"),
-      edge("mcp-external", "mcp", "external", "M 393 432 V 468", "mint"),
-      edge("external-result", "external", "result", "M 324 506 H 156", "orange")
+      edge("agent-tool", "agent", "tool", "M 190 296 V 326 H 87 V 350", "blue", {
+        surfaceBoundary: relationSurfaceBoundary("从开放的 Agent 决策节点切换到受控执行工具。")
+      }),
+      edge("agent-mcp", "agent", "mcp", "M 290 296 V 326 H 393 V 350", "purple", {
+        surfaceBoundary: relationSurfaceBoundary("从开放的 Agent 决策节点切换到受控协议入口。")
+      }),
+      edge("mcp-external", "mcp", "external", "M 393 432 V 468", "mint", {
+        surfaceBoundary: relationSurfaceBoundary("从受控协议入口切换到外部系统关系节点。")
+      }),
+      edge("external-result", "external", "result", "M 324 506 H 156", "orange", {
+        surfaceBoundary: relationSurfaceBoundary("从外部系统关系节点切换到返回的完整结果对象。")
+      })
     ],
     groups: [
       { id: "method", label: "方法与判断", x: 132, y: 92, width: 216, height: 220, nodeIds: ["skill", "agent"] },
@@ -1329,9 +1566,16 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       edge("samples-stable", "samples", "stable", "M 205 84 V 106 H 84 V 132", "blue"),
       edge("samples-repeat", "samples", "repeat", "M 240 84 V 132", "orange"),
       edge("samples-detect", "samples", "detect", "M 275 84 V 106 H 396 V 132", "purple"),
-      edge("criteria-accept", "repeat", "accept", "M 240 214 V 260", "mint"),
-      edge("accept-pilot", "accept", "pilot", "M 306 301 H 340 V 410", "mint"),
-      edge("accept-explore", "accept", "explore", "M 174 301 H 107 V 410", "orange", { relation: "warning" })
+      edge("criteria-accept", "repeat", "accept", "M 240 214 V 260", "mint", {
+        surfaceBoundary: relationSurfaceBoundary("从试点证据切换到明确的采用门槛。")
+      }),
+      edge("accept-pilot", "accept", "pilot", "M 306 301 H 340 V 410", "mint", {
+        surfaceBoundary: relationSurfaceBoundary("从采用门槛切换到通过后的试点路径。")
+      }),
+      edge("accept-explore", "accept", "explore", "M 174 301 H 107 V 410", "orange", {
+        relation: "warning",
+        surfaceBoundary: relationSurfaceBoundary("从采用门槛切换到未通过时的继续探索路径。")
+      })
     ],
     stages: [
       stage("samples", 404, "从真实任务样本开始，而不是从功能想象开始", ["samples"], [], { visibleNodeIds: ["samples"] }),
@@ -1427,8 +1671,13 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       edge("runtime-change", "runtime", "change", "M 402 94 V 176", "orange"),
       edge("change-invalidate", "change", "invalidate", "M 336 213 H 306", "red"),
       edge("invalidate-review", "invalidate", "review", "M 174 213 H 144", "blue"),
-      edge("review-enable", "review", "enable", "M 78 250 V 314 H 158 V 354", "mint"),
-      edge("review-rollback", "review", "rollback", "M 78 250 V 300 H 324 V 354", "orange", { relation: "warning" })
+      edge("review-enable", "review", "enable", "M 78 250 V 314 H 158 V 354", "mint", {
+        surfaceBoundary: relationSurfaceBoundary("从审查动作切换到启用后的完整状态结果。")
+      }),
+      edge("review-rollback", "review", "rollback", "M 78 250 V 300 H 324 V 354", "orange", {
+        relation: "warning",
+        surfaceBoundary: relationSurfaceBoundary("从审查动作切换到需要回退的完整状态结果。")
+      })
     ],
     stages: [
       stage("source", 472, "发布者先说明来源、版本和最小权限", ["source"], [], { visibleNodeIds: ["source"] }),
@@ -1498,25 +1747,25 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
     ]
   }),
   sceneSpec({
-    id: "S17", kind: "diagram", title: "建立一条可信采用路径", deck: "机器挡问题，人决定是否采用；反馈回到同一个产出 Agent", visualMode: "mixed-diagram", layoutStability: "stable-final",
+    id: "S17", kind: "diagram", title: "建立一条可信采用路径", deck: "机器挡问题，人决定是否采用；反馈回到同一个产出 Agent", visualMode: "open-diagram", layoutStability: "stable-final",
     nodes: [
       node("understand", 150, 8, 180, 74, "看懂能力与边界", "先理解再试用", "blue", {
-        semanticRole: "step", surfaceSemanticRole: "process-step", surfaceRole: "open-canvas", surfacePurpose: "process-anchor", visualPresentation: "process-anchor"
+        semanticGroupId: "adoption-path", semanticRole: "step", surfaceSemanticRole: "process-step", surfaceRole: "open-canvas", surfacePurpose: "process-anchor", visualPresentation: "process-anchor"
       }),
       node("trial", 150, 112, 180, 74, "受控试运行", "限定数据与工具", "orange", {
-        semanticRole: "step", surfaceSemanticRole: "process-step", surfaceRole: "open-canvas", surfacePurpose: "process-anchor", visualPresentation: "process-anchor"
+        semanticGroupId: "adoption-path", semanticRole: "step", surfaceSemanticRole: "process-step", surfaceRole: "open-canvas", surfacePurpose: "process-anchor", visualPresentation: "process-anchor"
       }),
       node("inspect", 150, 216, 180, 74, "检查结果", "证据可复算", "purple", {
-        semanticGroupId: "adoption-evidence", semanticRole: "evidence", importance: "primary", surfaceRole: "information-card", surfacePurpose: "focus-result"
+        semanticGroupId: "adoption-path", semanticRole: "evidence", importance: "primary", surfaceRole: "open-canvas", surfacePurpose: "relationship-structure", visualPresentation: "process-anchor"
       }),
       node("revise", 12, 342, 156, 84, "反馈给同一 Agent", "修订并保留版本史", "orange", {
-        semanticGroupId: "adoption-feedback", semanticRole: "step", surfaceSemanticRole: "feedback-action", surfaceRole: "open-canvas", surfacePurpose: "transition-output", visualPresentation: "diagram-output"
+        semanticGroupId: "adoption-path", semanticRole: "step", surfaceSemanticRole: "feedback-action", surfaceRole: "open-canvas", surfacePurpose: "transition-output", visualPresentation: "diagram-output"
       }),
       node("machine", 192, 342, 132, 84, "机器审核", "结构 · 证据 · 安全", "blue", {
-        semanticGroupId: "adoption-decisions", semanticRole: "decision", surfaceRole: "information-card", surfacePurpose: "decision-boundary"
+        semanticGroupId: "adoption-path", semanticRole: "decision", surfaceRole: "open-canvas", surfacePurpose: "relationship-structure", visualPresentation: "decision-gate"
       }),
       node("human", 348, 342, 120, 84, "人工决定", "采用或退回", "mint", {
-        semanticGroupId: "adoption-decisions", semanticRole: "decision", surfaceRole: "information-card", surfacePurpose: "decision-boundary"
+        semanticGroupId: "adoption-path", semanticRole: "decision", surfaceRole: "open-canvas", surfacePurpose: "relationship-structure", visualPresentation: "decision-gate"
       })
     ],
     edges: [
@@ -1527,7 +1776,9 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       edge("human-revise", "human", "revise", "M 408 426 V 472 H 90 V 426", "orange")
     ],
     standaloneIcons: [
-      standaloneIcon("human-gate-symbol", "human", "human-approval", "interaction-cue", { placement: "bottom" })
+      standaloneIcon("human-gate-symbol", "human", "human-approval", "interaction-cue", {
+        participation: "graph-node"
+      })
     ],
     stages: [
       stage("understand", 540, "用户先看懂能力和边界", ["understand"]),
@@ -1594,6 +1845,7 @@ const specById = new Map(AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.map((scene) => [sce
 const LONG_REVIEW_LAYOUT_CACHE_MAX_ENTRIES = 256;
 const longReviewBaseLayoutCache = new Map();
 const longReviewRenderedLayoutCache = new Map();
+const longReviewEdgeRevealFrameCache = new Map();
 
 function longReviewLayoutCacheKey({
   sceneId,
@@ -1699,31 +1951,130 @@ export function longReviewSemanticNodeRevealFrame(sceneId, nodeId) {
     return spec.startFrame + spec.visualPlan.timing.graphicStartFrame;
   }
   const startFrame = effectiveStageStartFrames(spec)[stageIndex];
-  return stageIndex === 0
+  const establishingEdgeIds = longReviewStageIncomingEdgeIds(spec, stageIndex, nodeId);
+  return stageIndex === 0 || establishingEdgeIds.length > 0
     ? startFrame
     : startFrame + AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES;
+}
+
+function longReviewNodeIntroductionStageIndex(spec, nodeId) {
+  return spec.stages.findIndex((stageItem) => stageItem.nodeIds.includes(nodeId));
+}
+
+function longReviewStageIncomingEdgeIds(spec, stageIndex, nodeId) {
+  const stageItem = spec.stages[stageIndex];
+  return stageItem.edgeIds.filter((edgeId) =>
+    spec.edges.find((edge) => edge.id === edgeId)?.to === nodeId
+  );
+}
+
+function longReviewSemanticEdgeRevealFrameInternal(spec, edgeId, resolvingEdgeIds) {
+  const cacheKey = `${spec.id}/${edgeId}`;
+  if (longReviewEdgeRevealFrameCache.has(cacheKey)) {
+    return longReviewEdgeRevealFrameCache.get(cacheKey);
+  }
+  if (resolvingEdgeIds.has(cacheKey)) {
+    throw new Error(`${cacheKey} 的同阶段关系形成无入口循环，必须声明可确定的 entry root`);
+  }
+  const relation = spec.edges.find((item) => item.id === edgeId);
+  if (!relation) throw new Error(`${spec.id} 不存在语义关系：${String(edgeId)}`);
+  const stageIndex = spec.stages.findIndex((item) => item.edgeIds.includes(edgeId));
+  if (stageIndex < 0) {
+    throw new Error(`${spec.id}/${edgeId} 没有阶段入场定义`);
+  }
+  resolvingEdgeIds.add(cacheKey);
+  const stageStartFrame = effectiveStageStartFrames(spec)[stageIndex];
+  const relationshipStartFrame = stageStartFrame;
+  const sourceIntroductionStageIndex = longReviewNodeIntroductionStageIndex(spec, relation.from);
+  const sourceIntroducedInStage = sourceIntroductionStageIndex === stageIndex;
+  const sourceIncomingEdgeIds = sourceIntroducedInStage
+    ? longReviewStageIncomingEdgeIds(spec, stageIndex, relation.from)
+    : [];
+  let revealFrame;
+  if (!sourceIntroducedInStage) {
+    revealFrame = relationshipStartFrame + AGENT_SKILL_LONG_REVIEW_EDGE_DELAY_FRAMES;
+  } else if (sourceIncomingEdgeIds.length === 0) {
+    revealFrame = Math.max(
+      relationshipStartFrame,
+      longReviewSemanticNodeRevealFrame(spec.id, relation.from)
+    );
+  } else {
+    const sourceEstablishedFrame = Math.max(...sourceIncomingEdgeIds.map((incomingEdgeId) =>
+      longReviewSemanticEdgeRevealFrameInternal(
+        spec,
+        incomingEdgeId,
+        resolvingEdgeIds
+      ) + AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES
+    ));
+    revealFrame = Math.max(
+      relationshipStartFrame,
+      sourceEstablishedFrame + AGENT_SKILL_LONG_REVIEW_EDGE_DELAY_FRAMES
+    );
+  }
+  resolvingEdgeIds.delete(cacheKey);
+  longReviewEdgeRevealFrameCache.set(cacheKey, revealFrame);
+  return revealFrame;
 }
 
 export function longReviewSemanticEdgeRevealFrame(sceneId, edgeId) {
   const spec = specById.get(sceneId);
   if (!spec) throw new Error(`未知长片审阅镜头：${sceneId}`);
-  const relation = spec.edges.find((item) => item.id === edgeId);
-  if (!relation) throw new Error(`${sceneId} 不存在语义关系：${String(edgeId)}`);
-  const stageIndex = spec.stages.findIndex((item) => item.edgeIds.includes(edgeId));
-  if (stageIndex < 0) {
-    throw new Error(`${sceneId}/${edgeId} 没有阶段入场定义`);
-  }
-  const stageStartFrame = effectiveStageStartFrames(spec)[stageIndex];
-  const baseRevealFrame = stageStartFrame + AGENT_SKILL_LONG_REVIEW_EDGE_DELAY_FRAMES;
-  if (stageIndex === 0) return baseRevealFrame;
-  return Math.max(
-    baseRevealFrame,
-    longReviewSemanticNodeRevealFrame(sceneId, relation.from) +
-      AGENT_SKILL_LONG_REVIEW_EDGE_DELAY_FRAMES,
-    longReviewSemanticNodeRevealFrame(sceneId, relation.to) +
-      AGENT_SKILL_LONG_REVIEW_EDGE_DELAY_FRAMES
-  );
+  return longReviewSemanticEdgeRevealFrameInternal(spec, edgeId, new Set());
 }
+
+export function longReviewSemanticNodeVisibleFrame(sceneId, nodeId) {
+  const spec = specById.get(sceneId);
+  if (!spec) throw new Error(`未知长片审阅镜头：${sceneId}`);
+  if (!spec.nodes.some((item) => item.id === nodeId)) {
+    throw new Error(`${sceneId} 不存在语义节点：${String(nodeId)}`);
+  }
+  const stageIndex = longReviewNodeIntroductionStageIndex(spec, nodeId);
+  if (stageIndex < 0) return longReviewSemanticNodeRevealFrame(sceneId, nodeId);
+  const incomingEdgeIds = longReviewStageIncomingEdgeIds(spec, stageIndex, nodeId);
+  if (incomingEdgeIds.length === 0) return longReviewSemanticNodeRevealFrame(sceneId, nodeId);
+  return Math.max(...incomingEdgeIds.map((edgeId) =>
+    longReviewSemanticEdgeRevealFrame(sceneId, edgeId) +
+      AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES
+  ));
+}
+
+export const AGENT_SKILL_LONG_REVIEW_REVEAL_SCHEDULE_REVIEW = (() => {
+  let stageCount = 0;
+  let relationCount = 0;
+  for (const spec of AGENT_SKILL_LONG_REVIEW_SCENE_SPECS) {
+    for (const [stageIndex, stageItem] of spec.stages.entries()) {
+      stageCount += 1;
+      relationCount += stageItem.edgeIds.length;
+      const completionFrames = [
+        ...stageItem.nodeIds.map((nodeId) =>
+          longReviewSemanticNodeRevealFrame(spec.id, nodeId) +
+            AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES - 1
+        ),
+        ...stageItem.edgeIds.map((edgeId) =>
+          longReviewSemanticEdgeRevealFrame(spec.id, edgeId) +
+            AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES +
+            AGENT_SKILL_LONG_REVIEW_ARROW_FADE_FRAMES - 1
+        )
+      ];
+      const completionFrame = Math.max(stageItem.startFrame, ...completionFrames);
+      const nextStageStartFrame = spec.stages[stageIndex + 1]?.startFrame ?? null;
+      const latestAllowedFrame = nextStageStartFrame == null
+        ? spec.holdStartFrame
+        : nextStageStartFrame - 1;
+      if (completionFrame > latestAllowedFrame) {
+        throw new Error(
+          `${spec.id}/${stageItem.id} 的关系入场到 ${completionFrame}，超过阶段边界 ${latestAllowedFrame}`
+        );
+      }
+    }
+  }
+  return Object.freeze({
+    valid: true,
+    mode: AGENT_SKILL_LONG_REVIEW_CONNECTED_ENTRY_MODE,
+    stageCount,
+    relationCount
+  });
+})();
 
 export function longReviewStageCaptionStateAtFrame(sceneId, frame) {
   const spec = specById.get(sceneId);
@@ -1964,9 +2315,18 @@ export function longReviewDiagramStateAtFrame(sceneId, frame) {
   const nodeVisibilityProgress = Object.fromEntries(spec.nodes.map((item) => {
     const inCurrent = currentNodeSet.has(item.id);
     const inPrevious = previousNodeSet.has(item.id);
-    return [item.id, inCurrent
-      ? (inPrevious ? 1 : stageTransitionProgress)
-      : inPrevious ? 1 - stageTransitionProgress : 0];
+    if (!inCurrent) {
+      return [item.id, inPrevious ? 1 - stageTransitionProgress : 0];
+    }
+    if (previousStage && inPrevious) return [item.id, 1];
+    const incomingStageEdgeIds = currentStage.nodeIds.includes(item.id)
+      ? longReviewStageIncomingEdgeIds(spec, stageIndex, item.id)
+      : [];
+    const stageVisibilityProgress = previousStage ? stageTransitionProgress : 1;
+    const connectedEntryProgress = incomingStageEdgeIds.length === 0
+      ? stageVisibilityProgress
+      : Math.min(...incomingStageEdgeIds.map((edgeId) => edgeArrowProgress[edgeId] ?? 0));
+    return [item.id, Math.min(stageVisibilityProgress, connectedEntryProgress)];
   }));
   const edgeVisibilityProgress = Object.fromEntries(spec.edges.map((item) => {
     const inCurrent = currentEdgeSet.has(item.id);
@@ -2033,6 +2393,31 @@ export function longReviewDiagramStateAtFrame(sceneId, frame) {
   };
 }
 
+function longReviewGraphIconConnectorGeometryById(spec, geometryById) {
+  const graphIconByAnchorId = new Map(
+    spec.standaloneIcons
+      .filter((icon) => icon.participation === "graph-node")
+      .map((icon) => [icon.anchorId, icon])
+  );
+  return Object.freeze(Object.fromEntries(Object.entries(geometryById).map(([nodeId, geometry]) => {
+    const icon = graphIconByAnchorId.get(nodeId);
+    if (!icon) return [nodeId, geometry];
+    const node = spec.nodes.find((candidate) => candidate.id === nodeId);
+    if (!node) throw new Error(`${spec.id}/${nodeId} 缺少图标节点文案`);
+    const metrics = visualSystemV1SemanticIconNodeMetrics({
+      id: `${spec.id}/${nodeId}`,
+      label: normalizedNodeText(node.label),
+      detail: normalizedNodeText(node.detail),
+      anchorGeometry: geometry,
+      iconSizePx: aiTechIconSize(icon.sizeRole).sizePx
+    });
+    if (!metrics.fitsAnchor) {
+      throw new Error(`${spec.id}/${nodeId} 的图标与文字无法放入语义锚点`);
+    }
+    return [nodeId, metrics.connectorGeometry];
+  })));
+}
+
 export function longReviewLayoutAtFrame(sceneId, frame, options = {}) {
   const spec = specById.get(sceneId);
   if (!spec) throw new Error(`未知长片审阅镜头：${sceneId}`);
@@ -2064,21 +2449,31 @@ export function longReviewLayoutAtFrame(sceneId, frame, options = {}) {
         visibleElementIds: layoutNodeIds,
         semanticContentById: longReviewSemanticContentById(spec.nodes),
         primitiveOverrideById: longReviewPrimitiveOverrideById(spec.nodes),
-        surfacePlanById: spec.surfacePlanById
+        surfacePlanById: spec.surfacePlanById,
+        flowLayoutProfile: spec.flowLayoutProfile
       });
       const routeBounds = longReviewConnectorRouteBounds({
         width,
         height,
         safeArea: baseLayout.safeArea
       });
+      const connectorGeometryById = longReviewGraphIconConnectorGeometryById(
+        spec,
+        baseLayout.geometryById
+      );
       const allConnectors = visualSystemV1GrammarConnectors({
         structure: spec.visualPlan.structure,
         semanticRelations: spec.visualPlan.semanticRelations,
-        geometryById: baseLayout.geometryById,
+        geometryById: connectorGeometryById,
         routeBounds,
         connectorPolicy: "orthogonal-only"
       });
-      return Object.freeze({ baseLayout, routeBounds, allConnectors });
+      return Object.freeze({
+        baseLayout,
+        routeBounds,
+        connectorGeometryById,
+        allConnectors
+      });
     }
   );
   const renderedCacheKey = longReviewLayoutCacheKey({
@@ -2098,6 +2493,9 @@ export function longReviewLayoutAtFrame(sceneId, frame, options = {}) {
       const geometryById = Object.freeze(Object.fromEntries(
         state.renderedNodeIds.map((nodeId) => [nodeId, base.baseLayout.geometryById[nodeId]])
       ));
+      const connectorGeometryById = Object.freeze(Object.fromEntries(
+        state.renderedNodeIds.map((nodeId) => [nodeId, base.connectorGeometryById[nodeId]])
+      ));
       const connectors = visualSystemV1GrammarConnectors({
         structure: spec.visualPlan.structure,
         semanticRelations: spec.visualPlan.semanticRelations.filter((relation) =>
@@ -2105,13 +2503,14 @@ export function longReviewLayoutAtFrame(sceneId, frame, options = {}) {
           renderedNodeSet.has(relation.from) &&
           renderedNodeSet.has(relation.to)
         ),
-        geometryById,
+        geometryById: connectorGeometryById,
         routeBounds: base.routeBounds,
         connectorPolicy: "orthogonal-only"
       });
       return Object.freeze({
         nodeIds: Object.freeze([...state.renderedNodeIds]),
         geometryById,
+        connectorGeometryById,
         connectors
       });
     }
@@ -2122,7 +2521,11 @@ export function longReviewLayoutAtFrame(sceneId, frame, options = {}) {
     state,
     nodeIds: rendered.nodeIds,
     geometryById: rendered.geometryById,
+    connectorGeometryById: rendered.connectorGeometryById,
+    visibleGeometryById: rendered.connectorGeometryById,
     fullGeometryById: base.baseLayout.geometryById,
+    fullConnectorGeometryById: base.connectorGeometryById,
+    fullVisibleGeometryById: base.connectorGeometryById,
     primitiveById: base.baseLayout.primitiveById,
     connectors: rendered.connectors,
     allConnectors: base.allConnectors,

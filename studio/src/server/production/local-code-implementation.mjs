@@ -3,16 +3,21 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { studioRoot, videoRoot, workspaceRelativePath } from "../../shared/paths.mjs";
 
-export const LOCAL_CODE_IMPLEMENTATION_VERSION = "local-code-implementation-v4";
+export const LOCAL_CODE_IMPLEMENTATION_VERSION = "local-code-implementation-v5";
 
 export const LOCAL_CODE_IMPLEMENTATION_FILES = Object.freeze([
+  resolve(studioRoot, "config", "visual-system.json"),
   resolve(videoRoot, "index.jsx"),
   resolve(videoRoot, "root.jsx"),
   resolve(videoRoot, "episode-preview.jsx"),
+  resolve(videoRoot, "production-semantic-preview.mjs"),
+  resolve(videoRoot, "production-semantic-preview.jsx"),
   resolve(videoRoot, "agent-skill-short.jsx"),
   resolve(videoRoot, "agent-skill-short-plan.mjs"),
+  resolve(videoRoot, "components", "visual-system-v1", "grammar-layout.mjs"),
   resolve(videoRoot, "components", "chrome.jsx"),
   resolve(videoRoot, "text-layout.mjs"),
+  resolve(studioRoot, "src", "shared", "visual-expression-contract.mjs"),
   resolve(studioRoot, "src", "shared", "technical-diagram-contract.mjs")
 ]);
 

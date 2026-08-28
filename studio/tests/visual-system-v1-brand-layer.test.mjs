@@ -31,6 +31,9 @@ test("横版品牌层只挂载一个不可覆盖尺寸的标准AI水印", async 
   );
   assert.match(source, /export function VisualSystemV1WideBrandLayer\(\{/u);
   assert.match(source, /profile = VISUAL_SYSTEM_V1_AI_WATERMARK\.defaultProfileId/u);
+  assert.match(source, /tone = "standard"/u);
+  assert.match(source, /standard: Object\.freeze\(\{ opacity: 1 \}\)/u);
+  assert.match(source, /quiet: Object\.freeze\(\{ opacity: 0\.76 \}\)/u);
   assert.match(
     source,
     /defaultWatermarkProfileId: VISUAL_SYSTEM_V1_AI_WATERMARK\.defaultProfileId/u
@@ -46,6 +49,8 @@ test("横版品牌层只挂载一个不可覆盖尺寸的标准AI水印", async 
     /<VisualSystemV1AiWatermark\b[^>]*(?:size|top|right|zIndex)=/u
   );
   assert.match(source, /data-brand-watermark-profile=\{profile\}/u);
+  assert.match(source, /data-brand-watermark-tone=\{tone\}/u);
+  assert.match(source, /data-brand-watermark-opacity=\{resolvedTone\.opacity\}/u);
   assert.match(source, /instancePolicy: "exactly-one-per-composition"/u);
   assert.match(source, /data-brand-layer-instance-policy="exactly-one-per-composition"/u);
   assert.match(source, /data-visual-system-brand-layer="wide-persistent-ai-watermark"/u);
@@ -72,6 +77,7 @@ test("十分钟横版成片通过统一品牌层挂载且不再保留40px特例"
 
   assert.match(source, /import \{ VisualSystemV1WideBrandLayer \} from "\.\/components\/visual-system-v1\/brand-layer\.jsx";/u);
   assert.equal((source.match(/<VisualSystemV1WideBrandLayer\b/gu) ?? []).length, 1);
+  assert.match(source, /<VisualSystemV1WideBrandLayer tone="quiet" \/>/u);
   assert.doesNotMatch(source, /<VisualSystemV1AiWatermark\b/u);
   assert.doesNotMatch(source, /size=\{40\}|top=\{18\}|right=\{18\}/u);
   assert.ok(

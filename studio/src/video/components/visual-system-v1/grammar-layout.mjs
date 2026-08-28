@@ -1,10 +1,12 @@
 import { visualSystemV1PackContentCards } from "./content-layout.mjs";
+import { VISUAL_SYSTEM_V1 } from "./tokens.mjs";
 import {
   EDITORIAL_SURFACE_ROLES,
   EDITORIAL_VISUAL_HIERARCHY_LEVELS
 } from "../../../shared/editorial-visual-policy.mjs";
 
 const REFERENCE_CANVAS = Object.freeze({ width: 1920, height: 1080 });
+const semanticNodeTokens = VISUAL_SYSTEM_V1.semanticNode.standard;
 
 export const VISUAL_SYSTEM_V1_GRAMMAR_STRUCTURES = Object.freeze([
   "none",
@@ -406,13 +408,22 @@ function contentDrivenFlowPlacement(
   width,
   height,
   semanticContentById,
-  primitiveOverrideById
+  primitiveOverrideById,
+  flowLayoutProfile
 ) {
   const placement = emptyPlacement();
   const ordered = linearOrder(elements, relations);
   if (ordered.length === 0) return placement;
-  const rowHeightPx = Math.min(height * 0.13, area.height * 0.44);
-  const rowGapPx = Math.min(height * 0.045, area.height * 0.16);
+  const scale = width / REFERENCE_CANVAS.width;
+  const rowHeightPx = flowLayoutProfile?.rowHeightPx == null
+    ? Math.min(height * 0.14, area.height * 0.44)
+    : flowLayoutProfile.rowHeightPx * scale;
+  const rowGapPx = flowLayoutProfile?.rowGapPx == null
+    ? Math.min(height * 0.045, area.height * 0.16)
+    : flowLayoutProfile.rowGapPx * scale;
+  const gapPx = flowLayoutProfile?.gapPx == null
+    ? Math.min(32 * scale, area.width * 0.03)
+    : flowLayoutProfile.gapPx * scale;
   const packed = visualSystemV1PackContentCards({
     items: ordered.map((element) => {
       const content = semanticContentById[element.id];
@@ -432,19 +443,45 @@ function contentDrivenFlowPlacement(
       };
     }),
     safeArea: area,
-    gapPx: Math.min(32 * (width / REFERENCE_CANVAS.width), area.width * 0.03),
+    gapPx,
     rowGapPx,
     rowHeightPx,
-    maximumRows: 2,
+    maximumRows: flowLayoutProfile?.rowGroups?.length ?? 2,
+    rowGroups: flowLayoutProfile?.rowGroups ?? null,
+    rowDirections: flowLayoutProfile?.rowDirections ?? null,
+    targetRowFillRatio: flowLayoutProfile?.targetRowFillRatio ?? 0,
+    maximumCardWidthPx: (flowLayoutProfile?.maximumCardWidthPx ?? Number.POSITIVE_INFINITY) * scale,
+    singletonMaximumWidthPx:
+      (flowLayoutProfile?.singletonMaximumWidthPx ?? Number.POSITIVE_INFINITY) * scale,
     cardOptions: {
-      labelFontSizePx: 32 * (width / REFERENCE_CANVAS.width),
-      detailFontSizePx: 20 * (width / REFERENCE_CANVAS.width),
-      horizontalPaddingPx: 26 * (width / REFERENCE_CANVAS.width),
-      minimumCardWidthPx: 288 * (width / REFERENCE_CANVAS.width)
+      labelFontSizePx: (
+        flowLayoutProfile?.labelFontSizePx ?? semanticNodeTokens.informationCard.labelFontSizePx
+      ) * scale,
+      detailFontSizePx: (
+        flowLayoutProfile?.detailFontSizePx ?? semanticNodeTokens.informationCard.detailFontSizePx
+      ) * scale,
+      horizontalPaddingPx: (
+        flowLayoutProfile?.horizontalPaddingPx ?? semanticNodeTokens.informationCard.horizontalPaddingPx
+      ) * scale,
+      minimumCardWidthPx: (flowLayoutProfile?.minimumCardWidthPx ?? 300) * scale
     }
   });
   const packedById = new Map(packed.cards.map((card) => [card.id, card]));
   for (const row of packed.rows) {
+    if (flowLayoutProfile != null) {
+      row.itemIds.forEach((id) => {
+        const element = ordered.find((candidate) => candidate.id === id);
+        const card = packedById.get(id);
+        place(
+          placement,
+          element,
+          rect(card.left, card.top, card.width, card.height),
+          "flow-step",
+          ""
+        );
+      });
+      continue;
+    }
     let cursor = row.index % 2 === 0 ? row.left : row.right;
     row.itemIds.forEach((id) => {
       const element = ordered.find((candidate) => candidate.id === id);
@@ -472,7 +509,8 @@ function flowPlacement(
   width,
   height,
   semanticContentById = null,
-  primitiveOverrideById = null
+  primitiveOverrideById = null,
+  flowLayoutProfile = null
 ) {
   if (semanticContentById != null) {
     return contentDrivenFlowPlacement(
@@ -482,7 +520,8 @@ function flowPlacement(
       width,
       height,
       semanticContentById,
-      primitiveOverrideById
+      primitiveOverrideById,
+      flowLayoutProfile
     );
   }
   const placement = emptyPlacement();
@@ -565,7 +604,7 @@ function hierarchyPlacement(elements, relations, area, width, height) {
   const orderedLevels = [...levels.keys()].sort((left, right) => left - right);
   const rowGap = Math.min(height * 0.025, area.height / Math.max(8, orderedLevels.length * 3));
   const rowHeight = Math.min(
-    height * 0.09,
+    height * 0.11,
     (area.height - rowGap * Math.max(0, orderedLevels.length - 1)) / orderedLevels.length
   );
   const groupHeight = rowHeight * orderedLevels.length + rowGap * Math.max(0, orderedLevels.length - 1);
@@ -617,7 +656,7 @@ function branchPlacement(elements, relations, area, width, height) {
 
   const columnWidth = Math.min(area.width * 0.25, width * 0.23);
   const decisionWidth = Math.min(area.width * 0.2, width * 0.18);
-  const decisionHeight = Math.min(area.height * 0.28, height * 0.13);
+  const decisionHeight = Math.min(area.height * 0.32, height * 0.14);
   const leftX = area.x;
   const decisionX = area.x + (area.width - decisionWidth) / 2;
   const rightX = area.right - columnWidth;
@@ -881,7 +920,8 @@ function placementFor(
   width,
   height,
   semanticContentById,
-  primitiveOverrideById
+  primitiveOverrideById,
+  flowLayoutProfile
 ) {
   switch (structure) {
     case "none": return emptyPlacement();
@@ -894,7 +934,8 @@ function placementFor(
       width,
       height,
       semanticContentById,
-      primitiveOverrideById
+      primitiveOverrideById,
+      flowLayoutProfile
     );
     case "comparison": return comparisonPlacement(elements, area, width, height);
     case "hierarchy": return hierarchyPlacement(elements, relations, area, width, height);
@@ -1725,7 +1766,8 @@ export function visualSystemV1GrammarLayout({
   visibleElementIds,
   semanticContentById = null,
   primitiveOverrideById = null,
-  surfacePlanById = null
+  surfacePlanById = null,
+  flowLayoutProfile = null
 } = {}) {
   finitePositive(width, "画布宽度");
   finitePositive(height, "画布高度");
@@ -1747,7 +1789,8 @@ export function visualSystemV1GrammarLayout({
     width,
     height,
     semanticContentById,
-    primitiveOverrideById
+    primitiveOverrideById,
+    flowLayoutProfile
   ), selectedElements, primitiveOverrideById);
   const connectors = buildConnectors(
     visualPlan.structure,

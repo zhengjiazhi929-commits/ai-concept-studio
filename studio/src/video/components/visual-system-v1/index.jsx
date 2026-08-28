@@ -42,10 +42,13 @@ export {
 export {
   VISUAL_SYSTEM_V1_CONTENT_LAYOUT_DEFAULTS,
   VISUAL_SYSTEM_V1_CONTENT_LAYOUT_UNFIT,
+  VISUAL_SYSTEM_V1_SEMANTIC_ICON_NODE_DEFAULTS,
   visualSystemV1ContentCardMetrics,
   visualSystemV1ContentTextWidthUnits,
   visualSystemV1EstimateContentTextWidthPx,
-  visualSystemV1PackContentCards
+  visualSystemV1PackContentCards,
+  visualSystemV1SemanticIconNodeMetrics,
+  visualSystemV1SemanticTextBoxMetrics
 } from "./content-layout.mjs";
 export {
   visualSystemV1Clamp01,
@@ -67,6 +70,7 @@ export {
 export {
   VISUAL_SYSTEM_V1_WIDE_BRAND_LAYER,
   VISUAL_SYSTEM_V1_WIDE_BRAND_SAFE_ZONE,
+  VISUAL_SYSTEM_V1_WIDE_BRAND_TONES,
   VisualSystemV1WideBrandLayer
 } from "./brand-layer.jsx";
 export {

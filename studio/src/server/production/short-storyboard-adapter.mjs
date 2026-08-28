@@ -1,7 +1,12 @@
 import { approvalValidForGate } from "../control/policy-engine.mjs";
+import {
+  VISUAL_EXPRESSION_CONTRACT_VERSION,
+  VISUAL_EXPRESSION_STYLE_PROFILE_ID,
+  createVisualExpressionIntent
+} from "../../shared/visual-expression-contract.mjs";
 
 export const APPROVED_SCRIPT_SHORT_STORYBOARD_ADAPTER_VERSION =
-  "approved-script-short-storyboard-adapter-v4";
+  "approved-script-short-storyboard-adapter-v5";
 
 export const SHORT_STORYBOARD_VISUAL_RULES = Object.freeze([
   "全片以关系动画、结构图和过程演示为主，禁止用连续大字卡片代替概念解释。",
@@ -237,6 +242,131 @@ function animationDirection(segment, approvedDirection) {
   return `${approvedDirection}；高亮过程知识层并展示任务步骤展开；${common}`;
 }
 
+function semanticParts(value) {
+  return String(value ?? "")
+    .split(/\s*(?:→|\/|、|；)\s*/u)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function visualNeedForScene(segment, index, sceneCount) {
+  if (index === 0 || index === sceneCount - 1) return "none";
+  if (/周报|先.+再|再.+最后|依次|顺序/u.test(segment)) return "sequence";
+  if (/不是同一层|只有工具|只有\s*Skill/u.test(segment)) return "comparison";
+  if (/MCP/u.test(segment) && /发现|调用|连接|外部能力/u.test(segment)) return "relationship";
+  if (/数据库|文档写入/u.test(segment)) return "relationship";
+  return "concept-anchor";
+}
+
+function visualIntentForScene(segment, index, sceneCount, copy) {
+  const informationNeed = visualNeedForScene(segment, index, sceneCount);
+  const claimId = `scene-claim-${String(index + 1).padStart(2, "0")}`;
+  const claim = {
+    id: claimId,
+    text: segment,
+    visualRequired: informationNeed !== "none",
+    evidenceRefs: []
+  };
+  const base = {
+    question: informationNeed === "none"
+      ? "这一场要让观众先记住哪个核心判断？"
+      : `怎样让观众一眼理解“${copy.title}”的${
+        informationNeed === "sequence" ? "先后顺序" :
+        informationNeed === "comparison" ? "关键差异" :
+        informationNeed === "relationship" ? "作用关系" : "核心概念"
+      }？`,
+    takeaway: copy.statement || copy.title,
+    role: "explanation",
+    objective: informationNeed === "none"
+      ? (index === 0 ? "orient" : "summarize")
+      : informationNeed === "comparison" ? "compare" : "explain",
+    informationNeed,
+    contribution: {
+      none: "none",
+      sequence: "show-order",
+      comparison: "show-difference",
+      relationship: "explain-relationship",
+      "concept-anchor": "anchor-concept"
+    }[informationNeed],
+    contributionRationale: informationNeed === "none"
+      ? "这是单一判断，清晰大标题比补一张装饰图更直接。"
+      : {
+          sequence: "删掉关系图后，口播中的先后步骤会退化成并列文字。",
+          comparison: "删掉对照结构后，观众无法快速定位两侧共同维度与差异。",
+          relationship: "删掉关系图后，观众看不清对象之间怎样连接和产生作用。",
+          "concept-anchor": "简约概念锚点帮助观众把抽象名词与当前主张绑定，但不能替代文字。"
+        }[informationNeed],
+    relationKind: {
+      none: "none",
+      sequence: "sequence",
+      comparison: "comparison",
+      relationship: "dependency",
+      "concept-anchor": "none"
+    }[informationNeed],
+    compositionProfile: ["none", "concept-anchor"].includes(informationNeed)
+      ? "text-first"
+      : "relation-first",
+    claims: [claim],
+    evidenceRefs: [],
+    mustNotShow: [
+      "没有叙事作用的人物",
+      "装饰箭头",
+      "用具体物体隐喻替代真实关系",
+      "卡片矩阵堆满整屏"
+    ]
+  };
+  if (informationNeed === "none") {
+    return createVisualExpressionIntent({ ...base, entities: [], relations: [] }, {
+      sceneId: `S${String(index + 1).padStart(2, "0")}`
+    });
+  }
+
+  let labels = semanticParts(copy.statement);
+  if (informationNeed === "comparison") {
+    if (/只有工具/u.test(segment)) labels = ["已有 Tool", "缺少顺序与验收"];
+    else if (/只有\s*Skill/u.test(segment)) labels = ["已有 Skill", "缺少执行能力"];
+    else labels = semanticParts(copy.title.replace(/与/u, "→"));
+  }
+  if (informationNeed === "relationship" && /MCP/u.test(segment)) {
+    labels = ["Agent", "MCP 外部能力"];
+  }
+  if (labels.length < 2 && ["sequence", "comparison", "relationship"].includes(informationNeed)) {
+    labels = [copy.title, copy.statement].filter(Boolean);
+  }
+  if (informationNeed === "concept-anchor") labels = [copy.title];
+  labels = [...new Set(labels)].slice(0, 4);
+  const entities = labels.map((label, entityIndex) => ({
+    id: `entity-${entityIndex + 1}`,
+    label,
+    semanticRole: informationNeed === "sequence"
+      ? (entityIndex === labels.length - 1 ? "result" : "step")
+      : "concept",
+    importance: "primary",
+    claimIds: [claimId]
+  }));
+  const relationPairs = informationNeed === "concept-anchor"
+    ? []
+    : informationNeed === "sequence"
+      ? entities.slice(0, -1).map((entity, relationIndex) => [entity, entities[relationIndex + 1]])
+      : [[entities[0], entities[1]]];
+  const relations = relationPairs.map(([from, to], relationIndex) => ({
+    id: `relation-${relationIndex + 1}`,
+    from: from.id,
+    to: to.id,
+    type: informationNeed === "sequence"
+      ? "then"
+      : informationNeed === "comparison" ? "compares" : "depends-on",
+    label: informationNeed === "sequence"
+      ? "然后"
+      : informationNeed === "comparison" ? "差异" : "连接并调用",
+    directed: informationNeed !== "comparison",
+    claimIds: [claimId]
+  }));
+  return createVisualExpressionIntent({ ...base, entities, relations }, {
+    sceneId: `S${String(index + 1).padStart(2, "0")}`
+  });
+}
+
 function rawSceneDuration(segment, narrationLength) {
   const proportional = (60 * Math.max(1, compactLength(segment))) / Math.max(1, narrationLength);
   return Number(Math.max(4, Math.min(15, proportional)).toFixed(3));
@@ -303,10 +433,13 @@ export function adaptApprovedScriptToShortStoryboard(episode) {
       subtitle: subtitleLines[0]?.text ?? "",
       label: "",
       assetHint: animationDirection(segment, approvedDirection),
+      visualIntent: visualIntentForScene(segment, index, segments.length, copy),
       subtitleLines
     };
   });
   return {
+    visualContractVersion: VISUAL_EXPRESSION_CONTRACT_VERSION,
+    visualStyleProfileId: VISUAL_EXPRESSION_STYLE_PROFILE_ID,
     targetDurationSeconds: 60,
     scenes,
     assetChecklist: [
@@ -340,11 +473,17 @@ export function derivedStoryboardFidelity(episode) {
       sceneCopyIssues: ["approved-script"],
       subtitlePassed: false,
       visualRulesPassed: false,
+      visualIntentPassed: false,
+      visualStyleProfilePassed: false,
       displayChromePassed: false,
       error: error.message
     };
   }
   const storyboardDraft = episode.production?.storyboardDraft;
+  const visualExpressionRequired =
+    storyboardDraft?.visualContractVersion === VISUAL_EXPRESSION_CONTRACT_VERSION;
+  const visualStyleProfilePassed = !visualExpressionRequired ||
+    storyboardDraft?.visualStyleProfileId === expected.visualStyleProfileId;
   const bindingPassed = Boolean(
     storyboardDraft?.generationKind === "deterministic-approved-script-storyboard-adapter" &&
     storyboardDraft?.sourceScriptVersion === expected.sourceScript.version &&
@@ -366,6 +505,7 @@ export function derivedStoryboardFidelity(episode) {
     "assetHint"
   ];
   const sceneCopyIssues = [];
+  let visualIntentPassed = true;
   if (actualScenes.length !== expected.scenes.length) {
     sceneCopyIssues.push("scene-count");
   }
@@ -374,6 +514,14 @@ export function derivedStoryboardFidelity(episode) {
       if (actualScenes[index]?.[field] !== expected.scenes[index]?.[field]) {
         sceneCopyIssues.push(`scenes[${index}].${field}`);
       }
+    }
+    if (
+      visualExpressionRequired &&
+      JSON.stringify(actualScenes[index]?.visualIntent ?? null) !==
+      JSON.stringify(expected.scenes[index]?.visualIntent ?? null)
+    ) {
+      visualIntentPassed = false;
+      sceneCopyIssues.push(`scenes[${index}].visualIntent`);
     }
   }
   const actualNarration = (episode.subtitles ?? []).map((subtitle) => subtitle.text).join("");
@@ -397,12 +545,16 @@ export function derivedStoryboardFidelity(episode) {
       sceneCopyIssues.length === 0 &&
       subtitlePassed &&
       visualRulesPassed &&
+      visualIntentPassed &&
+      visualStyleProfilePassed &&
       displayChromePassed,
     bindingPassed,
     currentArtifactIsLatest,
     sceneCopyIssues,
     subtitlePassed,
     visualRulesPassed,
+    visualIntentPassed,
+    visualStyleProfilePassed,
     displayChromePassed,
     error: ""
   };

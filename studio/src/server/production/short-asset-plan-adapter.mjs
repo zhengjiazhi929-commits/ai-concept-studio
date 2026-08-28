@@ -735,13 +735,19 @@ export function adaptApprovedStoryboardToShortAssetPlan(episode) {
     throw new Error(`确定性素材方案没有覆盖分镜：${missingSceneIds.join(", ")}`);
   }
   const visualRules = [...(episode.production?.storyboardDraft?.visualRules ?? [])];
+  const visualContractVersion =
+    episode.production?.storyboardDraft?.visualContractVersion ?? null;
+  const visualStyleProfileId =
+    episode.production?.storyboardDraft?.visualStyleProfileId ?? null;
   if (visualRules.length === 0) {
     throw new Error("已批准分镜缺少视觉规则，不能建立素材方案");
   }
   return {
     visualSystem:
-      "9:16 高级简约技术图解；关系动画和过程演示为主，同级扁平卡片统一，液态玻璃只作少量强调。",
+      "9:16 高级简约语义驱动技术图解；按比较、流程、层级、分支和证据选择结构，不把所有内容做成卡片；同级元素统一，液态玻璃只作少量强调。",
     visualRules,
+    ...(visualContractVersion ? { visualContractVersion } : {}),
+    ...(visualStyleProfileId ? { visualStyleProfileId } : {}),
     sourceStoryboard,
     ...(usesAihubmixVolcengine ? { generationProfile } : {}),
     items,

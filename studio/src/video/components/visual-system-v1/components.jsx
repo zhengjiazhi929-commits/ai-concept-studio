@@ -8,6 +8,9 @@ import {
 import {
   VISUAL_SYSTEM_V1_INFORMATION_CARD_PRIMITIVES
 } from "./grammar-layout.mjs";
+import {
+  VISUAL_SYSTEM_V1_SEMANTIC_ICON_NODE_DEFAULTS
+} from "./content-layout.mjs";
 import { visualSystemV1ChapterDisplayLabel } from "./chapter-progress.mjs";
 import {
   visualSystemV1ChapterProgressAtFrame,
@@ -22,10 +25,12 @@ import {
 import { VISUAL_SYSTEM_V1, VISUAL_SYSTEM_V1_DEPTH_ROLES } from "./tokens.mjs";
 import { VisualSystemV1AiTechIcon } from "./icons/ai-tech-icon.jsx";
 import {
+  aiTechIconMotionStateAtProgress,
+  aiTechIconSize,
   assertAiTechIconProductionPresentation
 } from "../../../shared/ai-tech-icon-contract.mjs";
 
-const { palette, typography } = VISUAL_SYSTEM_V1;
+const { palette, typography, semanticNode } = VISUAL_SYSTEM_V1;
 const SceneOpacityContext = React.createContext(1);
 
 function colorWithAlpha(color, opacity) {
@@ -455,17 +460,40 @@ export function VisualSystemV1StandaloneIcon({
   sizeRole = "support",
   statusMarkVariant = "quiet",
   label = "独立图标",
+  caption = null,
+  detail = null,
+  layoutRole = "open-diagram-object",
+  placement = "independent",
+  participation = null,
+  semanticObjectId = null,
+  ownerId = null,
   style = {}
 }) {
   const resolvedPresentation = assertAiTechIconProductionPresentation(conceptKind, presentation);
+  const motion = aiTechIconMotionStateAtProgress(progress);
+  const semanticIconNode = layoutRole === "semantic-icon-node";
+  const semanticIconNodeDefaults = VISUAL_SYSTEM_V1_SEMANTIC_ICON_NODE_DEFAULTS;
+  const resolvedIconSizePx = aiTechIconSize(sizeRole).sizePx;
   return (
     <div
       data-ai-tech-icon-presentation={resolvedPresentation}
       data-ai-tech-icon-container="standalone"
+      data-ai-tech-icon-layout-role={layoutRole}
+      data-ai-tech-icon-placement={placement}
+      data-ai-tech-icon-participation={participation ?? undefined}
+      data-ai-tech-icon-semantic-object-id={semanticObjectId ?? undefined}
+      data-ai-tech-icon-owner-id={ownerId ?? undefined}
       style={{
         position: "absolute",
-        display: "grid",
-        placeItems: "center",
+        display: "flex",
+        flexDirection: semanticIconNode ? "row" : "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: caption ? (semanticIconNode ? semanticIconNodeDefaults.gapPx : 8) : 0,
+        padding: semanticIconNode
+          ? `${semanticIconNodeDefaults.verticalPaddingPx}px ${semanticIconNodeDefaults.horizontalPaddingPx}px`
+          : 0,
+        boxSizing: "border-box",
         pointerEvents: "none",
         ...style
       }}
@@ -477,6 +505,45 @@ export function VisualSystemV1StandaloneIcon({
         statusMarkVariant={statusMarkVariant}
         label={label}
       />
+      {caption ? (
+        <div
+          data-ai-tech-icon-caption="standalone-label"
+          style={{
+            minWidth: 0,
+            maxWidth: semanticIconNode
+              ? `calc(100% - ${resolvedIconSizePx + semanticIconNodeDefaults.gapPx}px)`
+              : "100%",
+            color: palette.ink,
+            fontSize: semanticIconNode ? semanticIconNodeDefaults.labelFontSizePx : 22,
+            fontWeight: semanticIconNode ? 850 : 760,
+            lineHeight: semanticIconNode ? semanticIconNodeDefaults.labelLineHeight : 1.08,
+            letterSpacing: semanticIconNode
+              ? semanticIconNodeDefaults.labelLetterSpacingPx
+              : "-.02em",
+            textAlign: semanticIconNode ? "left" : "center",
+            whiteSpace: "nowrap",
+            opacity: motion.drawProgress
+          }}
+        >
+          <div>{caption}</div>
+          {detail ? (
+            <div
+              data-ai-tech-icon-caption-detail="semantic-node-detail"
+              style={{
+                marginTop: semanticIconNodeDefaults.detailGapPx,
+                color: palette.muted,
+                fontSize: semanticIconNodeDefaults.detailFontSizePx,
+                fontWeight: 620,
+                lineHeight: semanticIconNodeDefaults.detailLineHeight,
+                letterSpacing: semanticIconNodeDefaults.detailLetterSpacingPx,
+                whiteSpace: "nowrap"
+              }}
+            >
+              {detail}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -495,12 +562,14 @@ export function VisualSystemV1SemanticNode({
   visibilityProgress = 1,
   contentOpacity = 1,
   semanticRole = null,
+  semanticGroupId = null,
   surfaceRole = null,
   surfacePurpose = null,
   visualHierarchyLevel = null,
   semanticClaimIds = [],
   conceptKind = "none",
-  textWrapMode = "break-word"
+  textWrapMode = "break-word",
+  typographyProfile = "standard"
 }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -523,19 +592,41 @@ export function VisualSystemV1SemanticNode({
       : "open-canvas"
   );
   const informationCard = resolvedSurfaceRole === "information-card";
+  const semanticTypography = semanticNode[typographyProfile];
+  if (!semanticTypography) {
+    throw new TypeError(`未知语义节点排版配置：${typographyProfile}`);
+  }
   if (conceptKind !== "none") {
     throw new TypeError(
       `${nodeId} 是带文字的语义节点，不能嵌入图标；请改用 VisualSystemV1StandaloneIcon`
     );
   }
+  const compactInformationCard = informationCard &&
+    height < semanticTypography.informationCard.compactHeightThresholdPx;
   const labelFontSize = informationCard
-    ? 32
-    : Math.max(28, Math.min(36, height * 0.3, width * 0.12));
+    ? compactInformationCard
+      ? semanticTypography.informationCard.compactLabelFontSizePx
+      : semanticTypography.informationCard.labelFontSizePx
+    : Math.max(
+        semanticTypography.openCanvas.minimumLabelFontSizePx,
+        Math.min(semanticTypography.openCanvas.maximumLabelFontSizePx, height * 0.3, width * 0.12)
+      );
   const detailFontSize = informationCard
-    ? 20
-    : Math.max(18, Math.min(24, height * 0.19, width * 0.068));
-  const paddingX = informationCard ? 26 : Math.max(18, Math.min(26, width * 0.07));
-  const paddingY = Math.max(10, Math.min(26, height * 0.1));
+    ? compactInformationCard
+      ? semanticTypography.informationCard.compactDetailFontSizePx
+      : semanticTypography.informationCard.detailFontSizePx
+    : Math.max(
+        semanticTypography.openCanvas.minimumDetailFontSizePx,
+        Math.min(semanticTypography.openCanvas.maximumDetailFontSizePx, height * 0.19, width * 0.068)
+      );
+  const paddingX = informationCard
+    ? semanticTypography.informationCard.horizontalPaddingPx
+    : Math.max(18, Math.min(semanticTypography.openCanvas.horizontalPaddingPx, width * 0.07));
+  const paddingY = compactInformationCard
+    ? semanticTypography.informationCard.compactVerticalPaddingPx
+    : Math.max(informationCard ? 7 : 10, Math.min(26, height * 0.1));
+  const markerVisible = Boolean(marker) &&
+    height >= semanticNode.marker.minimumContainerHeightPx;
   const surface = semanticPrimitiveSurface(
     primitive,
     accentColor,
@@ -557,10 +648,13 @@ export function VisualSystemV1SemanticNode({
       data-visual-system-surface-border={surface.border === "none" ? "open-diagram" : "full-outline"}
       data-visual-system-node-id={nodeId}
       data-semantic-id={nodeId}
+      data-semantic-group-id={semanticGroupId ?? undefined}
       data-semantic-role={semanticRole ?? undefined}
       data-semantic-claim-ids={semanticClaimIds.join(",") || undefined}
       data-ai-tech-icon-presentation="none"
       data-semantic-text-wrap={textWrapMode}
+      data-semantic-typography-profile={typographyProfile}
+      data-semantic-typography-compact={compactInformationCard ? "true" : "false"}
       style={{
         ...style,
         ...surface,
@@ -591,11 +685,11 @@ export function VisualSystemV1SemanticNode({
           }}
         />
       ) : null}
-      {marker ? (
+      {markerVisible ? (
         <div
           style={{
             color: accentColor,
-            fontSize: 13,
+            fontSize: semanticNode.marker.fontSizePx,
             fontWeight: 850,
             letterSpacing: ".08em",
             lineHeight: 1.1,
@@ -607,7 +701,7 @@ export function VisualSystemV1SemanticNode({
       ) : null}
       <div
         style={{
-          marginTop: marker ? 7 : 0,
+          marginTop: markerVisible ? 7 : 0,
           minWidth: 0,
           opacity: normalizedContentOpacity
         }}
@@ -619,7 +713,7 @@ export function VisualSystemV1SemanticNode({
             fontSize: labelFontSize,
             fontWeight: 880,
             lineHeight: 1.08,
-            letterSpacing: "-.025em",
+            letterSpacing: `${semanticTypography.labelLetterSpacingPx}px`,
             whiteSpace: informationCard ? "nowrap" : undefined,
             wordBreak: informationCard || phraseSafe ? "keep-all" : "normal",
             overflowWrap: informationCard || phraseSafe ? "normal" : "break-word"
@@ -634,8 +728,8 @@ export function VisualSystemV1SemanticNode({
             marginTop: 7,
             color: palette.muted,
             fontSize: detailFontSize,
-            fontWeight: 620,
-            lineHeight: 1.22,
+            fontWeight: semanticTypography.detailFontWeight,
+            lineHeight: semanticTypography.detailLineHeight,
             wordBreak: phraseSafe ? "keep-all" : "normal",
             overflowWrap: phraseSafe ? "normal" : "break-word",
             opacity: normalizedContentOpacity * detailState.opacity

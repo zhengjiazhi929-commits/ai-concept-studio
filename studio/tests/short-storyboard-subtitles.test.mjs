@@ -47,10 +47,16 @@ test("确定性短分镜保留关键语义单元并满足单行字幕合同", as
   assert.equal(providerCalls, 0);
   assert.equal(
     APPROVED_SCRIPT_SHORT_STORYBOARD_ADAPTER_VERSION,
-    "approved-script-short-storyboard-adapter-v4"
+    "approved-script-short-storyboard-adapter-v5"
   );
   assert.equal(generated.model, APPROVED_SCRIPT_SHORT_STORYBOARD_ADAPTER_VERSION);
   assert.equal(generated.timeline.durationSeconds, 60);
+  assert.equal(generated.value.visualContractVersion, "visual-expression-contract-v1");
+  assert.equal(generated.value.visualStyleProfileId, "desktop-light-window-editorial-v3");
+  assert.ok(generated.timeline.scenes.every((scene) => scene.visualIntent));
+  assert.ok(generated.timeline.scenes.every((scene) => scene.visualPlan));
+  assert.ok(generated.timeline.scenes.some((scene) => scene.visualPlan.visualMode === "text-only"));
+  assert.ok(generated.timeline.scenes.some((scene) => scene.visualPlan.visualMode === "graphic"));
   assert.deepEqual(
     generated.timeline.scenes.map(({ start, end }) => [start, end]),
     EXPECTED_SCENE_TIMES

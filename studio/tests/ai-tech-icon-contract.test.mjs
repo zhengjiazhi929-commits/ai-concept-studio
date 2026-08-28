@@ -5,6 +5,7 @@ import {
   AI_TECH_ICON_CONCEPT_KINDS,
   AI_TECH_ICON_CONTRACT_VERSION,
   AI_TECH_ICON_ERROR_CODES,
+  AI_TECH_ICON_PARTICIPATION_ROLES,
   AI_TECH_ICON_POLICY,
   AI_TECH_ICON_PRODUCTION_PRESENTATIONS,
   AI_TECH_ICON_REGISTRY_APPROVAL,
@@ -21,8 +22,8 @@ import {
   assertAiTechIconStateRole
 } from "../src/shared/ai-tech-icon-contract.mjs";
 
-test("AI 技术图标合同固定28个语义、64视窗和三档尺寸", () => {
-  assert.equal(AI_TECH_ICON_CONTRACT_VERSION, "ai-tech-icon-contract-v2");
+test("AI 技术图标合同固定28个语义、64视窗和四档受控尺寸", () => {
+  assert.equal(AI_TECH_ICON_CONTRACT_VERSION, "ai-tech-icon-contract-v4");
   assert.equal(AI_TECH_ICON_REGISTRY_VERSION, "ai-tech-icon-registry-v1");
   assert.deepEqual(AI_TECH_ICON_REGISTRY_APPROVAL, {
     status: "approved-production-v1",
@@ -42,7 +43,7 @@ test("AI 技术图标合同固定28个语义、64视窗和三档尺寸", () => {
   });
   assert.deepEqual(
     Object.fromEntries(Object.entries(AI_TECH_ICON_SIZE_ROLES).map(([role, definition]) => [role, definition.sizePx])),
-    { inline: 36, support: 56, focus: 104 }
+    { inline: 36, support: 56, "longform-support": 88, focus: 104 }
   );
   assert.equal(AI_TECH_ICON_POLICY.strokeWidth, 3.5);
   assert.equal(AI_TECH_ICON_POLICY.maximumPrimitiveCount, 6);
@@ -60,11 +61,33 @@ test("AI 技术图标合同固定28个语义、64视窗和三档尺寸", () => {
   );
   assert.equal(AI_TECH_ICON_POLICY.registeredIconHierarchy, "peer");
   assert.equal(AI_TECH_ICON_POLICY.cardAttachmentMode, "forbidden");
+  assert.deepEqual(AI_TECH_ICON_PARTICIPATION_ROLES, [
+    "graph-node",
+    "owned-callout",
+    "dedicated-focus"
+  ]);
+  assert.equal(AI_TECH_ICON_POLICY.maximumOwnedCalloutGapPx, 48);
+  assert.equal(AI_TECH_ICON_POLICY.maximumIconLabelRevealDeltaFrames, 1);
+  assert.equal(AI_TECH_ICON_POLICY.duplicateSemanticRepresentationMode, "fail-closed");
+  assert.equal(
+    AI_TECH_ICON_POLICY.openDiagramUsage.graphNodeGeometryMode,
+    "measured-visible-content"
+  );
+  assert.equal(
+    AI_TECH_ICON_POLICY.openDiagramUsage.graphNodeRelationEntryMode,
+    "connector-arrow-first"
+  );
+  assert.equal(
+    AI_TECH_ICON_POLICY.openDiagramUsage.graphNodeMultipleIncomingMode,
+    "wait-for-all-establishing-arrows"
+  );
   assert.deepEqual(AI_TECH_ICON_POLICY.verifiedSuccessUsage, {
     autoInsert: false,
     purpose: "state-proof",
     presentation: "standalone-focus",
-    layoutRole: "dedicated-icon-focus"
+    layoutRole: "dedicated-icon-focus",
+    participation: "dedicated-focus",
+    placement: "dedicated-focus"
   });
 });
 
@@ -74,6 +97,9 @@ test("对号与其他注册图标同级，但只能作为独立成功焦点，�
     purpose: "state-proof",
     presentation: "standalone-focus",
     layoutRole: "dedicated-icon-focus",
+    participation: "dedicated-focus",
+    semanticObjectId: "verified-result",
+    placement: "dedicated-focus",
     attachmentMode: "independent",
     autoInsert: false
   }), {
@@ -81,6 +107,12 @@ test("对号与其他注册图标同级，但只能作为独立成功焦点，�
     purpose: "state-proof",
     presentation: "standalone-focus",
     layoutRole: "dedicated-icon-focus",
+    participation: "dedicated-focus",
+    semanticObjectId: "verified-result",
+    ownerId: null,
+    placement: "dedicated-focus",
+    maximumGapPx: null,
+    labelRevealDeltaFrames: 0,
     attachmentMode: "independent",
     autoInsert: false
   });
@@ -97,12 +129,21 @@ test("对号与其他注册图标同级，但只能作为独立成功焦点，�
     conceptKind: "routing",
     purpose: "semantic-anchor",
     presentation: "open-diagram-symbol",
-    layoutRole: "open-diagram-object"
+    layoutRole: "semantic-icon-node",
+    participation: "graph-node",
+    semanticObjectId: "router",
+    placement: "anchor-bounds"
   }), {
     conceptKind: "routing",
     purpose: "semantic-anchor",
     presentation: "open-diagram-symbol",
-    layoutRole: "open-diagram-object",
+    layoutRole: "semantic-icon-node",
+    participation: "graph-node",
+    semanticObjectId: "router",
+    ownerId: null,
+    placement: "anchor-bounds",
+    maximumGapPx: null,
+    labelRevealDeltaFrames: 0,
     attachmentMode: "independent",
     autoInsert: false
   });
@@ -111,17 +152,23 @@ test("对号与其他注册图标同级，但只能作为独立成功焦点，�
       conceptKind: "verified-success",
       purpose: "state-proof",
       presentation: "standalone-focus",
-      layoutRole: "open-diagram-object"
+      layoutRole: "semantic-icon-node",
+      participation: "graph-node",
+      semanticObjectId: "result",
+      placement: "anchor-bounds"
     }),
     (error) => error instanceof AiTechIconContractError &&
-      error.code === AI_TECH_ICON_ERROR_CODES.VERIFIED_SUCCESS_USAGE_INVALID
+      error.code === AI_TECH_ICON_ERROR_CODES.SEMANTIC_BINDING_INVALID
   );
   assert.throws(
     () => assertAiTechIconProductionPlacement({
       conceptKind: "routing",
       purpose: "semantic-anchor",
       presentation: "open-diagram-symbol",
-      layoutRole: "open-diagram-object",
+      layoutRole: "semantic-icon-node",
+      participation: "graph-node",
+      semanticObjectId: "router",
+      placement: "anchor-bounds",
       attachmentMode: "card-accessory"
     }),
     (error) => error instanceof AiTechIconContractError &&
@@ -134,6 +181,73 @@ test("对号与其他注册图标同级，但只能作为独立成功焦点，�
   );
 });
 
+test("开放图解图标只能替代关系节点或在48px内归属 owner，远端 rail 与异步文字 fail closed", () => {
+  assert.deepEqual(assertAiTechIconProductionPlacement({
+    conceptKind: "context-window",
+    purpose: "semantic-anchor",
+    presentation: "open-diagram-symbol",
+    layoutRole: "owned-icon-callout",
+    participation: "owned-callout",
+    semanticObjectId: "context-window-callout",
+    ownerId: "context-budget",
+    placement: "left-center",
+    maximumGapPx: 24,
+    labelRevealDeltaFrames: 1
+  }), {
+    conceptKind: "context-window",
+    purpose: "semantic-anchor",
+    presentation: "open-diagram-symbol",
+    layoutRole: "owned-icon-callout",
+    participation: "owned-callout",
+    semanticObjectId: "context-window-callout",
+    ownerId: "context-budget",
+    placement: "left-center",
+    maximumGapPx: 24,
+    labelRevealDeltaFrames: 1,
+    attachmentMode: "independent",
+    autoInsert: false
+  });
+  assert.throws(
+    () => assertAiTechIconProductionPlacement({
+      conceptKind: "tool",
+      purpose: "semantic-anchor",
+      presentation: "open-diagram-symbol",
+      layoutRole: "semantic-icon-node",
+      participation: "graph-node",
+      semanticObjectId: "tool",
+      placement: "left-rail"
+    }),
+    (error) => error.code === AI_TECH_ICON_ERROR_CODES.REMOTE_RAIL_FORBIDDEN
+  );
+  assert.throws(
+    () => assertAiTechIconProductionPlacement({
+      conceptKind: "context-window",
+      purpose: "semantic-anchor",
+      presentation: "open-diagram-symbol",
+      layoutRole: "owned-icon-callout",
+      participation: "owned-callout",
+      semanticObjectId: "context-window-callout",
+      ownerId: "context-budget",
+      placement: "left-center",
+      maximumGapPx: 49
+    }),
+    (error) => error.code === AI_TECH_ICON_ERROR_CODES.OWNED_CALLOUT_GAP_INVALID
+  );
+  assert.throws(
+    () => assertAiTechIconProductionPlacement({
+      conceptKind: "mcp",
+      purpose: "semantic-anchor",
+      presentation: "open-diagram-symbol",
+      layoutRole: "semantic-icon-node",
+      participation: "graph-node",
+      semanticObjectId: "mcp",
+      placement: "anchor-bounds",
+      labelRevealDeltaFrames: 2
+    }),
+    (error) => error.code === AI_TECH_ICON_ERROR_CODES.LABEL_REVEAL_SYNC_INVALID
+  );
+});
+
 test("未知 conceptKind、尺寸和状态 fail closed，none 必须显式允许", () => {
   assert.equal(assertAiTechIconConceptKind("prompt"), "prompt");
   assert.equal(assertAiTechIconConceptKind("none", { allowNone: true }), null);
@@ -143,6 +257,7 @@ test("未知 conceptKind、尺寸和状态 fail closed，none 必须显式允许
       error.code === AI_TECH_ICON_ERROR_CODES.CONCEPT_UNKNOWN
   );
   assert.equal(aiTechIconSize("support").sizePx, 56);
+  assert.equal(aiTechIconSize("longform-support").sizePx, 88);
   assert.throws(
     () => aiTechIconSize("tiny"),
     (error) => error.code === AI_TECH_ICON_ERROR_CODES.SIZE_ROLE_UNKNOWN
