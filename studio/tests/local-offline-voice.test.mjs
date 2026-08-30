@@ -204,6 +204,35 @@ async function fixtureReadFile(path, context = createFixtureAccessContext()) {
     : readFile(access.absolutePath);
 }
 
+function storyboardVisualBindingReadFile({
+  sourceVisualContractVersion,
+  currentVisualContractVersion,
+  sourceVisualStyleProfileId,
+  currentVisualStyleProfileId
+}) {
+  return async (path) => {
+    const data = await fixtureReadFile(path);
+    const source = path.endsWith("storyboard-draft-v003.json");
+    const current = path.endsWith("storyboard-draft-v004.json");
+    if (!source && !current) return data;
+
+    const artifact = JSON.parse(data.toString("utf8"));
+    artifact.draft.visualContractVersion = source
+      ? sourceVisualContractVersion
+      : currentVisualContractVersion;
+    artifact.draft.visualStyleProfileId = source
+      ? sourceVisualStyleProfileId
+      : currentVisualStyleProfileId;
+
+    const mutated = Buffer.from(JSON.stringify(artifact), "utf8");
+    assert.ok(mutated.length <= data.length);
+    return Buffer.concat([
+      mutated,
+      Buffer.alloc(data.length - mutated.length, 0x20)
+    ]);
+  };
+}
+
 async function fixtureLstat(path, context = createFixtureAccessContext()) {
   const access = resolveFixtureAccess(path, "lstat", context);
   if (access.source === "immutable-fixture") {
@@ -1165,6 +1194,44 @@ test("重绑定候选对 WAV、授权、上游批准、字幕语义和零调用�
       })
     ),
     /voice-v001 与原始 WAV 哈希不一致/u
+  );
+});
+
+test("旁白重绑定在 visualContractVersion 漂移时 fail closed", async () => {
+  await assert.rejects(
+    inspectRegisteredLocalOfflineTtsRebindCandidate(
+      episodeId,
+      rebindVerifierOptions({
+        readFile: storyboardVisualBindingReadFile({
+          sourceVisualContractVersion: "visual-expression-contract-v1",
+          currentVisualContractVersion: "visual-expression-contract-v2",
+          sourceVisualStyleProfileId: "desktop-light-window-editorial-v3",
+          currentVisualStyleProfileId: "desktop-light-window-editorial-v3"
+        })
+      })
+    ),
+    (error) => error.code === "local_tts_candidate_invalid"
+      && error.message ===
+        "Storyboard 除字幕布局外还有内容变化，不能零调用复用原始旁白"
+  );
+});
+
+test("旁白重绑定在 visualStyleProfileId 漂移时 fail closed", async () => {
+  await assert.rejects(
+    inspectRegisteredLocalOfflineTtsRebindCandidate(
+      episodeId,
+      rebindVerifierOptions({
+        readFile: storyboardVisualBindingReadFile({
+          sourceVisualContractVersion: "visual-expression-contract-v1",
+          currentVisualContractVersion: "visual-expression-contract-v1",
+          sourceVisualStyleProfileId: "desktop-light-window-editorial-v3",
+          currentVisualStyleProfileId: "desktop-light-window-editorial-v4"
+        })
+      })
+    ),
+    (error) => error.code === "local_tts_candidate_invalid"
+      && error.message ===
+        "Storyboard 除字幕布局外还有内容变化，不能零调用复用原始旁白"
   );
 });
 
