@@ -7,6 +7,7 @@ import {
 
 const REFERENCE_CANVAS = Object.freeze({ width: 1920, height: 1080 });
 const semanticNodeTokens = VISUAL_SYSTEM_V1.semanticNode.standard;
+const CONNECTOR_CLEARANCE_PX = 8;
 
 export const VISUAL_SYSTEM_V1_GRAMMAR_STRUCTURES = Object.freeze([
   "none",
@@ -33,6 +34,10 @@ export const VISUAL_SYSTEM_V1_CONNECTOR_PRESENTATION_KINDS = Object.freeze([
 export const VISUAL_SYSTEM_V1_CONNECTOR_POLICIES = Object.freeze([
   "allow-smooth",
   "orthogonal-only"
+]);
+
+export const VISUAL_SYSTEM_V1_HIERARCHY_LAYOUT_PROFILES = Object.freeze([
+  "progressive-package"
 ]);
 
 export const VISUAL_SYSTEM_V1_STANDALONE_OVERLAY_SLOT_SIDES = Object.freeze([
@@ -294,6 +299,15 @@ function walkOrder(elements, relations) {
     current = remaining.id;
   }
   return ordered;
+}
+
+const HIERARCHY_STRUCTURAL_RELATION_TYPES = new Set(["contains"]);
+
+function hierarchyStructuralRelations(relations) {
+  const structural = relations.filter((relation) =>
+    HIERARCHY_STRUCTURAL_RELATION_TYPES.has(relation?.semanticType ?? relation?.type)
+  );
+  return structural.length > 0 ? structural : relations;
 }
 
 function hierarchyLevels(elements, relations) {
@@ -591,33 +605,53 @@ function comparisonPlacement(elements, area, width, height) {
   return placement;
 }
 
-function hierarchyPlacement(elements, relations, area, width, height) {
+function hierarchyPlacement(elements, relations, area, width, height, hierarchyLayoutProfile = null) {
   const placement = emptyPlacement();
-  const levelById = hierarchyLevels(elements, relations);
+  if (elements.length === 0) return placement;
+  const structuralRelations = hierarchyStructuralRelations(relations);
+  const structuralIds = new Set(structuralRelations.flatMap((relation) => [relation.from, relation.to]));
+  const hasTypedStructure = structuralRelations.some((relation) =>
+    HIERARCHY_STRUCTURAL_RELATION_TYPES.has(relation?.semanticType ?? relation?.type)
+  );
+  const coreElements = hasTypedStructure
+    ? elements.filter((element) => structuralIds.has(element.id))
+    : elements;
+  const auxiliaryElements = hasTypedStructure
+    ? elements.filter((element) => !structuralIds.has(element.id))
+    : [];
+  const auxiliaryGap = auxiliaryElements.length > 0 ? Math.min(width * 0.028, area.width * 0.045) : 0;
+  const auxiliaryWidth = auxiliaryElements.length > 0 ? Math.min(width * 0.144, area.width * 0.19) : 0;
+  const coreArea = auxiliaryElements.length > 0
+    ? rect(area.x, area.y, area.width - auxiliaryGap - auxiliaryWidth, area.height)
+    : area;
+  const levelById = hierarchyLevels(coreElements, structuralRelations);
   const levels = new Map();
-  for (const element of elements) {
+  for (const element of coreElements) {
     const level = levelById.get(element.id) ?? 0;
     const group = levels.get(level) ?? [];
     group.push(element);
     levels.set(level, group);
   }
   const orderedLevels = [...levels.keys()].sort((left, right) => left - right);
-  const rowGap = Math.min(height * 0.025, area.height / Math.max(8, orderedLevels.length * 3));
+  const layoutLevelCount = hierarchyLayoutProfile === "progressive-package"
+    ? Math.max(2, orderedLevels.length)
+    : orderedLevels.length;
+  const rowGap = Math.min(height * 0.025, area.height / Math.max(8, layoutLevelCount * 3));
   const rowHeight = Math.min(
     height * 0.11,
-    (area.height - rowGap * Math.max(0, orderedLevels.length - 1)) / orderedLevels.length
+    (area.height - rowGap * Math.max(0, layoutLevelCount - 1)) / layoutLevelCount
   );
-  const groupHeight = rowHeight * orderedLevels.length + rowGap * Math.max(0, orderedLevels.length - 1);
+  const groupHeight = rowHeight * layoutLevelCount + rowGap * Math.max(0, layoutLevelCount - 1);
   const top = area.y + (area.height - groupHeight) / 2;
   orderedLevels.forEach((level, rowIndex) => {
     const row = levels.get(level);
-    const gap = Math.min(width * 0.018, area.width / Math.max(8, row.length * 3));
+    const gap = Math.min(width * 0.018, coreArea.width / Math.max(8, row.length * 3));
     const boxWidth = Math.min(
       width * 0.18,
-      (area.width - gap * Math.max(0, row.length - 1)) / row.length
+      (coreArea.width - gap * Math.max(0, row.length - 1)) / row.length
     );
     const rowWidth = boxWidth * row.length + gap * Math.max(0, row.length - 1);
-    const left = area.x + (area.width - rowWidth) / 2;
+    const left = coreArea.x + (coreArea.width - rowWidth) / 2;
     row.forEach((element, column) => {
       place(
         placement,
@@ -628,6 +662,28 @@ function hierarchyPlacement(elements, relations, area, width, height) {
       );
     });
   });
+  if (auxiliaryElements.length > 0) {
+    const metrics = stackMetrics(
+      auxiliaryElements.length,
+      coreArea.height,
+      height * 0.11,
+      height * 0.018
+    );
+    auxiliaryElements.forEach((element, index) => {
+      place(
+        placement,
+        element,
+        rect(
+          coreArea.right + auxiliaryGap,
+          coreArea.y + metrics.start + index * (metrics.size + metrics.gap),
+          auxiliaryWidth,
+          metrics.size
+        ),
+        "annotation",
+        "hierarchy-callouts"
+      );
+    });
+  }
   return placement;
 }
 
@@ -921,7 +977,8 @@ function placementFor(
   height,
   semanticContentById,
   primitiveOverrideById,
-  flowLayoutProfile
+  flowLayoutProfile,
+  hierarchyLayoutProfile
 ) {
   switch (structure) {
     case "none": return emptyPlacement();
@@ -938,7 +995,14 @@ function placementFor(
       flowLayoutProfile
     );
     case "comparison": return comparisonPlacement(elements, area, width, height);
-    case "hierarchy": return hierarchyPlacement(elements, relations, area, width, height);
+    case "hierarchy": return hierarchyPlacement(
+      elements,
+      relations,
+      area,
+      width,
+      height,
+      hierarchyLayoutProfile
+    );
     case "branch": return branchPlacement(elements, relations, area, width, height);
     case "feedback-loop": return feedbackPlacement(elements, relations, area, width, height);
     case "timeline": return timelinePlacement(elements, relations, area, width, height);
@@ -1125,7 +1189,7 @@ function pointInside(point, rectangle, padding = 0) {
     point.y > rectangle.y - padding && point.y < rectangle.bottom + padding;
 }
 
-function segmentCrossesRectangle(start, end, rectangle, padding = 8) {
+function segmentCrossesRectangle(start, end, rectangle, padding = CONNECTOR_CLEARANCE_PX) {
   const expanded = {
     x: rectangle.x - padding,
     y: rectangle.y - padding,
@@ -1275,6 +1339,65 @@ function outerLaneRoute(from, to, lane, fromSide, toSide, direction, portRatio) 
   ]);
 }
 
+function axisGapCenters(rectangles, axis, routeBounds) {
+  const [minimumKey, maximumKey] = axis === "x"
+    ? ["left", "right"]
+    : ["top", "bottom"];
+  const routeMinimum = routeBounds?.[minimumKey] ?? Number.NEGATIVE_INFINITY;
+  const routeMaximum = routeBounds?.[maximumKey] ?? Number.POSITIVE_INFINITY;
+  const boundaries = [...new Set(rectangles.flatMap((rectangle) => [
+    round(rectangle[minimumKey]),
+    round(rectangle[maximumKey])
+  ]))].sort((left, right) => left - right);
+  const minimumGapPx = CONNECTOR_CLEARANCE_PX * 2;
+  return boundaries.slice(0, -1).flatMap((boundary, index) => {
+    const next = boundaries[index + 1];
+    if (next - boundary < minimumGapPx) return [];
+    const center = round((boundary + next) / 2);
+    return center >= routeMinimum && center <= routeMaximum ? [center] : [];
+  });
+}
+
+function verticalLanePort(rectangle, laneX, other) {
+  if (laneX < rectangle.left) return { x: rectangle.left, y: rectangle.centerY };
+  if (laneX > rectangle.right) return { x: rectangle.right, y: rectangle.centerY };
+  return {
+    x: laneX,
+    y: other.centerY >= rectangle.centerY ? rectangle.bottom : rectangle.top
+  };
+}
+
+function horizontalLanePort(rectangle, laneY, other) {
+  if (laneY < rectangle.top) return { x: rectangle.centerX, y: rectangle.top };
+  if (laneY > rectangle.bottom) return { x: rectangle.centerX, y: rectangle.bottom };
+  return {
+    x: other.centerX >= rectangle.centerX ? rectangle.right : rectangle.left,
+    y: laneY
+  };
+}
+
+function verticalGapLaneRoute(from, to, laneX) {
+  const start = verticalLanePort(from, laneX, to);
+  const end = verticalLanePort(to, laneX, from);
+  return deduplicateRoute([
+    start,
+    { x: laneX, y: start.y },
+    { x: laneX, y: end.y },
+    end
+  ]);
+}
+
+function horizontalGapLaneRoute(from, to, laneY) {
+  const start = horizontalLanePort(from, laneY, to);
+  const end = horizontalLanePort(to, laneY, from);
+  return deduplicateRoute([
+    start,
+    { x: start.x, y: laneY },
+    { x: end.x, y: laneY },
+    end
+  ]);
+}
+
 function connectorRouteCandidates(structure, from, to, obstacles, routeBounds = null) {
   const directStart = boundaryPoint(from, { x: to.centerX, y: to.centerY });
   const directEnd = boundaryPoint(to, { x: from.centerX, y: from.centerY });
@@ -1321,6 +1444,12 @@ function connectorRouteCandidates(structure, from, to, obstacles, routeBounds = 
       );
     })
   );
+  const verticalGapCandidates = axisGapCenters(allRects, "x", routeBounds).map((laneX) =>
+    verticalGapLaneRoute(from, to, laneX)
+  );
+  const horizontalGapCandidates = axisGapCenters(allRects, "y", routeBounds).map((laneY) =>
+    horizontalGapLaneRoute(from, to, laneY)
+  );
   const candidates = [
     [directStart, directEnd],
     deduplicateRoute([
@@ -1345,6 +1474,8 @@ function connectorRouteCandidates(structure, from, to, obstacles, routeBounds = 
       { x: directEnd.x, y: middleY },
       directEnd
     ]),
+    ...verticalGapCandidates,
+    ...horizontalGapCandidates,
     ...outerCandidates
   ];
   if (structure === "timeline") candidates.reverse();
@@ -1368,6 +1499,20 @@ function connectorRouteCandidates(structure, from, to, obstacles, routeBounds = 
   return uniqueCandidates.filter((route, index) =>
     nodeIntersectionCounts[index] === minimumIntersections
   );
+}
+
+function hierarchyContainmentRoute(from, to) {
+  const start = { x: round(from.centerX), y: round(from.bottom) };
+  const end = { x: round(to.centerX), y: round(to.top) };
+  if (end.y <= start.y) return null;
+  if (Math.abs(start.x - end.x) < 1e-7) return [start, end];
+  const railY = round((start.y + end.y) / 2);
+  return deduplicateRoute([
+    start,
+    { x: start.x, y: railY },
+    { x: end.x, y: railY },
+    end
+  ]);
 }
 
 function bestConnectorRoute(candidates, obstacles, routedConnectors, relation) {
@@ -1458,6 +1603,10 @@ function buildConnectors(structure, relations, geometryById, routeBounds = null)
     const obstacles = Object.entries(geometryById)
       .filter(([id]) => ![relation.from, relation.to].includes(id))
       .map(([, geometry]) => geometry);
+    const containmentRoute = structure === "hierarchy" &&
+      (relation.semanticType ?? relation.type) === "contains"
+      ? hierarchyContainmentRoute(from, to)
+      : null;
     routed.push({
       connector: {
         id: `connector-${relation.id}`,
@@ -1470,7 +1619,9 @@ function buildConnectors(structure, relations, geometryById, routeBounds = null)
       relation,
       obstacles,
       span: Math.hypot(to.centerX - from.centerX, to.centerY - from.centerY),
-      candidates: connectorRouteCandidates(structure, from, to, obstacles, routeBounds)
+      candidates: containmentRoute == null
+        ? connectorRouteCandidates(structure, from, to, obstacles, routeBounds)
+        : [containmentRoute]
     });
   }
   const naturalOrder = routed.map((_, index) => index);
@@ -1767,11 +1918,21 @@ export function visualSystemV1GrammarLayout({
   semanticContentById = null,
   primitiveOverrideById = null,
   surfacePlanById = null,
-  flowLayoutProfile = null
+  flowLayoutProfile = null,
+  hierarchyLayoutProfile = null
 } = {}) {
   finitePositive(width, "画布宽度");
   finitePositive(height, "画布高度");
   assertVisualPlan(visualPlan);
+  if (
+    hierarchyLayoutProfile != null &&
+    !VISUAL_SYSTEM_V1_HIERARCHY_LAYOUT_PROFILES.includes(hierarchyLayoutProfile)
+  ) {
+    throw new TypeError(`不支持的层级布局配置：${hierarchyLayoutProfile}`);
+  }
+  if (hierarchyLayoutProfile != null && visualPlan.structure !== "hierarchy") {
+    throw new TypeError("hierarchyLayoutProfile 只允许用于 hierarchy 结构");
+  }
   const selectedElements = visualPlan.structure === "none"
     ? []
     : visibleElements(visualPlan, visibleElementIds);
@@ -1790,7 +1951,8 @@ export function visualSystemV1GrammarLayout({
     height,
     semanticContentById,
     primitiveOverrideById,
-    flowLayoutProfile
+    flowLayoutProfile,
+    hierarchyLayoutProfile
   ), selectedElements, primitiveOverrideById);
   const connectors = buildConnectors(
     visualPlan.structure,

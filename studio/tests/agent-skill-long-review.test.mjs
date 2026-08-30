@@ -12,8 +12,13 @@ import {
 import {
   EDITORIAL_CARD_SURFACE_PURPOSES,
   EDITORIAL_ICON_PRESENTATIONS,
+  EDITORIAL_NARRATIVE_TREATMENT_MECHANISMS,
+  EDITORIAL_NARRATIVE_TREATMENTS,
   EDITORIAL_OPEN_SURFACE_PURPOSES,
-  editorialSurfaceCohortKey
+  EDITORIAL_SHAPE_GRAMMAR_VERSION,
+  EDITORIAL_VISUAL_POLICY,
+  editorialSurfaceCohortKey,
+  validateEditorialScene
 } from "../src/shared/editorial-visual-policy.mjs";
 import {
   AGENT_SKILL_LONG_REVIEW_CHAPTERS,
@@ -21,6 +26,7 @@ import {
   AGENT_SKILL_LONG_REVIEW_CONNECTOR_TONES,
   AGENT_SKILL_LONG_REVIEW_CROSSFADE_FRAMES,
   AGENT_SKILL_LONG_REVIEW_DURATION_SECONDS,
+  AGENT_SKILL_LONG_REVIEW_EDGE_DELAY_FRAMES,
   AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES,
   AGENT_SKILL_LONG_REVIEW_EDITORIAL_REVIEW,
   AGENT_SKILL_LONG_REVIEW_FLOW_LAYOUT_PROFILES,
@@ -30,15 +36,19 @@ import {
   AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES,
   AGENT_SKILL_LONG_REVIEW_ORPHAN_SUBTITLE_RULES,
   AGENT_SKILL_LONG_REVIEW_REVEAL_SCHEDULE_REVIEW,
+  AGENT_SKILL_LONG_REVIEW_SCENE_START_FRAMES,
   AGENT_SKILL_LONG_REVIEW_SCENE_SPECS,
+  AGENT_SKILL_LONG_REVIEW_SHAPE_GRAMMAR_CUE,
   AGENT_SKILL_LONG_REVIEW_STAGE_CAPTION_PHASE_FRAMES,
   AGENT_SKILL_LONG_REVIEW_STAGE_DENSITY_POLICY,
+  AGENT_SKILL_LONG_REVIEW_TITLE_PREROLL_FRAMES,
   longReviewDiagramStateAtFrame,
   longReviewDisplaySubtitles,
   longReviewLayoutAtFrame,
   longReviewProgressAtFrame,
   longReviewSceneAtFrame,
   longReviewSceneLayersAtFrame,
+  longReviewSemanticGroupProgress,
   longReviewSemanticEdgeRevealFrame,
   longReviewSemanticNodeRevealFrame,
   longReviewSemanticNodeVisibleFrame,
@@ -47,11 +57,24 @@ import {
   longReviewSubtitleGateAtFrame,
   longReviewVisibleEdgeIdsAtStage,
   longReviewVisibleNodeIdsAtStage,
+  longReviewVisualSceneCopy,
   validateAgentSkillLongReviewEpisode
 } from "../src/video/agent-skill-long-review-plan.mjs";
+import {
+  longReviewBoundaryContrastRoute,
+  longReviewResolvedSemanticGroupBounds,
+  longReviewSemanticRelationType
+} from "../src/video/agent-skill-long-review-contrast.mjs";
+import { visualSystemV1TextMotionAtFrame } from "../src/video/components/visual-system-v1/motion.mjs";
 
 const PLAN_PATH = resolve(studioRoot, "src", "video", "agent-skill-long-review-plan.mjs");
 const COMPONENT_PATH = resolve(studioRoot, "src", "video", "agent-skill-long-review.jsx");
+const CONTRAST_GEOMETRY_PATH = resolve(
+  studioRoot,
+  "src",
+  "video",
+  "agent-skill-long-review-contrast.mjs"
+);
 const VISUAL_COMPONENTS_PATH = resolve(
   studioRoot,
   "src",
@@ -147,6 +170,16 @@ function orthogonalSegmentIntersectsRect(start, end, rectangle) {
   return true;
 }
 
+function pointOnGeometryBoundary(point, geometry, tolerance = 0.001) {
+  const onVertical = Math.abs(point.x - geometry.left) <= tolerance ||
+    Math.abs(point.x - geometry.right) <= tolerance;
+  const onHorizontal = Math.abs(point.y - geometry.top) <= tolerance ||
+    Math.abs(point.y - geometry.bottom) <= tolerance;
+  const insideX = point.x >= geometry.left - tolerance && point.x <= geometry.right + tolerance;
+  const insideY = point.y >= geometry.top - tolerance && point.y <= geometry.bottom + tolerance;
+  return insideX && insideY && (onVertical || onHorizontal);
+}
+
 test("十分钟审阅版固定为 600 秒、30fps、18000 帧，并兼容 18 场景与 107 字幕合同", async () => {
   assert.equal(AGENT_SKILL_LONG_REVIEW_DURATION_SECONDS, 600);
   assert.equal(AGENT_SKILL_LONG_REVIEW_FPS, 30);
@@ -203,7 +236,10 @@ test("18 个镜头先声明通用视觉语义，再由结构决定箭头、风�
       .map((relation) => ({ sceneId: spec.id, relation }))
   );
   assert.ok(nonDirectedRelations.length > 0);
-  assert.deepEqual(new Set(nonDirectedRelations.map((item) => item.sceneId)), new Set(["S05"]));
+  assert.deepEqual(
+    new Set(nonDirectedRelations.map((item) => item.sceneId)),
+    new Set(["S02", "S05", "S07", "S12"])
+  );
   for (const spec of AGENT_SKILL_LONG_REVIEW_SCENE_SPECS) {
     const relationById = new Map(spec.visualPlan.semanticRelations.map((relation) => [relation.id, relation]));
     for (const edge of spec.edges) {
@@ -227,6 +263,313 @@ test("18 个镜头先声明通用视觉语义，再由结构决定箭头、风�
   assert.match(component, /data-semantic-relation-id/u);
   assert.match(component, /visualPlan\.timing\.supportingCopyStartFrame/u);
   assert.match(component, /longReviewSubtitleGateAtFrame/u);
+});
+
+test("长片用多种可复用图解叙事承载内容，并在 S04 一次性教清可见形状语法", async () => {
+  const treatments = AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.map((scene) => scene.narrativeTreatment);
+  assert.ok(new Set(treatments).size >= 3);
+  assert.equal(treatments.every((treatment) => EDITORIAL_NARRATIVE_TREATMENTS.includes(treatment)), true);
+  for (const scene of AGENT_SKILL_LONG_REVIEW_SCENE_SPECS) {
+    assert.equal(scene.shapeGrammarVersion, EDITORIAL_SHAPE_GRAMMAR_VERSION, scene.id);
+    assert.equal(scene.editorialScene.shapeGrammarVersion, EDITORIAL_SHAPE_GRAMMAR_VERSION, scene.id);
+    assert.equal(scene.editorialScene.narrativeTreatment, scene.narrativeTreatment, scene.id);
+    assert.equal(
+      scene.editorialScene.narrativeTreatmentRationale,
+      scene.narrativeTreatmentRationale,
+      scene.id
+    );
+    assert.equal(
+      scene.editorialScene.treatmentEvidence.mechanism,
+      EDITORIAL_NARRATIVE_TREATMENT_MECHANISMS[scene.narrativeTreatment].mechanism,
+      scene.id
+    );
+    const governedElementIds = new Set(
+      [...scene.editorialScene.cards, ...scene.editorialScene.diagrams].map((item) => item.id)
+    );
+    const governedRelationById = new Map(
+      scene.editorialScene.relations.map((item) => [item.id, item])
+    );
+    assert.equal(
+      scene.editorialScene.treatmentEvidence.visibleElementIds.every((id) => governedElementIds.has(id)),
+      true,
+      scene.id
+    );
+    assert.equal(
+      scene.editorialScene.treatmentEvidence.relationIds.every((id) => {
+        const relation = governedRelationById.get(id);
+        return relation != null &&
+          EDITORIAL_NARRATIVE_TREATMENT_MECHANISMS[scene.narrativeTreatment]
+            .requiredRelationTypes.includes(relation.semanticType);
+      }),
+      true,
+      scene.id
+    );
+    assert.equal(
+      scene.editorialScene.relations.every((relation) => typeof relation.semanticType === "string"),
+      true,
+      scene.id
+    );
+    assert.ok(scene.narrativeTreatmentRationale.length >= 18, scene.id);
+    for (const [nodeId, surface] of Object.entries(scene.surfacePlanById)) {
+      assert.ok(
+        ["complete-object", "process-anchor", "semantic-boundary"].includes(
+          surface.shapeGrammarRole
+        ),
+        `${scene.id}/${nodeId}`
+      );
+      if (surface.surfaceRole === "information-card") {
+        assert.equal(surface.shapeGrammarRole, "complete-object", `${scene.id}/${nodeId}`);
+        assert.equal(surface.shapeGrammarVisualForm, "full-outline", `${scene.id}/${nodeId}`);
+      }
+    }
+    for (const alternateTreatment of EDITORIAL_NARRATIVE_TREATMENTS) {
+      if (alternateTreatment === scene.narrativeTreatment) continue;
+      const relabeled = validateEditorialScene({
+        ...scene.editorialScene,
+        narrativeTreatment: alternateTreatment,
+        treatmentEvidence: {
+          ...scene.editorialScene.treatmentEvidence,
+          mechanism: EDITORIAL_NARRATIVE_TREATMENT_MECHANISMS[alternateTreatment].mechanism
+        }
+      });
+      assert.equal(relabeled.valid, false, `${scene.id} cannot masquerade as ${alternateTreatment}`);
+    }
+  }
+  for (let index = 1, runLength = 1; index < treatments.length; index += 1) {
+    runLength = treatments[index] === treatments[index - 1] ? runLength + 1 : 1;
+    assert.ok(
+      runLength <= EDITORIAL_VISUAL_POLICY.maximumConsecutiveSameNarrativeTreatment,
+      `narrative run at ${index}`
+    );
+  }
+
+  const packageScene = sceneById("S05");
+  assert.equal(packageScene.narrativeTreatment, "package-anatomy");
+  assert.deepEqual(packageScene.groups.map((group) => group.id), ["skill-package-scope"]);
+  assert.equal(packageScene.groups[0].visualForm, "full-outline");
+  assert.deepEqual(
+    packageScene.groups[0].nodeIds,
+    ["root", "skill-md", "scripts", "references", "assets"]
+  );
+  assert.equal(packageScene.layoutStability, "explicit-reflow");
+  assert.equal(packageScene.hierarchyLayoutProfile, "progressive-package");
+  assert.equal(packageScene.groups[0].boundsMode, "visible-members");
+  const rootSettled = longReviewLayoutAtFrame(
+    "S05",
+    longReviewSemanticNodeRevealFrame("S05", "root") + AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES - 1
+  );
+  const skillSettled = longReviewLayoutAtFrame(
+    "S05",
+    longReviewSemanticNodeRevealFrame("S05", "skill-md") + AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES - 1
+  );
+  assert.deepEqual(Object.keys(rootSettled.fullGeometryById), ["root"]);
+  assert.deepEqual(Object.keys(skillSettled.fullGeometryById), ["root", "skill-md"]);
+  assert.equal(rootSettled.geometryById.root.y, skillSettled.geometryById.root.y);
+  assert.equal(skillSettled.geometryById.root.centerX, skillSettled.geometryById["skill-md"].centerX);
+  assert.deepEqual(skillSettled.connectors.find((item) => item.relationId === "root-skill").route, [
+    { x: skillSettled.connectorGeometryById.root.centerX, y: skillSettled.connectorGeometryById.root.bottom },
+    { x: skillSettled.connectorGeometryById["skill-md"].centerX, y: skillSettled.connectorGeometryById["skill-md"].top }
+  ]);
+  const scriptsStart = packageScene.stages.find((item) => item.id === "scripts").startFrame;
+  const beforeScripts = longReviewLayoutAtFrame("S05", scriptsStart - 1);
+  const enteringScripts = longReviewLayoutAtFrame("S05", scriptsStart);
+  const midScripts = longReviewLayoutAtFrame(
+    "S05",
+    scriptsStart + Math.floor(AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES / 2)
+  );
+  const scriptsSettled = longReviewLayoutAtFrame(
+    "S05",
+    scriptsStart + AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES - 1
+  );
+  assert.ok(Math.abs(enteringScripts.geometryById["skill-md"].x - beforeScripts.geometryById["skill-md"].x) < 4);
+  assert.ok(midScripts.geometryById["skill-md"].x < enteringScripts.geometryById["skill-md"].x);
+  assert.ok(midScripts.geometryById["skill-md"].x > scriptsSettled.geometryById["skill-md"].x);
+  const completePackage = longReviewLayoutAtFrame("S05", packageScene.holdStartFrame);
+  const packageRight = Math.max(...packageScene.groups[0].nodeIds.map(
+    (nodeId) => completePackage.geometryById[nodeId].right
+  ));
+  assert.ok(completePackage.geometryById["prompt-only"].left > packageRight);
+  assert.equal(packageScene.surfacePlanById["prompt-only"].shapeGrammarRole, "semantic-boundary");
+  assert.equal(packageScene.surfacePlanById["prompt-only"].shapeGrammarMeaning, "exclusion");
+  assert.deepEqual(
+    Object.fromEntries(packageScene.layoutSamples[0].elements.map((item) => [item.id, item.primitive])),
+    {
+      root: "process-anchor",
+      "skill-md": "directory-entry",
+      scripts: "directory-entry",
+      references: "directory-entry",
+      assets: "directory-entry",
+      "prompt-only": "diagram-output"
+    }
+  );
+  assert.equal(
+    packageScene.edges.filter((edge) => edge.semanticType === "contains").length,
+    4
+  );
+
+  const runtimeScene = sceneById("S10");
+  assert.equal(runtimeScene.narrativeTreatment, "runtime-resource-flow");
+  assert.deepEqual(
+    runtimeScene.standaloneIcons.map((icon) => [icon.anchorId, icon.participation]),
+    [["tool", "graph-node"], ["mcp", "graph-node"]]
+  );
+  assert.equal(runtimeScene.edges.some((edge) => edge.id === "mcp-external"), true);
+
+  const governanceScene = sceneById("S15");
+  assert.equal(governanceScene.narrativeTreatment, "governance-evidence-trail");
+  assert.deepEqual(
+    governanceScene.layoutSamples[0].elements.slice(-2).map((item) => [item.id, item.surfaceRole]),
+    [["enable", "information-card"], ["rollback", "information-card"]]
+  );
+  assert.equal(governanceScene.edges.some((edge) => edge.id === "change-invalidate"), true);
+
+  const cueScene = sceneById(AGENT_SKILL_LONG_REVIEW_SHAPE_GRAMMAR_CUE.sceneId);
+  assert.equal(cueScene.shapeGrammarCue, AGENT_SKILL_LONG_REVIEW_SHAPE_GRAMMAR_CUE);
+  assert.equal(AGENT_SKILL_LONG_REVIEW_SHAPE_GRAMMAR_CUE.persistent, false);
+  assert.deepEqual(
+    AGENT_SKILL_LONG_REVIEW_SHAPE_GRAMMAR_CUE.items.map((item) => item.visualForm),
+    ["full-outline", "open-node", "dashed-outline"]
+  );
+  assert.equal(cueScene.surfacePlanById.weights.shapeGrammarRole, "semantic-boundary");
+  assert.equal(
+    AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.filter((scene) => scene.shapeGrammarCue != null).length,
+    1
+  );
+  const [component, contrastGeometry] = await Promise.all([
+    readFile(COMPONENT_PATH, "utf8"),
+    readFile(CONTRAST_GEOMETRY_PATH, "utf8")
+  ]);
+  assert.match(component, /function ShapeGrammarLegend/u);
+  assert.match(component, /const SHAPE_GRAMMAR_LEGEND_FONT_SIZE_PX = 24/u);
+  assert.match(component, /const SHAPE_GRAMMAR_LEGEND_MIN_HEIGHT_PX = 48/u);
+  assert.match(component, /data-shape-grammar-font-size=\{SHAPE_GRAMMAR_LEGEND_FONT_SIZE_PX\}/u);
+  assert.doesNotMatch(component, /fontSize:\s*14/u);
+  assert.match(component, /data-shape-grammar-boundary-wrapper/u);
+  assert.match(component, /data-shape-grammar-form=\{surfacePlan\?\.shapeGrammarVisualForm\}/u);
+  assert.match(component, /data-narrative-treatment=\{spec\.narrativeTreatment\}/u);
+  assert.match(component, /data-semantic-group-role=\{isCompleteBoundary/u);
+  assert.match(contrastGeometry, /layout\.fullGeometryById \?\? layout\.geometryById/u);
+  assert.match(component, /border: isCompleteBoundary \? `2px solid/u);
+  assert.match(component, /borderTop: isCompleteBoundary \? undefined/u);
+});
+
+test("图解构建期间只保留一个降权短提示，建立前和安静终帧恢复完整字幕", async () => {
+  const episode = await readFixtureEpisode();
+  const opening = sceneById("S10");
+  const preBuild = longReviewSubtitleGateAtFrame(episode.subtitles, opening.startFrame);
+  assert.equal(preBuild.phase, "pre-build");
+  assert.equal(preBuild.presentationMode, "full-sentence");
+  assert.equal(preBuild.activeSubtitle.text, preBuild.activeSubtitle.sourceText);
+  assert.equal(preBuild.presentationOpacity, 1);
+
+  const activeBuild = longReviewSubtitleGateAtFrame(
+    episode.subtitles,
+    opening.stages.find((stage) => stage.id === "tool").startFrame + 4
+  );
+  assert.equal(activeBuild.presentationMode, "semantic-cue");
+  assert.notEqual(activeBuild.activeSubtitle.text, activeBuild.activeSubtitle.sourceText);
+  assert.ok(Array.from(activeBuild.activeSubtitle.text).length <= 16);
+  assert.equal(activeBuild.presentationOpacity, 0.72);
+
+  const denseBuild = longReviewSubtitleGateAtFrame(episode.subtitles, 17763);
+  assert.equal(denseBuild.phase, "dense-build");
+  assert.equal(denseBuild.presentationMode, "semantic-cue");
+  assert.equal(denseBuild.activeSubtitle.text, "四项条件汇聚");
+
+  const finalHold = longReviewSubtitleGateAtFrame(
+    episode.subtitles,
+    sceneById("S18").holdStartFrame
+  );
+  assert.equal(finalHold.phase, "final-hold");
+  assert.equal(finalHold.presentationMode, "semantic-cue");
+  assert.equal(finalHold.activeSubtitle.text, "四项条件汇聚");
+  assert.equal(finalHold.presentationOpacity, 0.72);
+
+  const normalizeCue = (value) => value.normalize("NFKC").replace(/\s+/gu, "").trim();
+  for (const scene of AGENT_SKILL_LONG_REVIEW_SCENE_SPECS) {
+    for (const stage of scene.stages) {
+      assert.ok(Array.from(stage.cueText).length <= 16, `${scene.id}/${stage.id}`);
+      assert.doesNotMatch(
+        stage.cueText,
+        /等\d+项/u,
+        `${scene.id}/${stage.id} 不能把多对象提示降级为占位数量`
+      );
+      const caption = longReviewStageCaptionStateAtFrame(scene.id, stage.startFrame + 20);
+      assert.ok(Array.from(caption.current.label).length <= 16, `${scene.id}/${stage.id}`);
+      assert.equal(caption.current.fullLabel, stage.label, `${scene.id}/${stage.id}`);
+      assert.equal(caption.current.render, stage.cuePlan.render, `${scene.id}/${stage.id}`);
+      assert.equal(caption.current.origin, stage.cuePlan.origin, `${scene.id}/${stage.id}`);
+      if (stage.cuePlan.render === false) {
+        assert.ok(
+          ["authored", "auto-node"].includes(stage.cuePlan.origin),
+          `${scene.id}/${stage.id}`
+        );
+        assert.equal(stage.cuePlan.suppressionReason, "duplicates-visible-node");
+      } else {
+        const sampleFrame = Math.min(scene.endFrame - 1, stage.startFrame + 20);
+        const state = longReviewDiagramStateAtFrame(scene.id, sampleFrame);
+        const visibleLabels = state.renderedNodeIds.map((nodeId) =>
+          normalizeCue(scene.nodes.find((node) => node.id === nodeId)?.label ?? "")
+        );
+        assert.equal(
+          visibleLabels.includes(normalizeCue(stage.cuePlan.text)),
+          false,
+          `${scene.id}/${stage.id} 的可见 cue 不能逐字重复当帧节点`
+        );
+      }
+    }
+    const finalState = longReviewDiagramStateAtFrame(scene.id, scene.holdStartFrame);
+    const denseFinalHold = finalState.currentVisibleNodeIds.length >=
+        EDITORIAL_VISUAL_POLICY.denseDiagramVisibleNodeThreshold ||
+      finalState.currentVisibleEdgeIds.length >=
+        EDITORIAL_VISUAL_POLICY.denseDiagramVisibleRelationThreshold;
+    if (denseFinalHold) {
+      const finalStage = scene.stages[finalState.stageIndex];
+      const visibleNodeLabels = finalState.currentVisibleNodeIds.map(
+        (nodeId) => scene.nodes.find((node) => node.id === nodeId)?.label
+      );
+      assert.equal(
+        visibleNodeLabels.includes(finalStage.cueText),
+        false,
+        `${scene.id}/${finalStage.id} 的稳定短提示不能逐字重复可见节点标题`
+      );
+    }
+  }
+
+  const component = await readFile(COMPONENT_PATH, "utf8");
+  assert.match(component, /subtitleCaptions\(episode, subtitleGate\.activeSubtitle\)/u);
+  assert.match(component, /\["semantic-cue", "hidden"\]\.includes\(subtitlePresentationMode\)/u);
+  assert.match(component, /\{suppressStageCaption \? null : \(/u);
+  assert.match(component, /data-stage-caption-reading-anchor/u);
+  assert.match(component, /data-subtitle-shape-legend-gate=/u);
+  assert.match(component, /shapeGrammarLegendActive\s*\? 0/u);
+  assert.match(component, /subtitleGate\.opacity \* subtitleGate\.presentationOpacity/u);
+  assert.match(component, /subtitleGate\.renderSubtitle \? \(/u);
+
+  const s05PreBuild = longReviewSubtitleGateAtFrame(episode.subtitles, 3960);
+  assert.equal(s05PreBuild.presentationMode, "full-sentence");
+  assert.equal(s05PreBuild.renderSubtitle, true);
+  assert.equal(longReviewStageCaptionStateAtFrame("S05", 3960).current.render, false);
+
+  const s05NodeOwnedCueFrames = sceneById("S05").stages
+    .filter((stage) => ["skill-md", "scripts", "references", "assets"].includes(stage.id))
+    .flatMap((stage) => [
+      stage.startFrame,
+      longReviewSemanticNodeRevealFrame("S05", stage.nodeIds[0])
+    ]);
+  for (const frame of [
+    ...s05NodeOwnedCueFrames,
+    9367,
+    9440,
+    9503
+  ]) {
+    const gate = longReviewSubtitleGateAtFrame(episode.subtitles, frame);
+    assert.equal(gate.presentationMode, "hidden", `duplicate cue frame ${frame}`);
+    assert.equal(gate.presentationOpacity, 0, `duplicate cue frame ${frame}`);
+    assert.equal(gate.renderSubtitle, false, `duplicate cue frame ${frame}`);
+    assert.equal(gate.suppressionReason, "duplicates-visible-node", `duplicate cue frame ${frame}`);
+    assert.equal(gate.activeSubtitle.text, gate.activeSubtitle.sourceText, `source copy frame ${frame}`);
+  }
 });
 
 test("长片显示层合并五个孤立尾词，同时保持 107 条合同夹具源字幕不变", async () => {
@@ -308,24 +651,19 @@ test("S01 前十四秒分三次增加信息，十四秒后汇总，二十八秒�
   ]);
   assert.deepEqual([...scene.stages[3].activeNodeIds], ["prompt-a", "prompt-b", "prompt-c"]);
 
-  assert.equal(longReviewSemanticNodeRevealFrame("S01", "prompt-b"), 159);
-  assert.equal(longReviewSemanticNodeRevealFrame("S01", "prompt-c"), 300);
+  assert.equal(longReviewSemanticNodeRevealFrame("S01", "prompt-b"), 141);
+  assert.equal(longReviewSemanticNodeRevealFrame("S01", "prompt-c"), 282);
   assert.equal(longReviewSemanticNodeRevealFrame("S01", "skill-unit"), 845);
-  assert.equal(longReviewSemanticNodeVisibleFrame("S01", "skill-unit"), 862);
-  assert.equal(longReviewDiagramStateAtFrame("S01", 158).nodeProgress["prompt-b"], 0);
-  assert.ok(longReviewDiagramStateAtFrame("S01", 159).nodeProgress["prompt-b"] > 0);
-  assert.equal(longReviewDiagramStateAtFrame("S01", 299).nodeProgress["prompt-c"], 0);
-  assert.ok(longReviewDiagramStateAtFrame("S01", 300).nodeProgress["prompt-c"] > 0);
+  assert.equal(longReviewSemanticNodeVisibleFrame("S01", "skill-unit"), 845);
+  assert.equal(longReviewDiagramStateAtFrame("S01", 140).nodeProgress["prompt-b"], 0);
+  assert.ok(longReviewDiagramStateAtFrame("S01", 141).nodeProgress["prompt-b"] > 0);
+  assert.equal(longReviewDiagramStateAtFrame("S01", 281).nodeProgress["prompt-c"], 0);
+  assert.ok(longReviewDiagramStateAtFrame("S01", 282).nodeProgress["prompt-c"] > 0);
   assert.equal(longReviewDiagramStateAtFrame("S01", 844).nodeProgress["skill-unit"], 0);
   assert.ok(longReviewDiagramStateAtFrame("S01", 845).nodeProgress["skill-unit"] > 0);
-  assert.equal(
-    longReviewDiagramStateAtFrame("S01", 861).nodeProgress["skill-unit"] *
-      longReviewDiagramStateAtFrame("S01", 861).nodeVisibilityProgress["skill-unit"],
-    0
-  );
   assert.ok(
-    longReviewDiagramStateAtFrame("S01", 862).nodeProgress["skill-unit"] *
-      longReviewDiagramStateAtFrame("S01", 862).nodeVisibilityProgress["skill-unit"] > 0
+    longReviewDiagramStateAtFrame("S01", 845).nodeProgress["skill-unit"] *
+      longReviewDiagramStateAtFrame("S01", 845).nodeVisibilityProgress["skill-unit"] > 0
   );
 
   let longestSingleCardRun = 0;
@@ -379,10 +717,10 @@ test("S18 用关系语法承载五项收束，不回退为旧卡片矩阵", asyn
   assert.match(visualComponents, /whiteSpace: informationCard \? "nowrap"/u);
 });
 
-test("后续阶段先完成稳定布局的显隐交接，再显示新节点并按物理因果绘制关系", async () => {
+test("后续阶段默认先建立端点，渐进目录按边界、结构线、文字的物理顺序进入", async () => {
   assert.deepEqual(AGENT_SKILL_LONG_REVIEW_REVEAL_SCHEDULE_REVIEW, {
     valid: true,
-    mode: "connector-arrow-first",
+    mode: "endpoint-first",
     stageCount: AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.reduce(
       (total, scene) => total + scene.stages.length,
       0
@@ -406,16 +744,38 @@ test("后续阶段先完成稳定布局的显隐交接，再显示新节点并�
           assert.ok(revealFrame >= stage.startFrame, `${scene.id}/${nodeId} first-stage reveal`);
           continue;
         }
-        const establishingEdgeIds = stage.edgeIds.filter((edgeId) =>
-          scene.edges.find((edge) => edge.id === edgeId)?.to === nodeId
-        );
-        assert.equal(
-          revealFrame,
-          stage.startFrame + (establishingEdgeIds.length > 0
-            ? 0
-            : AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES),
-          `${scene.id}/${nodeId} hidden preparation schedule`
-        );
+        const packageContainmentRelation = scene.narrativeTreatment === "package-anatomy"
+          ? scene.edges.find((relation) =>
+              stage.edgeIds.includes(relation.id) && relation.to === nodeId &&
+              (relation.semanticType ?? relation.type) === "contains"
+            )
+          : null;
+        const packageContrastRelation = scene.narrativeTreatment === "package-anatomy"
+          ? scene.edges.find((relation) =>
+              stage.edgeIds.includes(relation.id) && relation.to === nodeId &&
+              (relation.semanticType ?? relation.type) === "contrasts-with"
+            )
+          : null;
+        if (packageContainmentRelation == null && packageContrastRelation == null) {
+          assert.equal(
+            revealFrame,
+            stage.startFrame,
+            `${scene.id}/${nodeId} endpoint-first schedule`
+          );
+        } else if (packageContrastRelation != null) {
+          assert.equal(
+            revealFrame,
+            stage.startFrame + AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES,
+            `${scene.id}/${nodeId} waits for package reflow before endpoint entry`
+          );
+        } else {
+          assert.equal(
+            revealFrame,
+            longReviewSemanticEdgeRevealFrame(scene.id, packageContainmentRelation.id) +
+              AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES,
+            `${scene.id}/${nodeId} relation-first package schedule`
+          );
+        }
         const beforeReveal = longReviewDiagramStateAtFrame(scene.id, revealFrame - 1);
         assert.equal(beforeReveal.nodeProgress[nodeId], 0);
         assert.ok(longReviewDiagramStateAtFrame(scene.id, revealFrame).nodeProgress[nodeId] > 0);
@@ -431,32 +791,27 @@ test("后续阶段先完成稳定布局的显隐交接，再显示新节点并�
           atReveal.nodeProgress[relation.from] * atReveal.nodeVisibilityProgress[relation.from] > 0,
           `${scene.id}/${edgeId} source visible when relation starts`
         );
-        if (stage.nodeIds.includes(relation.to)) {
-          const arrowFrame = revealFrame + AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES;
-          const beforeArrow = longReviewDiagramStateAtFrame(scene.id, arrowFrame - 1);
-          const atArrow = longReviewDiagramStateAtFrame(scene.id, arrowFrame);
+        const packageRelationFirst = scene.narrativeTreatment === "package-anatomy" &&
+          (relation.semanticType ?? relation.type) === "contains";
+        if (packageRelationFirst) {
           assert.equal(
-            beforeArrow.nodeProgress[relation.to] * beforeArrow.nodeVisibilityProgress[relation.to],
+            atReveal.nodeProgress[relation.to] * atReveal.nodeVisibilityProgress[relation.to],
             0,
-            `${scene.id}/${edgeId} target must not float before arrow`
+            `${scene.id}/${edgeId} target hidden while package relation draws`
           );
-          assert.ok(atArrow.edgeArrowProgress[edgeId] > 0, `${scene.id}/${edgeId} arrow arrival`);
-          const targetVisibleFrame = longReviewSemanticNodeVisibleFrame(scene.id, relation.to);
-          const renderedTargetProgress = atArrow.nodeProgress[relation.to] *
-            atArrow.nodeVisibilityProgress[relation.to];
-          if (arrowFrame < targetVisibleFrame) {
-            assert.equal(
-              renderedTargetProgress,
-              0,
-              `${scene.id}/${edgeId} target waits for every establishing relation`
-            );
-          } else {
-            assert.ok(
-              renderedTargetProgress > 0,
-              `${scene.id}/${edgeId} target appears with final establishing arrow`
-            );
-          }
+        } else {
+          assert.ok(
+            atReveal.nodeProgress[relation.to] * atReveal.nodeVisibilityProgress[relation.to] > 0,
+            `${scene.id}/${edgeId} target visible when relation starts`
+          );
         }
+        const arrowFrame = revealFrame + AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES;
+        const atArrow = longReviewDiagramStateAtFrame(scene.id, arrowFrame);
+        assert.ok(atArrow.edgeArrowProgress[edgeId] > 0, `${scene.id}/${edgeId} arrow arrival`);
+        assert.ok(
+          atArrow.nodeProgress[relation.to] * atArrow.nodeVisibilityProgress[relation.to] > 0,
+          `${scene.id}/${edgeId} arrow never points to blank space`
+        );
       }
     }
   }
@@ -511,13 +866,20 @@ test("运行时连接线把阶段说明作为保留带，且十八场每个阶�
   assert.equal(protectedBottom, 340);
 
   for (const scene of AGENT_SKILL_LONG_REVIEW_SCENE_SPECS) {
-    assert.equal(scene.layoutStability, "stable-final", scene.id);
+    assert.equal(
+      scene.layoutStability,
+      scene.narrativeTreatment === "package-anatomy" ? "explicit-reflow" : "stable-final",
+      scene.id
+    );
     assert.equal(
       scene.edges.some((edge) => edge.connectorPresentation?.kind === "smooth-curve"),
       false,
       `${scene.id} declares smooth connector`
     );
     const finalLayout = longReviewLayoutAtFrame(scene.id, scene.endFrame - 1, { width, height });
+    const finalRouteByRelationId = new Map(
+      finalLayout.allConnectors.map((connector) => [connector.relationId, connector.route])
+    );
     for (const connector of finalLayout.allConnectors) {
       assertOrthogonalConnector(connector, `${scene.id}/final/${connector.relationId}`);
       const relation = scene.edges.find((edge) => edge.id === connector.relationId);
@@ -531,9 +893,24 @@ test("运行时连接线把阶段说明作为保留带，且十八场每个阶�
       ];
       for (const frame of new Set(sampleFrames)) {
         const layout = longReviewLayoutAtFrame(scene.id, frame, { width, height });
-        assert.deepEqual(layout.fullGeometryById, finalLayout.fullGeometryById, `${scene.id}/${stage.id} geometry drift`);
+        if (scene.layoutStability === "stable-final") {
+          assert.deepEqual(layout.fullGeometryById, finalLayout.fullGeometryById, `${scene.id}/${stage.id} geometry drift`);
+        } else {
+          assert.deepEqual(
+            Object.keys(layout.fullGeometryById),
+            layout.state.renderedNodeIds,
+            `${scene.id}/${stage.id} reflow node set`
+          );
+        }
         for (const connector of layout.connectors) {
           assertOrthogonalConnector(connector, `${scene.id}/${stage.id}/${frame}/${connector.relationId}`);
+          if (scene.layoutStability === "stable-final") {
+            assert.deepEqual(
+              connector.route,
+              finalRouteByRelationId.get(connector.relationId),
+              `${scene.id}/${stage.id}/${frame}/${connector.relationId} route drift`
+            );
+          }
           const relation = scene.edges.find((edge) => edge.id === connector.relationId);
           assert.equal(connector.arrowhead, relation.directed, `${scene.id}/${connector.relationId} arrowhead`);
         }
@@ -563,60 +940,105 @@ test("运行时连接线把阶段说明作为保留带，且十八场每个阶�
   assert.doesNotMatch(component, /presentationKind === "smooth-curve"/u);
 });
 
-test("S18 关键窗口隐藏04与最终卡直至显隐交接完成，标题和字幕保持", async () => {
+test("S18 在 592–594.5 秒完成四条件汇聚，之后进入无对号的安静终帧", async () => {
   const episode = await readFixtureEpisode();
   const summary = AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.find((item) => item.id === "S18");
   const rollbackStage = summary.stages.find((item) => item.id === "rollback");
+  const convergeStage = summary.stages.find((item) => item.id === "converge");
   assert.equal(rollbackStage.startFrame, 17708);
-  assert.equal(longReviewSemanticNodeRevealFrame("S18", "rollback"), 17726);
-  assert.equal(longReviewSemanticNodeRevealFrame("S18", "adopt"), 17708);
-  assert.equal(longReviewSemanticNodeVisibleFrame("S18", "adopt"), 17740);
+  assert.equal(convergeStage.startFrame, 17760);
+  assert.equal(longReviewSemanticNodeRevealFrame("S18", "rollback"), 17708);
+  assert.equal(longReviewSemanticNodeRevealFrame("S18", "adopt"), 17760);
+  assert.equal(longReviewSemanticNodeVisibleFrame("S18", "adopt"), 17760);
 
-  for (let frame = 17710; frame <= 17720; frame += 1) {
+  for (let frame = 17710; frame <= 17725; frame += 1) {
     const state = longReviewDiagramStateAtFrame("S18", frame);
-    assert.equal(state.nodeProgress.rollback, 0, `rollback visible at reported local frame ${frame - 17700}`);
+    assert.ok(state.nodeProgress.rollback > 0, `rollback missing at reported local frame ${frame - 17700}`);
     assert.equal(
       state.nodeProgress.adopt * state.nodeVisibilityProgress.adopt,
       0,
       `adopt visible at reported local frame ${frame - 17700}`
     );
   }
-  for (let frame = 17718; frame <= 17728; frame += 1) {
+  for (let frame = 17708; frame < convergeStage.startFrame; frame += 1) {
     const state = longReviewDiagramStateAtFrame("S18", frame);
-    if (frame < 17726) {
-      assert.equal(state.nodeProgress.rollback, 0);
-      assert.equal(state.nodeProgress.adopt * state.nodeVisibilityProgress.adopt, 0);
-    } else {
-      assert.equal(state.stageTransitionProgress, 1);
-    }
+    assert.ok(state.nodeProgress.rollback > 0);
+    assert.equal(state.nodeProgress.adopt * state.nodeVisibilityProgress.adopt, 0);
   }
-  const visibilityHandoffComplete = longReviewDiagramStateAtFrame("S18", 17725);
-  assert.equal(visibilityHandoffComplete.stageTransitionProgress, 1);
-  assert.equal(visibilityHandoffComplete.nodeProgress.rollback, 0);
-  assert.equal(
-    visibilityHandoffComplete.nodeProgress.adopt *
-      visibilityHandoffComplete.nodeVisibilityProgress.adopt,
-    0
-  );
-  const revealBegins = longReviewDiagramStateAtFrame("S18", 17726);
-  assert.ok(revealBegins.nodeProgress.rollback > 0);
-  assert.equal(revealBegins.nodeProgress.adopt * revealBegins.nodeVisibilityProgress.adopt, 0);
-  const adoptVisible = longReviewDiagramStateAtFrame("S18", 17740);
+  const revealBegins = longReviewDiagramStateAtFrame("S18", convergeStage.startFrame);
+  assert.equal(revealBegins.stageId, "converge");
+  assert.ok(revealBegins.nodeProgress.adopt > 0);
+  assert.ok(revealBegins.nodeProgress.adopt * revealBegins.nodeVisibilityProgress.adopt > 0);
+  const adoptVisible = longReviewDiagramStateAtFrame("S18", 17777);
   assert.ok(adoptVisible.nodeProgress.adopt * adoptVisible.nodeVisibilityProgress.adopt > 0);
 
-  for (const edgeId of rollbackStage.edgeIds) {
+  for (const edgeId of convergeStage.edgeIds) {
     const edgeRevealFrame = longReviewSemanticEdgeRevealFrame("S18", edgeId);
     assert.equal(longReviewDiagramStateAtFrame("S18", edgeRevealFrame - 1).edgeProgress[edgeId], 0);
     assert.ok(longReviewDiagramStateAtFrame("S18", edgeRevealFrame).edgeProgress[edgeId] > 0);
+    assert.equal(edgeRevealFrame, 17781);
   }
-  assert.equal(longReviewSemanticEdgeRevealFrame("S18", "trigger-adopt"), 17711);
-  assert.equal(longReviewSemanticEdgeRevealFrame("S18", "rollback-adopt"), 17726);
-  assert.equal(summary.holdStartFrame, 17747);
+  assert.equal(summary.holdStartFrame, 17835);
+  const atConvergenceStart = longReviewDiagramStateAtFrame("S18", 17760);
+  const beforeQuietHold = longReviewDiagramStateAtFrame("S18", 17834);
+  assert.notDeepEqual(
+    {
+      adopt: atConvergenceStart.nodeProgress.adopt,
+      arrow: atConvergenceStart.edgeArrowProgress["rollback-adopt"]
+    },
+    {
+      adopt: beforeQuietHold.nodeProgress.adopt,
+      arrow: beforeQuietHold.edgeArrowProgress["rollback-adopt"]
+    }
+  );
+  let previousConvergenceProgress = 0;
+  for (let frame = convergeStage.startFrame; frame < summary.holdStartFrame; frame += 1) {
+    const state = longReviewDiagramStateAtFrame("S18", frame);
+    assert.ok(
+      state.convergenceProgress > previousConvergenceProgress,
+      `S18 convergence must keep moving at ${frame}`
+    );
+    assert.equal(state.nodeHighlightProgress.adopt, state.convergenceProgress);
+    for (const edgeId of convergeStage.edgeIds) {
+      assert.equal(state.edgeHighlightProgress[edgeId], state.convergenceProgress);
+    }
+    assert.equal(state.finalHold, false);
+    previousConvergenceProgress = state.convergenceProgress;
+  }
   const finalHold = longReviewDiagramStateAtFrame("S18", summary.holdStartFrame);
+  assert.equal(beforeQuietHold.complete, false);
   assert.equal(finalHold.finalHold, true);
+  assert.equal(finalHold.complete, true);
   assert.equal(finalHold.nodeProgress.adopt, 1);
   assert.equal(finalHold.edgeProgress["rollback-adopt"], 1);
   assert.equal(finalHold.edgeArrowProgress["rollback-adopt"], 1);
+  assert.equal(finalHold.convergenceProgress, 1);
+  for (let frame = summary.holdStartFrame; frame < summary.endFrame; frame += 1) {
+    const state = longReviewDiagramStateAtFrame("S18", frame);
+    assert.equal(state.finalHold, true, `S18 quiet hold at ${frame}`);
+    assert.equal(state.convergenceProgress, 1, `S18 quiet convergence at ${frame}`);
+    assert.equal(state.nodeHighlightProgress.adopt, 1, `S18 quiet node focus at ${frame}`);
+    assert.equal(state.edgeHighlightProgress["rollback-adopt"], 1, `S18 quiet edge focus at ${frame}`);
+  }
+  const endFrame = longReviewDiagramStateAtFrame("S18", 17999);
+  assert.deepEqual(
+    {
+      stageId: endFrame.stageId,
+      nodes: endFrame.nodeProgress,
+      edges: endFrame.edgeProgress,
+      arrows: endFrame.edgeArrowProgress,
+      visibleNodes: endFrame.currentVisibleNodeIds,
+      visibleEdges: endFrame.currentVisibleEdgeIds
+    },
+    {
+      stageId: finalHold.stageId,
+      nodes: finalHold.nodeProgress,
+      edges: finalHold.edgeProgress,
+      arrows: finalHold.edgeArrowProgress,
+      visibleNodes: finalHold.currentVisibleNodeIds,
+      visibleEdges: finalHold.currentVisibleEdgeIds
+    }
+  );
 
   for (const frame of [17710, 17718, 17720, 17726, 17728]) {
     const scene = longReviewSceneAtFrame(frame);
@@ -628,8 +1050,19 @@ test("S18 关键窗口隐藏04与最终卡直至显隐交接完成，标题和�
     assert.equal(layers[0].sceneId, "S18");
     assert.equal(layers[0].copyOpacity, 1);
     assert.equal(subtitle.opacity, 1);
+    assert.equal(subtitle.activeSubtitle?.sourceText, "完成标准、权限边界和版本回退。");
     assert.equal(subtitle.activeSubtitle?.text, "完成标准、权限边界和版本回退。");
+    assert.equal(subtitle.presentationMode, "hidden");
+    assert.equal(subtitle.renderSubtitle, false);
   }
+  const convergenceSubtitle = longReviewSubtitleGateAtFrame(episode.subtitles, 17763);
+  assert.equal(convergenceSubtitle.phase, "dense-build");
+  assert.equal(convergenceSubtitle.presentationMode, "semantic-cue");
+  assert.equal(convergenceSubtitle.activeSubtitle.text, "四项条件汇聚");
+  const quietSubtitle = longReviewSubtitleGateAtFrame(episode.subtitles, 17835);
+  assert.equal(quietSubtitle.phase, "final-hold");
+  assert.equal(quietSubtitle.presentationMode, "semantic-cue");
+  assert.equal(quietSubtitle.activeSubtitle.text, "四项条件汇聚");
 
   const forbiddenStatusBadges = AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.flatMap((scene) =>
     scene.standaloneIcons
@@ -641,6 +1074,10 @@ test("S18 关键窗口隐藏04与最终卡直至显隐交接完成，标题和�
       .map((icon) => `${scene.id}/${icon.id}/${icon.conceptKind}/${icon.statusMarkVariant}`)
   );
   assert.deepEqual(forbiddenStatusBadges, []);
+  const component = await readFile(COMPONENT_PATH, "utf8");
+  assert.match(component, /const backdropFrame = frame >= finalScene\.holdStartFrame/u);
+  assert.match(component, /<WideMovingBackdrop frameOverride=\{backdropFrame\} \/>/u);
+  assert.match(component, /data-wallpaper-sample-frame=\{frame\}/u);
 });
 
 test("审阅计划用八章和十八个镜头连续覆盖完整时轴", () => {
@@ -717,9 +1154,8 @@ test("所有分步图的动画进度单调完成，阶段窗口按当前语义�
   }
 });
 
-test("每个镜头边界保持画面守恒交叉淡化，文字按先退后进交接且不会重叠", () => {
+test("每个镜头边界只保留一个完全不透明的信息 owner", () => {
   assert.ok(AGENT_SKILL_LONG_REVIEW_CROSSFADE_FRAMES > 0);
-  const copyHandoffFrame = Math.floor((AGENT_SKILL_LONG_REVIEW_CROSSFADE_FRAMES - 1) / 2);
   for (const incoming of AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.slice(1)) {
     const boundaryFrame = incoming.startFrame;
     const outgoing = longReviewSceneAtFrame(boundaryFrame - 1);
@@ -729,39 +1165,59 @@ test("每个镜头边界保持画面守恒交叉淡化，文字按先退后进�
       frame += 1
     ) {
       const layers = longReviewSceneLayersAtFrame(frame);
-      assert.ok(layers.length >= 1 && layers.length <= 2);
-      const opacitySum = layers.reduce((sum, layer) => sum + layer.opacity, 0);
-      assert.ok(Math.abs(opacitySum - 1) < 1e-12, `opacity sum at frame ${frame}`);
-      assert.ok(layers.some((layer) => layer.opacity > 0), `blank frame ${frame}`);
-      assert.equal(layers.every((layer) => layer.opacity >= 0 && layer.opacity <= 1), true);
-      assert.equal(layers.every((layer) => layer.copyOpacity >= 0 && layer.copyOpacity <= 1), true);
-      assert.equal(layers.every((layer) => layer.diagramOpacity >= 0 && layer.diagramOpacity <= 1), true);
-      assert.ok(
-        layers.filter((layer) => layer.opacity * layer.copyOpacity > 1e-12).length <= 1,
-        `copy overlap at frame ${frame}`
-      );
-      assert.ok(
-        layers.filter((layer) => layer.opacity * layer.diagramOpacity > 1e-12).length <= 1,
-        `diagram overlap at frame ${frame}`
-      );
+      assert.equal(layers.length, 1, `single semantic owner at frame ${frame}`);
+      assert.equal(layers[0].opacity, 1, `opaque scene at frame ${frame}`);
+      assert.equal(layers[0].copyOpacity, 1, `opaque copy at frame ${frame}`);
+      assert.equal(layers[0].diagramOpacity, 1, `opaque diagram at frame ${frame}`);
+      assert.equal(layers[0].opacity * layers[0].copyOpacity, 1, `effective copy opacity ${frame}`);
+      assert.equal(layers[0].opacity * layers[0].diagramOpacity, 1, `effective diagram opacity ${frame}`);
+      assert.equal(layers[0].semanticHandoff, "opaque-hard-cut");
+      assert.equal(layers[0].sceneId, longReviewSceneAtFrame(frame).id);
     }
-    const atBoundary = longReviewSceneLayersAtFrame(boundaryFrame);
-    assert.ok(atBoundary.some((layer) => layer.sceneId === outgoing.id));
-    assert.ok(atBoundary.some((layer) => layer.sceneId === incoming.id));
-    assert.equal(atBoundary.find((layer) => layer.role === "outgoing").copyOpacity, 1);
-    assert.equal(atBoundary.find((layer) => layer.role === "incoming").copyOpacity, 0);
-    assert.equal(atBoundary.find((layer) => layer.role === "outgoing").diagramOpacity, 1);
+    assert.equal(longReviewSceneLayersAtFrame(boundaryFrame - 1)[0].sceneId, outgoing.id);
+    assert.equal(longReviewSceneLayersAtFrame(boundaryFrame)[0].sceneId, incoming.id);
 
-    const atCopyHandoff = longReviewSceneLayersAtFrame(boundaryFrame + copyHandoffFrame);
-    assert.equal(atCopyHandoff.every((layer) => layer.copyOpacity === 0), true);
-    assert.equal(atCopyHandoff.find((layer) => layer.role === "outgoing").diagramOpacity, 0);
-
-    const afterCrossfade = longReviewSceneLayersAtFrame(
-      boundaryFrame + AGENT_SKILL_LONG_REVIEW_CROSSFADE_FRAMES - 1
-    );
-    assert.equal(afterCrossfade.find((layer) => layer.role === "outgoing").copyOpacity, 0);
-    assert.equal(afterCrossfade.find((layer) => layer.role === "incoming").copyOpacity, 1);
+    const titleStartFrame = boundaryFrame - AGENT_SKILL_LONG_REVIEW_TITLE_PREROLL_FRAMES;
+    assert.equal(visualSystemV1TextMotionAtFrame(boundaryFrame, titleStartFrame).opacity, 1);
   }
+});
+
+test("正式视觉标题不被旧 episode 覆盖，渐进目录边框只包住当前可见成员", async () => {
+  const s05 = sceneById("S05");
+  const visualCopy = longReviewVisualSceneCopy("S05", {
+    title: "Agent Skill 的准确定义",
+    statement: "旧 episode 说明"
+  });
+  assert.equal(visualCopy.title, "Skill 是一个有边界的目录");
+  assert.equal(visualCopy.titleSource, "formal-visual-spec");
+  assert.equal(visualCopy.episodeTitleMismatch, true);
+  assert.equal(visualCopy.deck, s05.deck);
+
+  const group = s05.groups.find((item) => item.id === "skill-package-scope");
+  assert.equal(group.boundsMode, "visible-members");
+  const beforeNode = longReviewDiagramStateAtFrame(
+    "S05",
+    longReviewSemanticNodeRevealFrame("S05", "root") - 1
+  );
+  const atNode = longReviewDiagramStateAtFrame(
+    "S05",
+    longReviewSemanticNodeRevealFrame("S05", "root")
+  );
+  assert.equal(longReviewSemanticGroupProgress(beforeNode, group.nodeIds), 0);
+  assert.ok(longReviewSemanticGroupProgress(atNode, group.nodeIds) > 0);
+
+  const [component, contrastGeometry] = await Promise.all([
+    readFile(COMPONENT_PATH, "utf8"),
+    readFile(CONTRAST_GEOMETRY_PATH, "utf8")
+  ]);
+  assert.match(component, /longReviewSemanticGroupProgress\(layout\.state, group\.nodeIds\)/u);
+  assert.match(component, /if \(groupProgress <= 0\) return null/u);
+  assert.match(contrastGeometry, /group\.boundsMode === "visible-members"/u);
+  assert.match(contrastGeometry, /layout\.previousGeometryById/u);
+  assert.match(contrastGeometry, /layout\.currentGeometryById/u);
+  assert.match(component, /const title = visualSceneCopy\.title/u);
+  assert.doesNotMatch(component, /scene\.title \?\? spec\.title/u);
+  assert.match(component, /spec\.startFrame - AGENT_SKILL_LONG_REVIEW_TITLE_PREROLL_FRAMES/u);
 });
 
 test("跨场景字幕保持连续，其余场景仍由大标题领先建立", async () => {
@@ -900,9 +1356,10 @@ test("正式长片信息卡保持纯文字，四个 AI 图标只作为真实关�
       delayed: false
     },
   ]);
-  assert.equal(
-    AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.every((scene) => scene.layoutStability === "stable-final"),
-    true
+  assert.deepEqual(
+    AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.filter((scene) => scene.layoutStability === "explicit-reflow")
+      .map((scene) => scene.id),
+    ["S05"]
   );
 
   const [component, visualComponents] = await Promise.all([
@@ -919,7 +1376,7 @@ test("正式长片信息卡保持纯文字，四个 AI 图标只作为真实关�
   assert.doesNotMatch(visualComponents, /VisualSystemV1OpenDiagramGlyph/u);
 });
 
-test("六个 flow 镜头固定行组与方向，最终布局行内有序且全部节点不重叠", () => {
+test("七个 flow 镜头固定行组与方向，最终布局行内有序且全部节点不重叠", () => {
   const expectedProfiles = {
     S01: {
       rowGroups: [["prompt-a", "prompt-b", "prompt-c"], ["skill-unit"]],
@@ -938,8 +1395,16 @@ test("六个 flow 镜头固定行组与方向，最终布局行内有序且全�
       rowDirections: ["ltr", "ltr", "ltr"]
     },
     S14: {
-      rowGroups: [["publisher", "installer", "operator"], ["reviewer", "scanner", "owner"]],
-      rowDirections: ["ltr", "rtl"]
+      rowGroups: [["publisher", "installer", "operator", "reviewer"], ["scanner", "owner"]],
+      rowDirections: ["ltr", "ltr"]
+    },
+    S15: {
+      rowGroups: [
+        ["source", "permission", "runtime", "change"],
+        ["invalidate", "review"],
+        ["rollback", "enable"]
+      ],
+      rowDirections: ["ltr", "rtl", "ltr"]
     },
     S17: {
       rowGroups: [["understand", "trial", "inspect"], ["machine", "human", "revise"]],
@@ -1013,14 +1478,135 @@ test("十八个镜头用真实文字盒验证边框、换行与紧凑字号，�
       assert.ok(metrics.availableHeightPx > 0, `${metrics.id} 可用高度`);
     }
   }
-  for (const sceneId of ["S01", "S08", "S10", "S14", "S17", "S18"]) {
+  for (const sceneId of ["S01", "S08", "S10", "S14", "S15", "S17", "S18"]) {
     assert.equal(sceneById(sceneId).typographyProfile, "longform-emphasis", sceneId);
   }
   for (const scene of AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.filter(
-    (candidate) => !["S01", "S08", "S10", "S14", "S17", "S18"].includes(candidate.id)
+    (candidate) => !["S01", "S08", "S10", "S14", "S15", "S17", "S18"].includes(candidate.id)
   )) {
     assert.equal(scene.typographyProfile, "standard", scene.id);
   }
+});
+
+test("S15 在 490–500 秒形成横向证据生命周期、失效复评与回退闭环", () => {
+  const scene = sceneById("S15");
+  assert.equal(scene.visualPlan.structure, "flow");
+  assert.equal(scene.narrativeTreatment, "governance-evidence-trail");
+  assert.deepEqual(
+    scene.stages.map((stage) => [stage.id, stage.startFrame]),
+    [
+      ["source", 14160],
+      ["permission", 14316],
+      ["runtime", 14480],
+      ["change", 14643],
+      ["invalidate", 14806],
+      ["review-focus", 14904],
+      ["review", 14928],
+      ["decision", 15126]
+    ]
+  );
+
+  const changeLayout = longReviewLayoutAtFrame("S15", 14700, { width: 1920, height: 1080 });
+  assert.equal(changeLayout.state.stageId, "change");
+  assert.deepEqual(changeLayout.state.currentVisibleNodeIds, [
+    "source", "permission", "runtime", "change"
+  ]);
+  assert.deepEqual(changeLayout.state.currentVisibleEdgeIds, [
+    "source-permission", "permission-runtime", "runtime-change"
+  ]);
+  const changeGeometries = changeLayout.state.currentVisibleNodeIds.map(
+    (nodeId) => changeLayout.geometryById[nodeId]
+  );
+  const evidenceTrailSpan = Math.max(...changeGeometries.map((item) => item.right)) -
+    Math.min(...changeGeometries.map((item) => item.left));
+  assert.ok(
+    evidenceTrailSpan / changeLayout.safeArea.width >= 0.8,
+    `S15 evidence trail only occupies ${evidenceTrailSpan}px`
+  );
+
+  const invalidationLayout = longReviewLayoutAtFrame("S15", 14890, {
+    width: 1920,
+    height: 1080
+  });
+  assert.equal(invalidationLayout.state.stageId, "invalidate");
+  assert.deepEqual(invalidationLayout.state.currentVisibleNodeIds, [
+    "source", "permission", "runtime", "change", "invalidate", "review"
+  ]);
+  assert.deepEqual(invalidationLayout.state.currentVisibleEdgeIds, [
+    "source-permission",
+    "permission-runtime",
+    "runtime-change",
+    "change-invalidate",
+    "invalidate-review"
+  ]);
+
+  const closedLoopLayout = longReviewLayoutAtFrame("S15", 14999, {
+    width: 1920,
+    height: 1080
+  });
+  assert.equal(closedLoopLayout.state.stageId, "review");
+  assert.deepEqual(closedLoopLayout.state.currentVisibleNodeIds, [
+    "source", "change", "invalidate", "review", "enable", "rollback"
+  ]);
+  assert.deepEqual(closedLoopLayout.state.currentVisibleEdgeIds, [
+    "change-invalidate",
+    "invalidate-review",
+    "review-enable",
+    "review-rollback",
+    "rollback-source"
+  ]);
+  assertRelationEndpointsVisible(
+    scene,
+    closedLoopLayout.state.currentVisibleNodeIds,
+    closedLoopLayout.state.currentVisibleEdgeIds,
+    "S15/14999"
+  );
+  for (const nodeId of closedLoopLayout.state.currentVisibleNodeIds) {
+    assert.equal(closedLoopLayout.state.nodeVisibilityProgress[nodeId], 1, `S15/${nodeId} visible`);
+  }
+  for (const edgeId of closedLoopLayout.state.currentVisibleEdgeIds) {
+    assert.equal(closedLoopLayout.state.edgeProgress[edgeId], 1, `S15/${edgeId} drawn`);
+    assert.equal(closedLoopLayout.state.edgeArrowProgress[edgeId], 1, `S15/${edgeId} arrow`);
+  }
+  assert.equal(
+    closedLoopLayout.connectors.some((connector) => connector.relationId === "rollback-source"),
+    true
+  );
+  for (const connector of closedLoopLayout.connectors) {
+    assertOrthogonalConnector(connector, `S15/${connector.relationId}`);
+    for (const [start, end] of routeSegments(connector.route)) {
+      for (const [nodeId, geometry] of Object.entries(closedLoopLayout.connectorGeometryById)) {
+        if (nodeId === connector.from || nodeId === connector.to) continue;
+        assert.equal(
+          orthogonalSegmentIntersectsRect(start, end, geometry),
+          false,
+          `S15/${connector.relationId} crosses ${nodeId}`
+        );
+      }
+    }
+  }
+  const invalidateGeometry = closedLoopLayout.fullConnectorGeometryById.invalidate;
+  const reviewGeometry = closedLoopLayout.fullConnectorGeometryById.review;
+  assert.ok(invalidateGeometry.width < closedLoopLayout.fullGeometryById.invalidate.width / 2);
+  assert.ok(reviewGeometry.width < closedLoopLayout.fullGeometryById.review.width / 2);
+  const invalidateReview = closedLoopLayout.allConnectors.find(
+    (connector) => connector.relationId === "invalidate-review"
+  );
+  assert.ok(invalidateReview, "S15/invalidate-review connector");
+  assert.ok(
+    Math.abs(invalidateReview.route[0].x - invalidateReview.route.at(-1).x) > 300,
+    "S15/invalidate-review must visibly bridge the two text groups"
+  );
+  assert.equal(
+    pointOnGeometryBoundary(invalidateReview.route[0], invalidateGeometry),
+    true,
+    "S15/invalidate-review source must bind to visible text"
+  );
+  assert.equal(
+    pointOnGeometryBoundary(invalidateReview.route.at(-1), reviewGeometry),
+    true,
+    "S15/invalidate-review target must bind to visible text"
+  );
 });
 
 test("S08、S10 与 S17 的四个图标替代真实关系节点，不再生成远端重复表现", async () => {
@@ -1038,6 +1624,7 @@ test("S08、S10 与 S17 的四个图标替代真实关系节点，不再生成�
       assert.equal(icon.placement, "anchor-bounds", `${sceneId}/${icon.id}`);
       assert.equal(icon.labelRevealDeltaFrames, 0, `${sceneId}/${icon.id}`);
       assert.ok(layout.fullGeometryById[icon.anchorId], `${sceneId}/${icon.id} anchor geometry`);
+      assert.ok(layout.fullIconGeometryById[icon.anchorId], `${sceneId}/${icon.id} render geometry`);
       assert.ok(
         layout.fullConnectorGeometryById[icon.anchorId].width <
           layout.fullGeometryById[icon.anchorId].width,
@@ -1053,10 +1640,15 @@ test("S08、S10 与 S17 的四个图标替代真实关系节点，不再生成�
         layout.fullGeometryById[icon.anchorId].centerY,
         `${sceneId}/${icon.id} connector centerY`
       );
-      assert.deepEqual(
-        layout.fullVisibleGeometryById[icon.anchorId],
-        layout.fullConnectorGeometryById[icon.anchorId],
-        `${sceneId}/${icon.id} DOM 与连线必须使用同一可见几何`
+      assert.ok(
+        layout.fullConnectorGeometryById[icon.anchorId].left >
+          layout.fullIconGeometryById[icon.anchorId].left,
+        `${sceneId}/${icon.id} 连线命中范围必须排除 DOM 的透明横向 padding`
+      );
+      assert.ok(
+        layout.fullConnectorGeometryById[icon.anchorId].top >
+          layout.fullIconGeometryById[icon.anchorId].top,
+        `${sceneId}/${icon.id} 连线命中范围必须排除 DOM 的透明纵向 padding`
       );
       const incidentRelations = scene.edges.filter(
         (edge) => edge.from === icon.anchorId || edge.to === icon.anchorId
@@ -1071,8 +1663,8 @@ test("S08、S10 与 S17 的四个图标替代真实关系节点，不再生成�
     readFile(VISUAL_COMPONENTS_PATH, "utf8")
   ]);
   assert.match(component, /if \(graphIconByAnchorId\.has\(nodeId\)\) return null/u);
-  assert.match(component, /reason: "semantic-icon-visible-bounds"/u);
-  assert.match(component, /semanticLayout\.visibleGeometryById\[icon\.anchorId\]/u);
+  assert.match(component, /reason: "semantic-icon-render-bounds"/u);
+  assert.match(component, /semanticLayout\.iconGeometryById\[icon\.anchorId\]/u);
   assert.doesNotMatch(component, /StandaloneRailSlot/u);
   assert.match(visualComponents, /opacity: motion\.drawProgress/u);
 });
@@ -1114,47 +1706,53 @@ test("S08 的卡片实体都有完整边框，S10 与 S17 的图标节点保持�
   assert.equal(s17.edges.some((edge) => edge.id === "human-revise"), true);
 });
 
-test("同阶段新增的关系节点必须等关系箭头抵达后再显现，禁止悬空目标", () => {
-  assert.equal(AGENT_SKILL_LONG_REVIEW_CONNECTED_ENTRY_MODE, "connector-arrow-first");
+test("同阶段关系默认等待端点；渐进目录先完成边框和结构线再显示新成员", async () => {
+  assert.equal(AGENT_SKILL_LONG_REVIEW_CONNECTED_ENTRY_MODE, "endpoint-first");
   for (const scene of AGENT_SKILL_LONG_REVIEW_SCENE_SPECS) {
     for (const stage of scene.stages) {
       for (const nodeId of stage.nodeIds) {
-        const incomingEdgeIds = stage.edgeIds.filter((edgeId) => {
-          const relation = scene.edges.find((edge) => edge.id === edgeId);
-          return relation?.to === nodeId;
-        });
-        const outgoingEdgeIds = stage.edgeIds.filter((edgeId) =>
-          scene.edges.find((edge) => edge.id === edgeId)?.from === nodeId
-        );
-        if (incomingEdgeIds.length === 0 && outgoingEdgeIds.length > 0) {
-          const sourceRevealFrame = longReviewSemanticNodeRevealFrame(scene.id, nodeId);
-          const sourceState = longReviewDiagramStateAtFrame(scene.id, sourceRevealFrame);
-          assert.ok(sourceState.nodeProgress[nodeId] > 0, `${scene.id}/${nodeId} source enters`);
-          assert.ok(
-            outgoingEdgeIds.some((edgeId) => sourceState.edgeProgress[edgeId] > 0),
-            `${scene.id}/${nodeId} 新 source 不得脱离关系悬空入场`
-          );
-        }
-        if (incomingEdgeIds.length === 0) continue;
-        const expectedVisibleFrame = Math.max(...incomingEdgeIds.map((edgeId) =>
-          longReviewSemanticEdgeRevealFrame(scene.id, edgeId) +
-            AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES
-        ));
+        const expectedVisibleFrame = longReviewSemanticNodeRevealFrame(scene.id, nodeId);
         assert.equal(
           longReviewSemanticNodeVisibleFrame(scene.id, nodeId),
           expectedVisibleFrame,
           `${scene.id}/${stage.id}/${nodeId} visible schedule`
         );
-        for (let frame = stage.startFrame; frame < Math.min(scene.endFrame, expectedVisibleFrame + 5); frame += 1) {
-          const state = longReviewDiagramStateAtFrame(scene.id, frame);
-          const establishingArrowProgress = Math.min(
-            ...incomingEdgeIds.map((edgeId) => state.edgeArrowProgress[edgeId] ?? 0)
+      }
+      for (const edgeId of stage.edgeIds) {
+        const relation = scene.edges.find((edge) => edge.id === edgeId);
+        const edgeRevealFrame = longReviewSemanticEdgeRevealFrame(scene.id, edgeId);
+        const beforeEdge = longReviewDiagramStateAtFrame(scene.id, edgeRevealFrame - 1);
+        const atEdge = longReviewDiagramStateAtFrame(scene.id, edgeRevealFrame);
+        assert.equal(beforeEdge.edgeProgress[edgeId], 0, `${scene.id}/${edgeId} no early connector`);
+        assert.ok(atEdge.edgeProgress[edgeId] > 0, `${scene.id}/${edgeId} connector starts`);
+        const packageRelationFirst = scene.narrativeTreatment === "package-anatomy" &&
+          (relation.semanticType ?? relation.type) === "contains";
+        if (packageRelationFirst) {
+          assert.equal(
+            (atEdge.nodeProgress[relation.from] ?? 0) *
+              (atEdge.nodeVisibilityProgress[relation.from] ?? 0),
+            1,
+            `${scene.id}/${edgeId} parent settles before relation`
           );
-          const renderedNodeProgress = (state.nodeProgress[nodeId] ?? 0) *
-            (state.nodeVisibilityProgress[nodeId] ?? 0);
-          assert.ok(
-            renderedNodeProgress <= establishingArrowProgress + 1e-12,
-            `${scene.id}/${stage.id}/${nodeId} 在 global ${frame} 早于关系箭头出现`
+          assert.equal(
+            atEdge.nodeProgress[relation.to] ?? 0,
+            0,
+            `${scene.id}/${edgeId} target text stays hidden while relation draws`
+          );
+          assert.equal(
+            longReviewSemanticNodeRevealFrame(scene.id, relation.to),
+            edgeRevealFrame + AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES,
+            `${scene.id}/${edgeId} target starts only after structural line completes`
+          );
+          continue;
+        }
+        for (const endpointId of [relation.from, relation.to]) {
+          const endpointProgress = (atEdge.nodeProgress[endpointId] ?? 0) *
+            (atEdge.nodeVisibilityProgress[endpointId] ?? 0);
+          assert.equal(
+            endpointProgress,
+            1,
+            `${scene.id}/${stage.id}/${edgeId}/${endpointId} endpoint must settle before connector`
           );
         }
       }
@@ -1168,29 +1766,90 @@ test("同阶段新增的关系节点必须等关系箭头抵达后再显现，�
   const toolVisibleFrame = longReviewSemanticNodeVisibleFrame("S10", "tool");
   assert.equal(
     skillAgentFrame,
-    s10ToolStage.startFrame + 3
+    s10ToolStage.startFrame + AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES +
+      AGENT_SKILL_LONG_REVIEW_EDGE_DELAY_FRAMES
   );
-  assert.equal(agentVisibleFrame, skillAgentFrame + AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES);
-  assert.equal(agentToolFrame, agentVisibleFrame + 3);
-  assert.equal(toolVisibleFrame, agentToolFrame + AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES);
+  assert.equal(agentVisibleFrame, s10ToolStage.startFrame);
+  assert.equal(agentToolFrame, skillAgentFrame);
+  assert.equal(toolVisibleFrame, s10ToolStage.startFrame);
 
+  assert.ok(
+    longReviewSemanticEdgeRevealFrame("S08", "budget-parked") >
+      longReviewSemanticNodeVisibleFrame("S08", "context-budget") +
+      AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES
+  );
+  assert.ok(
+    longReviewSemanticEdgeRevealFrame("S17", "machine-human") >
+      longReviewSemanticNodeVisibleFrame("S17", "human")
+  );
+  assert.ok(
+    longReviewSemanticEdgeRevealFrame("S17", "human-revise") >
+      longReviewSemanticNodeVisibleFrame("S17", "revise")
+  );
+
+  const s05 = sceneById("S05");
+  for (const [nodeId, edgeId] of [
+    ["skill-md", "root-skill"],
+    ["scripts", "root-scripts"],
+    ["references", "root-refs"],
+    ["assets", "root-assets"]
+  ]) {
+    const stage = s05.stages.find((item) => item.nodeIds.includes(nodeId));
+    assert.equal(
+      longReviewSemanticEdgeRevealFrame("S05", edgeId),
+      stage.startFrame + AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES +
+        AGENT_SKILL_LONG_REVIEW_EDGE_DELAY_FRAMES,
+      `S05/${nodeId} waits for the 18-frame outline reflow`
+    );
+    const nodeRevealFrame = longReviewSemanticNodeRevealFrame("S05", nodeId);
+    const beforeNode = longReviewDiagramStateAtFrame("S05", nodeRevealFrame - 1);
+    assert.equal(beforeNode.edgeProgress[edgeId], 1, `S05/${nodeId} relation complete before text`);
+    assert.equal(beforeNode.nodeProgress[nodeId], 0, `S05/${nodeId} text not yet visible`);
+  }
+  const boundaryStage = s05.stages.find((item) => item.id === "boundary");
+  const boundaryRelation = s05.visualPlan.semanticRelations.find((item) => item.id === "boundary");
+  assert.equal(longReviewSemanticRelationType(boundaryRelation), "contrasts-with");
+  const promptRevealFrame = longReviewSemanticNodeRevealFrame("S05", "prompt-only");
   assert.equal(
-    longReviewSemanticEdgeRevealFrame("S08", "budget-parked"),
-    longReviewSemanticNodeVisibleFrame("S08", "context-budget") + 3
+    promptRevealFrame,
+    boundaryStage.startFrame + AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES
+  );
+  const promptLayout = longReviewLayoutAtFrame("S05", promptRevealFrame);
+  const sourceGroup = s05.groups.find((group) => group.id === "skill-package-scope");
+  const promptBounds = longReviewResolvedSemanticGroupBounds(sourceGroup, promptLayout);
+  assert.ok(
+    promptLayout.geometryById["prompt-only"].left > promptBounds.right,
+    "S05 Prompt first appears only after it is outside the settled package outline"
   );
   assert.equal(
-    longReviewSemanticNodeVisibleFrame("S17", "human"),
-    longReviewSemanticEdgeRevealFrame("S17", "machine-human") +
-      AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES
+    longReviewSemanticEdgeRevealFrame("S05", "boundary"),
+    boundaryStage.startFrame + AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES * 2 +
+      AGENT_SKILL_LONG_REVIEW_EDGE_DELAY_FRAMES
   );
-  assert.equal(
-    longReviewSemanticNodeVisibleFrame("S17", "revise"),
-    longReviewSemanticEdgeRevealFrame("S17", "human-revise") +
-      AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES
+  const promptRelationStart = longReviewSemanticEdgeRevealFrame("S05", "boundary");
+  const promptStateAtRelationStart = longReviewDiagramStateAtFrame("S05", promptRelationStart);
+  assert.equal(promptStateAtRelationStart.nodeProgress["prompt-only"], 1);
+  const promptRelationLayout = longReviewLayoutAtFrame("S05", promptRelationStart);
+  const promptRelationBounds = longReviewResolvedSemanticGroupBounds(sourceGroup, promptRelationLayout);
+  const promptTarget = promptRelationLayout.geometryById["prompt-only"];
+  assert.deepEqual(
+    longReviewBoundaryContrastRoute(s05, boundaryRelation, promptRelationLayout),
+    [
+      { x: promptRelationBounds.right, y: promptTarget.centerY },
+      { x: promptTarget.left, y: promptTarget.centerY }
+    ],
+    "S05 contrast connector is restricted to the external outline-to-card gap"
   );
+  const component = await readFile(COMPONENT_PATH, "utf8");
+  assert.match(component, /data-connector-semantic-style/u);
+  assert.match(component, /contrast-dashed/u);
+  assert.match(component, /palette\.purpleDeep/u);
+  assert.match(component, /longReviewBoundaryContrastRoute/u);
+  assert.match(component, /strokeDasharray: boundaryContrast \? "7 6" : 1/u);
+  assert.doesNotMatch(component, /semanticRelation\?\.semanticType === "contrasts-with"/u);
 });
 
-test("S14 使用精确 sequence-critical 连线 tone，长片品牌层固定 quiet", async () => {
+test("S14 使用精确 sequence-critical 连线 tone，长片品牌层按 18 个真实切场帧短暂运动", async () => {
   assert.equal(sceneById("S14").connectorTone, "sequence-critical");
   assert.deepEqual(AGENT_SKILL_LONG_REVIEW_CONNECTOR_TONES["sequence-critical"], {
     strokeWidthPx: 2.6,
@@ -1204,8 +1863,16 @@ test("S14 使用精确 sequence-critical 连线 tone，长片品牌层固定 qui
       .every((scene) => scene.connectorTone === "standard"),
     true
   );
+  assert.deepEqual(
+    AGENT_SKILL_LONG_REVIEW_SCENE_START_FRAMES,
+    AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.map((scene) => scene.startFrame)
+  );
+  assert.equal(AGENT_SKILL_LONG_REVIEW_SCENE_START_FRAMES.length, 18);
   const component = await readFile(COMPONENT_PATH, "utf8");
-  assert.equal((component.match(/<VisualSystemV1WideBrandLayer tone="quiet" \/>/gu) ?? []).length, 1);
+  assert.match(
+    component,
+    /<VisualSystemV1WideBrandLayer[\s\S]*?tone="quiet"[\s\S]*?transitionFrames=\{AGENT_SKILL_LONG_REVIEW_SCENE_START_FRAMES\}[\s\S]*?\/>/u
+  );
 });
 
 test("完整长片用内容驱动宽度、纯文字卡片和开放图解打破连续卡片模板", async () => {
@@ -1328,8 +1995,8 @@ test("完整长片用内容驱动宽度、纯文字卡片和开放图解打破�
   const reviseVisibleFrame = longReviewSemanticNodeVisibleFrame("S17", "revise");
   const feedbackEdgeRevealFrame = longReviewSemanticEdgeRevealFrame("S17", "human-revise");
   assert.equal(reviseRevealFrame, 17049);
-  assert.equal(reviseVisibleFrame, 17066);
-  assert.equal(feedbackEdgeRevealFrame, 17052);
+  assert.equal(reviseVisibleFrame, 17049);
+  assert.equal(feedbackEdgeRevealFrame, 17070);
   for (let frame = 16860; frame < reviseRevealFrame; frame += 1) {
     assert.equal(
       longReviewDiagramStateAtFrame("S17", frame).nodeProgress.revise,
@@ -1338,10 +2005,7 @@ test("完整长片用内容驱动宽度、纯文字卡片和开放图解打破�
     );
   }
   assert.ok(longReviewDiagramStateAtFrame("S17", reviseRevealFrame).nodeProgress.revise > 0);
-  assert.equal(
-    longReviewDiagramStateAtFrame("S17", reviseRevealFrame).nodeVisibilityProgress.revise,
-    0
-  );
+  assert.ok(longReviewDiagramStateAtFrame("S17", reviseRevealFrame).nodeVisibilityProgress.revise > 0);
   assert.equal(longReviewDiagramStateAtFrame("S17", feedbackEdgeRevealFrame - 1).edgeProgress["human-revise"], 0);
   assert.ok(longReviewDiagramStateAtFrame("S17", feedbackEdgeRevealFrame).edgeProgress["human-revise"] > 0);
   const firstFeedbackArrowFrame = Array.from(
@@ -1350,20 +2014,18 @@ test("完整长片用内容驱动宽度、纯文字卡片和开放图解打破�
   ).find((frame) =>
     longReviewDiagramStateAtFrame("S17", frame).edgeArrowProgress["human-revise"] > 0
   );
-  assert.equal(firstFeedbackArrowFrame, 17066);
+  assert.equal(firstFeedbackArrowFrame, 17084);
   assert.equal(
     longReviewDiagramStateAtFrame("S17", firstFeedbackArrowFrame - 1).nodeVisibilityProgress.revise,
-    0
+    1
   );
   const firstConnectedFeedbackState = longReviewDiagramStateAtFrame(
     "S17",
     firstFeedbackArrowFrame
   );
   assert.ok(firstConnectedFeedbackState.nodeVisibilityProgress.revise > 0);
-  assert.equal(
-    firstConnectedFeedbackState.nodeVisibilityProgress.revise,
-    firstConnectedFeedbackState.edgeArrowProgress["human-revise"]
-  );
+  assert.equal(firstConnectedFeedbackState.nodeVisibilityProgress.revise, 1);
+  assert.ok(firstConnectedFeedbackState.edgeArrowProgress["human-revise"] > 0);
   assert.equal(longReviewDiagramStateAtFrame("S17", 17087).edgeArrowProgress["human-revise"], 1);
   assert.equal(longReviewDiagramStateAtFrame("S17", 17087).finalHold, false);
   assert.equal(s17.holdStartFrame, 17088);
@@ -1377,6 +2039,17 @@ test("完整长片用内容驱动宽度、纯文字卡片和开放图解打破�
   );
   assertOrthogonalConnector(inspectMachineConnector, "S17/inspect-machine");
   assert.equal(inspectMachineConnector.arrowhead, true);
+  const feedbackConnector = stableS17Layout.connectors.find(
+    (connector) => connector.relationId === "human-revise"
+  );
+  const reviseConnectorGeometry = stableS17Layout.fullConnectorGeometryById.revise;
+  assertOrthogonalConnector(feedbackConnector, "S17/human-revise");
+  assert.equal(feedbackConnector.route.at(-1).x, reviseConnectorGeometry.right);
+  assert.equal(feedbackConnector.route.at(-1).y, reviseConnectorGeometry.centerY);
+  assert.ok(
+    reviseConnectorGeometry.width < stableS17Layout.fullGeometryById.revise.width,
+    "反馈箭头必须命中文字可见边界，而不是宽布局 cell"
+  );
   assert.equal(s17.edges.some((edge) => edge.id === "inspect-revise"), false);
   assert.equal(s17.editorialScene.cards.every((card) => card.iconPresentation === "none"), true);
   assert.match(component, /longReviewLayoutAtFrame\(spec\.id, globalFrame/u);
@@ -1508,11 +2181,39 @@ test("已报告的关键问题帧保持语义清楚、卡片有完整边框且�
   ]);
   const s14SampleById = new Map(s14.layoutSamples[0].elements.map((element) => [element.id, element]));
   for (const nodeId of at13920.state.currentVisibleNodeIds) {
-    assert.equal(s14.surfacePlanById[nodeId].surfaceRole, "information-card", `S14/${nodeId}`);
-    assert.equal(s14SampleById.get(nodeId).borderMode, "full-outline", `S14/${nodeId} border`);
-    assert.ok(s14SampleById.get(nodeId).borderWidthPx >= 2, `S14/${nodeId} border width`);
+    assert.equal(s14.surfacePlanById[nodeId].surfaceRole, "open-canvas", `S14/${nodeId}`);
+    assert.equal(s14SampleById.get(nodeId).borderMode, "shape-outline", `S14/${nodeId} border`);
     assert.equal(s14SampleById.get(nodeId).iconPlacement, "none", `S14/${nodeId} embedded icon`);
   }
+  assert.equal(s14.surfacePlanById.owner.surfaceRole, "information-card");
+  assert.equal(s14SampleById.get("owner").borderMode, "full-outline");
+  assert.ok(s14SampleById.get("owner").borderWidthPx >= 2);
+  const s14Final = longReviewLayoutAtFrame("S14", 14159);
+  assertRelationEndpointsVisible(
+    s14,
+    s14Final.state.currentVisibleNodeIds,
+    s14Final.state.currentVisibleEdgeIds,
+    "S14/final"
+  );
+  for (const connector of s14Final.connectors) {
+    assertOrthogonalConnector(connector, `S14/final/${connector.relationId}`);
+  }
+  const scannerOwner = s14Final.allConnectors.find(
+    (connector) => connector.relationId === "scanner-owner"
+  );
+  assert.ok(scannerOwner, "S14/scanner-owner connector");
+  assert.ok(
+    Math.abs(scannerOwner.route[0].x - scannerOwner.route.at(-1).x) > 350,
+    "S14/scanner-owner must visibly bridge scanner text and owner card"
+  );
+  assert.equal(
+    pointOnGeometryBoundary(scannerOwner.route[0], s14Final.fullConnectorGeometryById.scanner),
+    true
+  );
+  assert.equal(
+    pointOnGeometryBoundary(scannerOwner.route.at(-1), s14Final.fullConnectorGeometryById.owner),
+    true
+  );
 
   for (const [frame, sceneId] of [[3900, "S04"], [4890, "S05"], [9990, "S10"], [13920, "S14"]]) {
     for (const connector of longReviewLayoutAtFrame(sceneId, frame).connectors) {
@@ -1552,6 +2253,19 @@ test("S18 最终保持帧不再挂载对号附属徽章，正式长片禁用 ver
     assert.equal(connector.arrowhead, true, `S18/${relation.id} arrowhead`);
     assert.equal(layout.state.edgeArrowProgress[relation.id], 1, `S18/${relation.id} arrow reveal`);
   }
+  const triggerAdopt = layout.allConnectors.find(
+    (connector) => connector.relationId === "trigger-adopt"
+  );
+  assert.deepEqual(triggerAdopt.route, [
+    { x: 864, y: 408 },
+    { x: 880, y: 408 },
+    { x: 880, y: 666 }
+  ]);
+  assert.equal(
+    triggerAdopt.route.some((point) => Math.abs(point.y - layout.fullGeometryById.trigger.top) < 10),
+    false,
+    "S18/trigger-adopt must not hug the trigger border"
+  );
 });
 
 test("场景标题、说明、阶段文字和语义节点正文都接入独立文字透明度", async () => {
@@ -1619,7 +2333,7 @@ test("节点焦点连续交接，八个证据镜头使用稳定最终布局的�
 
   const component = await readFile(COMPONENT_PATH, "utf8");
   assert.match(component, /VisualSystemV1SemanticNode/u);
-  assert.match(component, /data-scene-layout="stable-final-visual-grammar"/u);
+  assert.match(component, /data-scene-layout=\{`\$\{spec\.layoutStability\}-visual-grammar`\}/u);
   assert.match(component, /data-visual-system-connectors="orthogonal-semantic-graph"/u);
   assert.match(component, /data-visual-system-content="open-canvas"/u);
   assert.match(component, /data-same-level-surfaces="semantic-hierarchy-consistent"/u);

@@ -1,8 +1,8 @@
-# AI 技术视频图标系统 v4
+# AI 技术视频图标系统 v5
 
 这套系统解决“相同 AI 技术概念每次都画成同一个图标”的问题。它不是图标墙素材库，也不允许 Storyboard 从一个好看的图标开始倒推内容。
 
-当前状态：28 个语义映射、几何、状态与动效注册表保持 `approved-production-v1`；当前工作树的展示边界候选升级为 `ai-tech-icon-contract-v4`，须经新 MP4 视觉确认后才能成为生产默认。Zhengjiazhi 已于 2026-08-26 接受 `ai-tech-icon-system-review-v002` 的注册图标方向；后续相同 `conceptKind` 必须复用同一注册图标，不能临时改画。v4 不改变这 28 个映射，而是把图标的语义参与方式收敛为“关系节点、近距归属说明、专门焦点”三类，并禁止造成重复表达和因果断裂的远端边栏。2026-08-27 的最新 Git 决策允许把本轮视觉整改的精确任务代码、文档、测试和必要运行时资产选择性提交并推送到 `codex/agent-production-pipeline`；仍禁止创建 PR、merge 或把代码同步误报为完整视觉验收。
+2026-08-30，Zhengjiazhi 在实际关键片段检查后明确选择把既有未合并提交与本轮任务代码一起安全合并；注册表因此晋升为 `ai-tech-icon-registry-v2 / approved-production-v2`。v2 不改变 28 个 `conceptKind` 映射，但把 `human-approval-gate` 固定为无人物、无对号的选项面板，并把图标 DOM 的 padded 渲染槽与 padding-free 连线命中范围分开。该批准允许图标合同进入仓库复用，不等于完整 10 分钟成片已通过最终视觉验收。
 
 2026-08-26 更新：Zhengjiazhi 已确认 v002 的注册几何视觉方向；图标注册表晋升为 `approved-production-v1`，稳定可见面积品牌水印 v013 同步晋升为默认生产 profile。批准记录的可执行真源是 `AI_TECH_ICON_REGISTRY_APPROVAL`；任何后续几何或 motion 变化都必须升版本并重新确认。专门独立图标演示/焦点布局的实际成片效果仍须通过新 MP4 视觉确认，不能用旧联系表代替。
 
@@ -26,9 +26,11 @@ conceptKind → canonicalIconId → geometry + token roles + motion recipe
 
 不能根据中文标题猜图标。未知 `conceptKind` 必须 fail closed；信息卡 node 固定使用 `none`。图标只有在确实帮助观众识别对象、状态或动作时才允许出现，不能重复标题，也不能为了填空白形成图标墙。每个长视频独立图标还必须声明 `semanticObjectId`、`anchorId`、`purpose: "semantic-anchor" | "state-proof" | "interaction-cue"`、`participation: "graph-node" | "owned-callout" | "dedicated-focus"`，并选择 `presentation: "open-diagram-symbol" | "standalone-focus"`；缺少任一项都不渲染。同一 `semanticObjectId` 只能有一个主表现，不能同时保留同名文字节点和另一处图标。
 
-`graph-node` 直接替换对应开放图解文字节点，继承其稳定布局位置和全部入射/出射关系线；文字标题与说明在图标节点内部排版，图标和标签揭示时间差不得超过 1 帧。稳定布局锚点只负责占位，实际 DOM 与连接线必须共同消费由注册图标尺寸、统一字号、间距和 padding 测出的紧致可见几何；测量结果放不进锚点时 fail closed，不能缩字或裁切。`owned-callout` 必须显式声明 owner，距 owner 最多 48px，并使用清楚的归属线；`dedicated-focus` 必须使用真正预留独立区域的 `dedicated-icon-focus` 布局。远端左右 rail、无 owner 漂浮、同时保留同名节点都直接 fail closed；任何模式都禁止用 clamp、缩小文字、覆盖卡片、压住边框或穿过箭头来强行显示。
+`graph-node` 直接替换对应开放图解文字节点，继承其稳定布局位置和全部入射/出射关系线；文字标题与说明在图标节点内部排版，图标和标签揭示时间差不得超过 1 帧。稳定布局锚点只负责占位；同一次测量必须同时返回 `renderGeometry` 与 `connectorGeometry`：前者包含统一 padding，供 DOM 排版；后者只包住图标、标题和说明的实际可见内容，供连线命中。二者中心一致、后者嵌套于前者，禁止把透明 padding 当成可见端点，也禁止另外估算一套坐标。测量结果放不进锚点时 fail closed，不能缩字或裁切。`owned-callout` 必须显式声明 owner，距 owner 最多 48px，并使用清楚的归属线；`dedicated-focus` 必须使用真正预留独立区域的 `dedicated-icon-focus` 布局。远端左右 rail、无 owner 漂浮、同时保留同名节点都直接 fail closed；任何模式都禁止用 clamp、缩小文字、覆盖卡片、压住边框或穿过箭头来强行显示。
 
-关系入场采用 `connector-arrow-first`：已有 source 可先向预留端点绘制关系，新 target 的图标与文字在最后一条必要入边的箭头抵达时同步显现；新 source 则必须与出边同帧出现。同阶段两跳以上关系按拓扑波次执行，例如 `Skill → Agent → Tool` 必须先建立 Agent，再从 Agent 画向 Tool。没有明确入口的循环关系、提前漂浮的 target、从未建立的中间节点发出的线都直接 fail closed。
+同一套可见几何规则也适用于没有图标的开放文字节点：连接线必须落到左对齐标题/说明的紧边界，而不是落到排版 cell 的空白边缘。信息卡仍绑定完整四边框，虚线语义 wrapper 及具有全宽可见表面的原语绑定其完整外形。稳定最终布局中的关系路线只计算一次，阶段变化只能显示或隐藏，不能让已出现的线重新寻路；两列或两行之间存在安全中缝时，正交路由优先使用中缝，避免贴着边框形成第二条假边框。
+
+关系入场采用 `endpoint-first`：source 与 target 的图形、文字和完整边界必须先进入并稳定，连接线才能从真实起点绘向真实终点；箭头头部出现时两端必须已经清楚可见。同阶段存在多条入边或两跳关系时，可以在端点稳定后同步绘制，但不得先露出残线、折角、箭头或指向空白。任何缺少可见起点/终点、从尚未出现的中间节点发出的线、连接线早于端点的实现都直接 fail closed。
 
 ## 2. 第一批 28 个稳定语义
 
@@ -126,7 +128,7 @@ conceptKind → canonicalIconId → geometry + token roles + motion recipe
 - `quiet`：普通清单逐项完成，用约 6 帧克制绘制后稳定保持；
 - `celebrate`：只用于一次关键最终验收，用约 18 帧单次 jelly 建立后稳定保持，不能循环。
 
-人工 Gate 图标不再内置小对号；审计清单改用项目圆点。任何专门的成功图标演示都必须组合 `VisualSystemV1StatusMark`，因此同一视频不会再出现圆形对号、手写对号和方形对号三套视觉。对号只能在真实验收项全部完成、且镜头明确采用独立成功状态焦点布局时出现，禁止无证据成功态。
+人工 Gate 图标使用简洁的选项面板：一个外框、标题线、两项选择和一个实心选择点，只表达“由人作出采用或退回决定”。它不画人物、头像、机器人、手臂或对号，也不内置成功语义；审计清单改用项目圆点。任何专门的成功图标演示都必须组合 `VisualSystemV1StatusMark`，因此同一视频不会再出现圆形对号、手写对号和方形对号三套视觉。对号只能在真实验收项全部完成、且镜头明确采用独立成功状态焦点布局时出现，禁止无证据成功态。
 
 对号与数据库、路由、模型、工具等其他注册图标处于同一层级，没有“结果完成就自动追加”的特殊地位。它不得作为卡片徽章、贴边附件、标题前缀或结果卡注释；若确实需要展示，必须单独设计成功状态图标演示/焦点镜头。
 
@@ -153,6 +155,6 @@ conceptKind → canonicalIconId → geometry + token roles + motion recipe
 - v013 manifest 必须同时声明 `approved=true`、`reviewOnly=false`、审批方向与 canonical profile；
 - 后续几何、尺寸或节奏调整必须生成新版本，不能覆盖 v012、v013 或任何既有成片。
 
-长片可以显式使用 `VisualSystemV1WideBrandLayer tone="quiet"`，当前 quiet opacity 为 `0.76`。tone 只降低视觉权重，不改变 v013 profile、120×120 尺寸、`top=40/right=40` 位置、120 帧循环、可见 footprint 或右上 200px 品牌安全区；其他 composition 不传 tone 时仍为 `standard=1.0`。每个正式片段仍必须恰好包含一个品牌层。
+长片可以显式使用 `VisualSystemV1WideBrandLayer tone="quiet"`，当前 quiet opacity 为 `0.76`。`standard` 仍连续播放已批准 v013 循环；`quiet` 使用 `longform-quiet` cadence：正文全程保持同一个已批准稳定帧，只有声明的场景边界后 30 帧执行一次闭合的 `0→10→0` 克制微动。上层必须把真实场景 `startFrame` 作为 `transitionFrames` 传入；`null/undefined` 统一表示只在 composition 片头与片尾触发 fallback，空数组属于配置错误。每个声明窗口都必须完整落在成片内，且相邻窗口不得重叠，否则 fail closed，避免片尾停在半个动作或切换时跳帧。cadence 不改变 v013 profile、120×120 尺寸、`top=40/right=40` 位置、可见 footprint 或右上 200px 品牌安全区，且水印每帧仍持续存在。每个正式片段仍必须恰好包含一个品牌层。
 
 可执行真源：`studio/src/video/components/visual-system-v1/ai-watermark.mjs`、`studio/src/video/components/visual-system-v1/brand-layer.jsx`、`studio/public/assets/visual-system-v1/ai-watermark-v013/manifest.json`。

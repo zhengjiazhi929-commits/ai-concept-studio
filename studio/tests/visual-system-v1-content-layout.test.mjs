@@ -10,6 +10,7 @@ import {
   visualSystemV1EstimateContentTextWidthPx,
   visualSystemV1PackContentCards,
   visualSystemV1SemanticIconNodeMetrics,
+  visualSystemV1SemanticTextConnectorMetrics,
   visualSystemV1SemanticTextBoxMetrics
 } from "../src/video/components/visual-system-v1/content-layout.mjs";
 
@@ -69,10 +70,26 @@ test("语义图标节点按图标与文字真实占位生成居中的连线命�
   });
   assert.equal(VISUAL_SYSTEM_V1_SEMANTIC_ICON_NODE_DEFAULTS.iconSizePx, 56);
   assert.equal(metrics.fitsAnchor, true);
+  assert.ok(metrics.renderGeometry.width < anchorGeometry.width);
+  assert.ok(metrics.renderGeometry.height < anchorGeometry.height);
   assert.ok(metrics.connectorGeometry.width < anchorGeometry.width);
   assert.ok(metrics.connectorGeometry.height < anchorGeometry.height);
+  assert.ok(metrics.connectorGeometry.width < metrics.renderGeometry.width);
+  assert.ok(metrics.connectorGeometry.height < metrics.renderGeometry.height);
+  assert.equal(metrics.renderGeometry.centerX, anchorGeometry.centerX);
+  assert.equal(metrics.renderGeometry.centerY, anchorGeometry.centerY);
   assert.equal(metrics.connectorGeometry.centerX, anchorGeometry.centerX);
   assert.equal(metrics.connectorGeometry.centerY, anchorGeometry.centerY);
+  assert.equal(
+    metrics.connectorGeometry.left - metrics.renderGeometry.left,
+    VISUAL_SYSTEM_V1_SEMANTIC_ICON_NODE_DEFAULTS.horizontalPaddingPx
+  );
+  assert.equal(
+    metrics.connectorGeometry.top - metrics.renderGeometry.top,
+    VISUAL_SYSTEM_V1_SEMANTIC_ICON_NODE_DEFAULTS.verticalPaddingPx
+  );
+  assert.equal(metrics.connectorGeometry.width, metrics.visibleContentWidthPx);
+  assert.equal(metrics.connectorGeometry.height, metrics.visibleContentHeightPx);
   assert.equal(metrics.connectorGeometry.left, metrics.connectorGeometry.x);
   assert.equal(metrics.connectorGeometry.top, metrics.connectorGeometry.y);
   assert.ok(Math.abs(
@@ -197,6 +214,88 @@ test("真实文字盒把边框、自适应紧凑字号、换行和 marker 一起
     typographyProfile: "standard"
   });
   assert.equal(undersized.fits, false);
+});
+
+test("连接线绑定真实可见承载：卡片取完整边框，开放文字取左对齐紧边界", () => {
+  const anchorGeometry = {
+    x: 288,
+    y: 510,
+    width: 576,
+    height: 120
+  };
+  const openText = visualSystemV1SemanticTextConnectorMetrics({
+    id: "open-text",
+    label: "重新评测",
+    detail: "固定样例比较新旧",
+    surfaceRole: "open-canvas",
+    anchorGeometry,
+    typographyProfile: "longformEmphasis"
+  });
+  assert.equal(openText.bindingMode, "visible-text-content");
+  assert.equal(openText.fitsAnchor, true);
+  assert.ok(openText.connectorGeometry.width < anchorGeometry.width / 2);
+  assert.ok(openText.connectorGeometry.left >= anchorGeometry.x);
+  assert.ok(openText.connectorGeometry.right <= anchorGeometry.x + anchorGeometry.width);
+  assert.ok(openText.connectorGeometry.top >= anchorGeometry.y);
+  assert.ok(openText.connectorGeometry.bottom <= anchorGeometry.y + anchorGeometry.height);
+
+  const mixedText = visualSystemV1SemanticTextConnectorMetrics({
+    id: "feedback-mixed-text",
+    label: "反馈给同一 Agent",
+    detail: "修订并保留版本史",
+    surfaceRole: "open-canvas",
+    anchorGeometry: { x: 287.2, y: 590, width: 434.2, height: 164 },
+    typographyProfile: "longformEmphasis"
+  });
+  const mixedVisibleTextWidth = Math.max(
+    mixedText.textBoxMetrics.labelTextWidthPx,
+    mixedText.textBoxMetrics.detailTextWidthPx,
+    16
+  );
+  const expectedMixedRight = Number((
+    287.2 +
+    mixedText.textBoxMetrics.horizontalPaddingPx +
+    mixedVisibleTextWidth +
+    8
+  ).toFixed(4));
+  assert.equal(mixedText.bindingMode, "visible-text-content");
+  assert.equal(mixedText.connectorGeometry.right, expectedMixedRight);
+  assert.equal(mixedText.connectorGeometry.right, 609.84);
+  assert.ok(mixedText.connectorGeometry.right < 287.2 + 434.2 - 100);
+
+  const card = visualSystemV1SemanticTextConnectorMetrics({
+    id: "card",
+    label: "重新启用",
+    detail: "证据通过",
+    surfaceRole: "information-card",
+    anchorGeometry,
+    typographyProfile: "longformEmphasis"
+  });
+  assert.equal(card.bindingMode, "full-visible-surface");
+  assert.deepEqual(card.connectorGeometry, {
+    x: 288,
+    y: 510,
+    left: 288,
+    top: 510,
+    width: 576,
+    height: 120,
+    right: 864,
+    bottom: 630,
+    centerX: 576,
+    centerY: 570
+  });
+
+  const fullSurfaceOpenNode = visualSystemV1SemanticTextConnectorMetrics({
+    id: "full-surface-open",
+    label: "时间锚点",
+    detail: "可见横贯表面",
+    surfaceRole: "open-canvas",
+    anchorGeometry,
+    typographyProfile: "longformEmphasis",
+    bindToFullAnchor: true
+  });
+  assert.equal(fullSurfaceOpenNode.bindingMode, "full-visible-surface");
+  assert.deepEqual(fullSurfaceOpenNode.connectorGeometry, card.connectorGeometry);
 });
 
 test("首选宽度能放下时保持单行、原顺序与首选宽度", () => {

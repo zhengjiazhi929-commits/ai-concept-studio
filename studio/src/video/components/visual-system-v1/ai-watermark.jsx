@@ -9,6 +9,7 @@ import {
   aiCubeFaceVisibilityAtFrame,
   aiExtrusionLayerState,
   aiWatermarkMotionAtFrame,
+  visualSystemV1AiWatermarkCadenceState,
   visualSystemV1AiWatermarkProfile,
   visualSystemV1AiWatermarkGeometry,
   visualSystemV1AiWatermarkScale
@@ -276,11 +277,20 @@ export function VisualSystemV1AiWatermark({
   top = VISUAL_SYSTEM_V1_AI_WATERMARK.placement.top,
   right = VISUAL_SYSTEM_V1_AI_WATERMARK.placement.right,
   zIndex = VISUAL_SYSTEM_V1_AI_WATERMARK.placement.zIndex,
-  profile = VISUAL_SYSTEM_V1_AI_WATERMARK.defaultProfileId
+  profile = VISUAL_SYSTEM_V1_AI_WATERMARK.defaultProfileId,
+  motionCadence = VISUAL_SYSTEM_V1_AI_WATERMARK.defaultCadenceId,
+  transitionFrames
 }) {
   const frame = useCurrentFrame();
-  const { width, height } = useVideoConfig();
+  const { width, height, durationInFrames } = useVideoConfig();
   const resolvedProfile = visualSystemV1AiWatermarkProfile(profile);
+  const cadenceState = visualSystemV1AiWatermarkCadenceState({
+    frame,
+    durationInFrames,
+    rasterFrameCount: resolvedProfile.rasterSequence.frameCount,
+    cadenceId: motionCadence,
+    transitionFrames
+  });
   const geometry = visualSystemV1AiWatermarkGeometry(width, height, {
     size,
     top,
@@ -297,6 +307,11 @@ export function VisualSystemV1AiWatermark({
       data-ai-watermark-profile={resolvedProfile.id}
       data-ai-watermark-approval-status={resolvedProfile.approvalStatus}
       data-ai-watermark-review-only={resolvedProfile.reviewOnly ? "true" : "false"}
+      data-ai-watermark-visibility-policy={cadenceState.visibilityPolicy}
+      data-ai-watermark-motion-cadence={cadenceState.cadenceId}
+      data-ai-watermark-motion-phase={cadenceState.phase}
+      data-ai-watermark-motion-active={cadenceState.motionActive ? "true" : "false"}
+      data-ai-watermark-raster-frame={cadenceState.rasterFrame}
       style={{
         position: "absolute",
         top: geometry.top,
@@ -310,7 +325,7 @@ export function VisualSystemV1AiWatermark({
     >
       <Img
         data-ai-watermark-raster-sequence={resolvedProfile.rasterSequenceLabel}
-        src={staticFile(rasterFramePath(frame, resolvedProfile))}
+        src={staticFile(rasterFramePath(cadenceState.rasterFrame, resolvedProfile))}
         style={{
           width: geometry.width,
           height: geometry.height,

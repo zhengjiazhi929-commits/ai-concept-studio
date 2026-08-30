@@ -77,9 +77,13 @@ test("28个 conceptKind 一一稳定映射到唯一 canonicalIconId", () => {
     assert.equal(aiTechIconIdForConcept(conceptKind), canonicalIconId);
     assert.equal(aiTechIconDefinitionById(canonicalIconId), definition);
     assert.equal(definition.registryVersion, AI_TECH_ICON_REGISTRY_VERSION);
-    assert.equal(definition.status, "approved-production-v1");
+    assert.equal(definition.status, "approved-production-v2");
     assert.equal(definition.approval.approvedBy, "Zhengjiazhi");
-    assert.equal(definition.approval.sourceCandidate, "ai-tech-icon-system-review-v002");
+    assert.equal(definition.approval.approvedOn, "2026-08-30");
+    assert.equal(
+      definition.approval.sourceCandidate,
+      "agent-skill-current-head-key-clips-v015"
+    );
     if (definition.renderKind === "geometry") {
       assert.equal(definition.sourceType, "original-local-vector");
       assert.equal(definition.geometry, AI_TECH_ICON_GEOMETRY[canonicalIconId]);
@@ -143,6 +147,17 @@ test("所有几何统一64视窗、简约原语预算和受控颜色槽", () => 
   assert.doesNotMatch(registrySource, /#[0-9a-f]{3,8}|rgba?\(/iu);
   assert.equal("success-check" in AI_TECH_ICON_GEOMETRY, false);
   assert.equal("human-gate-check" in AI_TECH_ICON_GEOMETRY, false);
+  assert.deepEqual(
+    AI_TECH_ICON_GEOMETRY["human-approval-gate"].elements.map((element) => element.type),
+    ["rect", "line", "circle", "line", "circle", "line"]
+  );
+  assert.equal(
+    AI_TECH_ICON_GEOMETRY["human-approval-gate"].elements.some(
+      (element) => element.type === "path" || "d" in element
+    ),
+    false,
+    "人工决定使用选项面板，不使用人物轮廓、机器人或对号 path"
+  );
 });
 
 test("Remotion组件只消费 progress 与 token，不含临时图标、emoji 或浏览器计时动画", () => {

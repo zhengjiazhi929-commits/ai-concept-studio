@@ -8,8 +8,8 @@ const safeZonePadding = 40;
 const safeZoneSize = placement.size + safeZonePadding * 2;
 
 export const VISUAL_SYSTEM_V1_WIDE_BRAND_TONES = Object.freeze({
-  standard: Object.freeze({ opacity: 1 }),
-  quiet: Object.freeze({ opacity: 0.76 })
+  standard: Object.freeze({ opacity: 1, watermarkCadence: "continuous" }),
+  quiet: Object.freeze({ opacity: 0.76, watermarkCadence: "longform-quiet" })
 });
 
 export const VISUAL_SYSTEM_V1_WIDE_BRAND_SAFE_ZONE = Object.freeze({
@@ -47,6 +47,8 @@ export const VISUAL_SYSTEM_V1_WIDE_BRAND_LAYER = Object.freeze({
   defaultWatermarkProfileId: VISUAL_SYSTEM_V1_AI_WATERMARK.defaultProfileId,
   watermarkProfilePolicy: "approved-v013-default-v012-explicit-legacy-fallback",
   watermarkTonePolicy: "standard-default-quiet-explicit-longform",
+  watermarkCadencePolicy:
+    "standard-continuous-quiet-static-body-declared-transition-motion",
   watermarkTones: VISUAL_SYSTEM_V1_WIDE_BRAND_TONES,
   watermarkPlacement: placement,
   safeZone: VISUAL_SYSTEM_V1_WIDE_BRAND_SAFE_ZONE
@@ -54,11 +56,17 @@ export const VISUAL_SYSTEM_V1_WIDE_BRAND_LAYER = Object.freeze({
 
 export function VisualSystemV1WideBrandLayer({
   profile = VISUAL_SYSTEM_V1_AI_WATERMARK.defaultProfileId,
-  tone = "standard"
+  tone = "standard",
+  transitionFrames
 } = {}) {
   const { safeZone } = VISUAL_SYSTEM_V1_WIDE_BRAND_LAYER;
   const resolvedTone = VISUAL_SYSTEM_V1_WIDE_BRAND_TONES[tone];
   if (!resolvedTone) throw new Error(`未知的 visual-system-v1 品牌水印 tone: ${tone}`);
+  const transitionSource = resolvedTone.watermarkCadence === "continuous"
+    ? "continuous-not-applicable"
+    : transitionFrames == null
+      ? "composition-entry-and-exit"
+      : "declared-scene-transitions";
   return (
     <div
       aria-hidden="true"
@@ -74,6 +82,8 @@ export function VisualSystemV1WideBrandLayer({
       data-brand-watermark-profile={profile}
       data-brand-watermark-tone={tone}
       data-brand-watermark-opacity={resolvedTone.opacity}
+      data-brand-watermark-motion-cadence={resolvedTone.watermarkCadence}
+      data-brand-watermark-transition-source={transitionSource}
       style={{
         position: "absolute",
         inset: 0,
@@ -82,7 +92,11 @@ export function VisualSystemV1WideBrandLayer({
         pointerEvents: "none"
       }}
     >
-      <VisualSystemV1AiWatermark profile={profile} />
+      <VisualSystemV1AiWatermark
+        profile={profile}
+        motionCadence={resolvedTone.watermarkCadence}
+        transitionFrames={transitionFrames}
+      />
     </div>
   );
 }

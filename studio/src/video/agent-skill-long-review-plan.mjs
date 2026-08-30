@@ -13,6 +13,7 @@ import {
 import {
   visualSystemV1ContentCardMetrics,
   visualSystemV1SemanticIconNodeMetrics,
+  visualSystemV1SemanticTextConnectorMetrics,
   visualSystemV1SemanticTextBoxMetrics
 } from "./components/visual-system-v1/content-layout.mjs";
 import { VISUAL_SYSTEM_V1 } from "./components/visual-system-v1/tokens.mjs";
@@ -25,9 +26,13 @@ import {
 import {
   EDITORIAL_ICON_PRESENTATIONS,
   EDITORIAL_ICON_PURPOSES,
+  EDITORIAL_NARRATIVE_TREATMENT_MECHANISMS,
+  EDITORIAL_SHAPE_GRAMMAR,
+  EDITORIAL_SHAPE_GRAMMAR_VERSION,
   EDITORIAL_VISUAL_POLICY,
   editorialSurfacePurposeRationale,
   planEditorialCardTitleLayout,
+  planEditorialSubtitlePresentation,
   validateEditorialScene,
   validateEditorialSequence
 } from "../shared/editorial-visual-policy.mjs";
@@ -36,7 +41,11 @@ export const AGENT_SKILL_LONG_REVIEW_DURATION_SECONDS = 600;
 export const AGENT_SKILL_LONG_REVIEW_FPS = 30;
 export const AGENT_SKILL_LONG_REVIEW_FRAME_COUNT =
   AGENT_SKILL_LONG_REVIEW_DURATION_SECONDS * AGENT_SKILL_LONG_REVIEW_FPS;
+// Kept as the transition audit window for historical candidates. Semantic
+// content itself uses an opaque hard handoff; only independent decoration may
+// animate around a scene boundary.
 export const AGENT_SKILL_LONG_REVIEW_CROSSFADE_FRAMES = 9;
+export const AGENT_SKILL_LONG_REVIEW_TITLE_PREROLL_FRAMES = 11;
 export const AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES = 18;
 export const AGENT_SKILL_LONG_REVIEW_EDGE_DELAY_FRAMES = 3;
 export const AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES = 14;
@@ -95,8 +104,16 @@ export const AGENT_SKILL_LONG_REVIEW_FLOW_LAYOUT_PROFILES = Object.freeze({
     rowDirections: ["ltr", "ltr", "ltr"], rowHeightPx: 132, rowGapPx: 30, gapPx: 32
   }),
   S14: longReviewFlowLayoutProfile({
-    rowGroups: [["publisher", "installer", "operator"], ["reviewer", "scanner", "owner"]],
-    rowDirections: ["ltr", "rtl"], rowHeightPx: 164, rowGapPx: 40, gapPx: 40
+    rowGroups: [["publisher", "installer", "operator", "reviewer"], ["scanner", "owner"]],
+    rowDirections: ["ltr", "ltr"], rowHeightPx: 150, rowGapPx: 54, gapPx: 36
+  }),
+  S15: longReviewFlowLayoutProfile({
+    rowGroups: [
+      ["source", "permission", "runtime", "change"],
+      ["invalidate", "review"],
+      ["rollback", "enable"]
+    ],
+    rowDirections: ["ltr", "rtl", "ltr"], rowHeightPx: 120, rowGapPx: 30, gapPx: 32
   }),
   S17: longReviewFlowLayoutProfile({
     rowGroups: [["understand", "trial", "inspect"], ["machine", "human", "revise"]],
@@ -243,6 +260,110 @@ const sceneTimes = Object.freeze([
   ["S17", 540, 574], ["S18", 574, 600]
 ]);
 
+export const AGENT_SKILL_LONG_REVIEW_SCENE_START_FRAMES = Object.freeze(
+  sceneTimes.map(([, startSecond]) => frameAt(startSecond))
+);
+
+export const AGENT_SKILL_LONG_REVIEW_NARRATIVE_TREATMENTS = Object.freeze({
+  S01: Object.freeze({
+    treatment: "state-transformation",
+    rationale: "把三份散落提示与最终能力单元放在同一变化路径里，让复用价值先于术语出现。"
+  }),
+  S02: Object.freeze({
+    treatment: "comparison-field",
+    rationale: "把重复复制与可维护能力放进同一比较场，直接呈现二者在边界和复用上的差异。"
+  }),
+  S03: Object.freeze({
+    treatment: "state-transformation",
+    rationale: "让聊天版本依次经过触发、步骤、材料和验收，最终转化为可维护的 Skill 包。"
+  }),
+  S04: Object.freeze({
+    treatment: "relationship-map",
+    rationale: "把可发现、按需加载、可组合与方法效果连成语义关系，避免把定义读成属性清单。"
+  }),
+  S05: Object.freeze({
+    treatment: "package-anatomy",
+    rationale: "用目录根、同级文件和边界反例解释 Skill 的组成职责，让文件结构成为内容本身。"
+  }),
+  S06: Object.freeze({
+    treatment: "relationship-map",
+    rationale: "把自然语言、元数据、文件结构和资源汇入能力单元，说明 Prompt 之外的工程关系。"
+  }),
+  S07: Object.freeze({
+    treatment: "comparison-field",
+    rationale: "用共享维度比较 Prompt 与 Skill，帮助观众快速定位一次性交互和生命周期能力的差别。"
+  }),
+  S08: Object.freeze({
+    treatment: "runtime-resource-flow",
+    rationale: "按元数据、说明、资源和上下文预算的进入顺序展示加载过程，减少对长段口播的依赖。"
+  }),
+  S09: Object.freeze({
+    treatment: "decision-path",
+    rationale: "把描述宽窄、路由判断和最终上下文组织成条件路径，显示误触发与漏召回如何产生。"
+  }),
+  S10: Object.freeze({
+    treatment: "runtime-resource-flow",
+    rationale: "让 Skill、Agent、Tool、MCP 与外部系统沿实际调用关系连接，图标只替代真实技术节点。"
+  }),
+  S11: Object.freeze({
+    treatment: "runtime-resource-flow",
+    rationale: "把同一周报任务拆成方法、判断、动作、连接和结果，沿运行链解释三层分工。"
+  }),
+  S12: Object.freeze({
+    treatment: "comparison-field",
+    rationale: "把候选任务置于共同判断维度，突出稳定性与可检测性，而不是堆叠相似卡片。"
+  }),
+  S13: Object.freeze({
+    treatment: "decision-path",
+    rationale: "从真实样本进入稳定性、错误检测和验收门槛，让是否产品化形成可追踪判断路径。"
+  }),
+  S14: Object.freeze({
+    treatment: "governance-evidence-trail",
+    rationale: "沿发布、安装、运行、更新、扫描和责任人串起证据，让治理责任具有先后与归属。"
+  }),
+  S15: Object.freeze({
+    treatment: "governance-evidence-trail",
+    rationale: "让来源、权限、运行证据、依赖变化、复评和回退构成闭环，显示审核结论为何会失效。"
+  }),
+  S16: Object.freeze({
+    treatment: "decision-path",
+    rationale: "把稳定、可检测、权限和版本问题设为前置门，区分可信采用与只增加上传入口。"
+  }),
+  S17: Object.freeze({
+    treatment: "governance-evidence-trail",
+    rationale: "把看懂、试运行、机器证据、人工决定和反馈修订排成证据轨迹，明确最终责任顺序。"
+  }),
+  S18: Object.freeze({
+    treatment: "state-transformation",
+    rationale: "让四项治理条件在同一时窗汇聚为能力资产，随后保持安静终态，强化完成条件而非庆祝图标。"
+  })
+});
+
+export const AGENT_SKILL_LONG_REVIEW_SHAPE_GRAMMAR_CUE = Object.freeze({
+  sceneId: "S04",
+  mode: EDITORIAL_SHAPE_GRAMMAR.teachingMode.mode,
+  persistent: EDITORIAL_SHAPE_GRAMMAR.teachingMode.persistent,
+  startFrame: frameAt(123),
+  endFrame: frameAt(126.5),
+  items: Object.freeze([
+    Object.freeze({
+      id: "full-outline",
+      visualForm: EDITORIAL_SHAPE_GRAMMAR.informationCard.visualForm,
+      meaning: "完整对象 / 完整边界"
+    }),
+    Object.freeze({
+      id: "open-node",
+      visualForm: EDITORIAL_SHAPE_GRAMMAR.openCanvas.visualForm,
+      meaning: "过程 / 关系锚点"
+    }),
+    Object.freeze({
+      id: "dashed-outline",
+      visualForm: EDITORIAL_SHAPE_GRAMMAR.semanticBoundary.visualForm,
+      meaning: "范围 / 排除 / 待验证"
+    })
+  ])
+});
+
 const LONG_REVIEW_VISUAL_GRAMMAR = Object.freeze({
   S01: { informationNeed: "relationship", relationKind: "dependency", compositionProfile: "text-first" },
   S02: { informationNeed: "branch", relationKind: "branch", compositionProfile: "relation-first" },
@@ -258,7 +379,7 @@ const LONG_REVIEW_VISUAL_GRAMMAR = Object.freeze({
   S12: { informationNeed: "branch", relationKind: "branch", compositionProfile: "relation-first" },
   S13: { informationNeed: "branch", relationKind: "branch", compositionProfile: "relation-first" },
   S14: { informationNeed: "sequence", relationKind: "sequence", compositionProfile: "relation-first" },
-  S15: { informationNeed: "branch", relationKind: "branch", compositionProfile: "relation-first" },
+  S15: { informationNeed: "sequence", relationKind: "sequence", compositionProfile: "relation-first" },
   S16: { informationNeed: "branch", relationKind: "branch", compositionProfile: "relation-first" },
   S17: { informationNeed: "sequence", relationKind: "sequence", compositionProfile: "relation-first" },
   S18: { informationNeed: "relationship", relationKind: "dependency", compositionProfile: "text-first" }
@@ -397,6 +518,11 @@ const LONG_REVIEW_OPEN_SURFACE_PRIMITIVES = new Set([
   "quantity-bar",
   "spatial-marker"
 ]);
+const LONG_REVIEW_FULL_EXTENT_OPEN_PRIMITIVES = new Set([
+  "timeline-anchor",
+  "quantity-bar",
+  "spatial-marker"
+]);
 
 function inferredCardSurfacePurpose(semanticRole) {
   if (["result", "evidence"].includes(semanticRole)) return "focus-result";
@@ -419,6 +545,35 @@ function inferredOpenSurfacePurpose(semanticRole, primitive) {
   return "relationship-structure";
 }
 
+function longReviewShapeGrammarMetadata(item, surfaceRole) {
+  if (item.dashed === true) {
+    if (surfaceRole === "information-card") {
+      throw new Error(`${item.id} 的完整信息卡不能改成虚线；请把边界作为独立开放 wrapper 表达`);
+    }
+    const boundaryMeaning = item.semanticBoundaryKind ?? "risk-boundary";
+    if (!EDITORIAL_SHAPE_GRAMMAR.semanticBoundary.allowedMeanings.includes(boundaryMeaning)) {
+      throw new Error(`${item.id} 使用了未知的虚线边界语义：${boundaryMeaning}`);
+    }
+    return Object.freeze({
+      shapeGrammarRole: "semantic-boundary",
+      shapeGrammarVisualForm: EDITORIAL_SHAPE_GRAMMAR.semanticBoundary.visualForm,
+      shapeGrammarMeaning: boundaryMeaning
+    });
+  }
+  if (surfaceRole === "information-card") {
+    return Object.freeze({
+      shapeGrammarRole: "complete-object",
+      shapeGrammarVisualForm: EDITORIAL_SHAPE_GRAMMAR.informationCard.visualForm,
+      shapeGrammarMeaning: EDITORIAL_SHAPE_GRAMMAR.informationCard.semanticMeaning
+    });
+  }
+  return Object.freeze({
+    shapeGrammarRole: "process-anchor",
+    shapeGrammarVisualForm: EDITORIAL_SHAPE_GRAMMAR.openCanvas.visualForm,
+    shapeGrammarMeaning: EDITORIAL_SHAPE_GRAMMAR.openCanvas.semanticMeaning
+  });
+}
+
 export function longReviewSurfacePlanById({ nodes, visualPlan, primitiveById }) {
   const semanticElementById = new Map(
     visualPlan.semanticElements.map((element) => [element.id, element])
@@ -439,6 +594,7 @@ export function longReviewSurfacePlanById({ nodes, visualPlan, primitiveById }) 
         ? inferredCardSurfacePurpose(semanticRole)
         : inferredOpenSurfacePurpose(semanticRole, primitive)
     );
+    const shapeGrammar = longReviewShapeGrammarMetadata(item, surfaceRole);
     return [item.id, Object.freeze({
       id: item.id,
       semanticGroupId: item.semanticGroupId ?? item.id,
@@ -446,19 +602,23 @@ export function longReviewSurfacePlanById({ nodes, visualPlan, primitiveById }) 
       visualHierarchyLevel,
       surfaceRole,
       surfacePurpose,
-      surfaceRationale: editorialSurfacePurposeRationale(surfacePurpose)
+      surfaceRationale: editorialSurfacePurposeRationale(surfacePurpose),
+      ...shapeGrammar
     })];
   })));
 }
 
 function editorialSceneFromLayout({
   id,
+  narrativeTreatment,
+  narrativeTreatmentRationale,
   requestedVisualMode,
   nodes,
   relations,
   standaloneIcons,
   visualPlan,
   layoutSample,
+  surfacePlanById,
   typographyProfile
 }) {
   const nodeById = new Map(nodes.map((item) => [item.id, item]));
@@ -467,6 +627,7 @@ function editorialSceneFromLayout({
     : standardSemanticNodeTokens;
   const cards = layoutSample.elements.filter((item) => item.surfaceRole === "information-card").map((item) => {
     const source = nodeById.get(item.id);
+    const surfacePlan = surfacePlanById[item.id];
     const paddingX = typographyTokens.informationCard.horizontalPaddingPx;
     const metrics = visualSystemV1ContentCardMetrics({
       id: item.id,
@@ -487,6 +648,9 @@ function editorialSceneFromLayout({
       semanticRole: item.narrativeRole,
       semanticGroupId: item.semanticGroupId,
       visualHierarchyLevel: item.visualHierarchyLevel,
+      shapeGrammarRole: surfacePlan.shapeGrammarRole,
+      shapeGrammarVisualForm: surfacePlan.shapeGrammarVisualForm,
+      shapeGrammarMeaning: surfacePlan.shapeGrammarMeaning,
       conceptKind: "none",
       iconPresentation: "none",
       titleLayout: planEditorialCardTitleLayout({
@@ -500,8 +664,9 @@ function editorialSceneFromLayout({
       border: Object.freeze({ mode: "full-outline", widthPx: 3 })
     });
   });
-  const diagrams = layoutSample.elements.filter((item) => item.surfaceRole !== "information-card").map((item) =>
-    Object.freeze({
+  const diagrams = layoutSample.elements.filter((item) => item.surfaceRole !== "information-card").map((item) => {
+    const surfacePlan = surfacePlanById[item.id];
+    return Object.freeze({
       id: item.id,
       title: normalizedNodeText(nodeById.get(item.id)?.label),
       kind: "open-diagram",
@@ -511,11 +676,14 @@ function editorialSceneFromLayout({
       semanticRole: item.narrativeRole,
       semanticGroupId: item.semanticGroupId,
       visualHierarchyLevel: item.visualHierarchyLevel,
+      shapeGrammarRole: surfacePlan.shapeGrammarRole,
+      shapeGrammarVisualForm: surfacePlan.shapeGrammarVisualForm,
+      shapeGrammarMeaning: surfacePlan.shapeGrammarMeaning,
       carriesRelation: visualPlan.semanticRelations.some(
         (relation) => relation.from === item.id || relation.to === item.id
       )
-    })
-  );
+    });
+  });
   const icons = standaloneIcons.map((item) => Object.freeze({
     id: item.id,
     anchorId: item.anchorId,
@@ -538,16 +706,49 @@ function editorialSceneFromLayout({
       : cards.length > 0
         ? "card-led"
         : "text-led";
+  const treatmentRequirement = EDITORIAL_NARRATIVE_TREATMENT_MECHANISMS[narrativeTreatment];
+  if (!treatmentRequirement) {
+    throw new Error(`${id} 使用了没有可执行证据合同的解释方式：${narrativeTreatment}`);
+  }
+  const treatmentRelations = relations.filter((relation) =>
+    treatmentRequirement.requiredRelationTypes.includes(relation.semanticType)
+  );
+  const treatmentElementIds = [...new Set(treatmentRelations.flatMap((relation) => [
+    relation.from,
+    relation.to
+  ]))];
+  const treatmentEvidence = Object.freeze({
+    mechanism: treatmentRequirement.mechanism,
+    visibleElementIds: Object.freeze(treatmentElementIds),
+    relationIds: Object.freeze(treatmentRelations.map((relation) => relation.id)),
+    contentContribution: narrativeTreatmentRationale
+  });
+  const semanticBoundaries = Object.freeze(nodes.filter((item) => item.dashed === true).map(
+    (item) => Object.freeze({
+      id: `${id}-${item.id}-boundary`,
+      meaning: item.semanticBoundaryKind,
+      memberIds: Object.freeze([item.id]),
+      rationale: `${normalizedNodeText(item.label)} 用虚线明确表示${item.semanticBoundaryKind}，不作为装饰分组。`
+    })
+  ));
   const editorialScene = Object.freeze({
     id,
+    shapeGrammarVersion: EDITORIAL_SHAPE_GRAMMAR_VERSION,
+    narrativeTreatment,
+    narrativeTreatmentRationale,
+    treatmentEvidence,
     visualMode: requestedVisualMode ?? inferredVisualMode,
     cards: Object.freeze(cards),
     diagrams: Object.freeze(diagrams),
     icons: Object.freeze(icons),
+    semanticBoundaries,
     relations: Object.freeze(relations.map((relation) => Object.freeze({
       id: relation.id,
       from: relation.from,
       to: relation.to,
+      semanticType: relation.semanticType,
+      semanticLabel: relation.semanticLabel,
+      directed: relation.directed,
       surfaceBoundary: relation.surfaceBoundary ?? null
     })))
   });
@@ -648,7 +849,65 @@ function stage(id, atSecond, label, nodeIds = [], edgeIds = [], options = {}) {
       : Object.freeze([...options.visibleNodeIds]),
     visibleEdgeIds: options.visibleEdgeIds == null
       ? null
-      : Object.freeze([...options.visibleEdgeIds])
+      : Object.freeze([...options.visibleEdgeIds]),
+    cueText: options.cueText ?? null
+  });
+}
+
+function normalizedCueComparisonText(value) {
+  return typeof value === "string"
+    ? value.normalize("NFKC").replace(/\s+/gu, "").trim()
+    : "";
+}
+
+function longReviewStageSubtitleCuePlan(stageItem, nodes) {
+  const nodeById = new Map(nodes.map((item) => [item.id, item]));
+  const cueNodeIds = stageItem.nodeIds.length > 0
+    ? stageItem.nodeIds
+    : stageItem.activeNodeIds.length > 0
+      ? stageItem.activeNodeIds
+      : stageItem.visibleNodeIds ?? [];
+  const cueLabels = [...new Set(cueNodeIds.flatMap((nodeId) => {
+    const label = normalizedNodeText(nodeById.get(nodeId)?.label);
+    return label.length > 0 ? [label] : [];
+  }))];
+  const authoredCueText = typeof stageItem.cueText === "string"
+    ? stageItem.cueText.trim()
+    : "";
+  let cueText;
+  let origin;
+  if (authoredCueText.length > 0) {
+    cueText = authoredCueText;
+    origin = "authored";
+  } else if (cueLabels.length === 1) {
+    [cueText] = cueLabels;
+    origin = "auto-node";
+  } else if (cueLabels.length > 1) {
+    throw new Error(
+      `${stageItem.id} 同时聚焦多个语义对象时必须声明 cueText；禁止生成“${cueLabels[0]}等${cueLabels.length}项”这类占位文案`
+    );
+  } else {
+    [cueText] = stageItem.label.split(/[，；。！？]/u).map((item) => item.trim()).filter(Boolean);
+    origin = "auto-stage";
+  }
+  if (
+    !(typeof cueText === "string" && cueText.length > 0) ||
+    Array.from(cueText).length > EDITORIAL_VISUAL_POLICY.maximumSubtitleCueGraphemes
+  ) {
+    throw new Error(
+      `${stageItem.id} 需要声明不超过 ${EDITORIAL_VISUAL_POLICY.maximumSubtitleCueGraphemes} 字的语义字幕提示`
+    );
+  }
+  const normalizedCue = normalizedCueComparisonText(cueText);
+  const duplicatesFocusedNode = cueLabels.some(
+    (label) => normalizedCueComparisonText(label) === normalizedCue
+  );
+  const render = !duplicatesFocusedNode;
+  return Object.freeze({
+    text: cueText,
+    origin,
+    render,
+    suppressionReason: render ? null : "duplicates-visible-node"
   });
 }
 
@@ -659,13 +918,16 @@ function sceneSpec({
   deck,
   material = null,
   visualMode = null,
+  narrativeTreatment = null,
+  narrativeTreatmentRationale = null,
   layoutStability = "stable-final",
   reflowJustification = null,
+  finalHoldStartSecond = null,
   nodes = [],
   edges = [],
   groups = [],
   standaloneIcons = [],
-  stages
+  stages: stageItems
 }) {
   if (!["stable-final", "explicit-reflow"].includes(layoutStability)) {
     throw new Error(`${id} 使用了不支持的布局稳定模式：${layoutStability}`);
@@ -676,6 +938,27 @@ function sceneSpec({
   const timing = sceneTimes.find(([sceneId]) => sceneId === id);
   if (!timing) throw new Error(`缺少 ${id} 的正式时间范围`);
   const [, startSecond, endSecond] = timing;
+  const narrativePlan = AGENT_SKILL_LONG_REVIEW_NARRATIVE_TREATMENTS[id];
+  const resolvedNarrativeTreatment = narrativeTreatment ?? narrativePlan?.treatment;
+  const resolvedNarrativeTreatmentRationale =
+    narrativeTreatmentRationale ?? narrativePlan?.rationale;
+  if (
+    !(typeof resolvedNarrativeTreatment === "string" && resolvedNarrativeTreatment.length > 0) ||
+    !(
+      typeof resolvedNarrativeTreatmentRationale === "string" &&
+      resolvedNarrativeTreatmentRationale.length > 0
+    )
+  ) {
+    throw new Error(`${id} 缺少可复用的图解叙事方式或内容增强理由`);
+  }
+  const stages = stageItems.map((stageItem) => {
+    const cuePlan = longReviewStageSubtitleCuePlan(stageItem, nodes);
+    return Object.freeze({
+      ...stageItem,
+      cueText: cuePlan.text,
+      cuePlan
+    });
+  });
   const lastStage = stages.at(-1);
   const lastStageIndex = stages.length - 1;
   const lastStageNodeIds = new Set(lastStage.nodeIds);
@@ -683,10 +966,16 @@ function sceneSpec({
   const lastStageHasNewEdgeEndpoint = lastStageEdges.some(
     (item) => lastStageNodeIds.has(item.from) || lastStageNodeIds.has(item.to)
   );
+  const lastStageHasDelayedBoundaryContrastEndpoint =
+    resolvedNarrativeTreatment === "package-anatomy" &&
+    lastStageEdges.some((item) =>
+      lastStageNodeIds.has(item.to) &&
+      (item.semanticType ?? item.type) === "contrasts-with"
+    );
   const laterStageRevealDelay = lastStageIndex > 0
     ? AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES
     : 0;
-  const holdStartFrame = Math.min(
+  const automaticHoldStartFrame = Math.min(
     frameAt(endSecond) - 1,
     lastStage.startFrame + Math.max(
       AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES,
@@ -700,11 +989,23 @@ function sceneSpec({
           AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES +
           AGENT_SKILL_LONG_REVIEW_ARROW_FADE_FRAMES
         : 0,
+      lastStageHasDelayedBoundaryContrastEndpoint
+        ? AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES * 2 +
+          AGENT_SKILL_LONG_REVIEW_EDGE_DELAY_FRAMES +
+          AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES +
+          AGENT_SKILL_LONG_REVIEW_ARROW_FADE_FRAMES
+        : 0,
       AGENT_SKILL_LONG_REVIEW_EDGE_DELAY_FRAMES +
         AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES +
         AGENT_SKILL_LONG_REVIEW_ARROW_FADE_FRAMES
     )
   );
+  const holdStartFrame = finalHoldStartSecond == null
+    ? automaticHoldStartFrame
+    : frameAt(finalHoldStartSecond);
+  if (holdStartFrame < lastStage.startFrame || holdStartFrame >= frameAt(endSecond)) {
+    throw new Error(`${id} 的最终静帧必须位于最后阶段开始后且场景结束前`);
+  }
   const chapter = chapterAtSecond(startSecond);
   const embeddedIconNodes = nodes.filter((item) =>
     item.conceptKind != null ||
@@ -847,6 +1148,11 @@ function sceneSpec({
   if (new Set(semanticObjectIds).size !== semanticObjectIds.length) {
     throw new Error(`${id} 的同一语义对象不能出现两套图标主表现`);
   }
+  for (const group of groups) {
+    if (group.boundsMode != null && !["stable-members", "visible-members"].includes(group.boundsMode)) {
+      throw new Error(`${id}/${group.id} 使用了不支持的分组边界模式：${group.boundsMode}`);
+    }
+  }
   const visualIntent = longReviewVisualIntent({ id, kind, title, deck, material, nodes, edges });
   const visualPlan = resolveVisualExpressionPlan({
     sceneId: id,
@@ -857,6 +1163,12 @@ function sceneSpec({
   if (flowLayoutProfile != null && visualPlan.structure !== "flow") {
     throw new Error(`${id} 声明了 flowLayoutProfile，但视觉结构不是 flow`);
   }
+  const hierarchyLayoutProfile = resolvedNarrativeTreatment === "package-anatomy"
+    ? "progressive-package"
+    : null;
+  if (hierarchyLayoutProfile != null && visualPlan.structure !== "hierarchy") {
+    throw new Error(`${id} 的 progressive-package 叙事必须使用 hierarchy 结构`);
+  }
   const initialLayout = visualSystemV1GrammarLayout({
     width: 1920,
     height: 1080,
@@ -864,7 +1176,8 @@ function sceneSpec({
     visibleElementIds: nodes.map((item) => item.id),
     semanticContentById: longReviewSemanticContentById(nodes),
     primitiveOverrideById: longReviewPrimitiveOverrideById(nodes),
-    flowLayoutProfile
+    flowLayoutProfile,
+    hierarchyLayoutProfile
   });
   const surfacePlanById = longReviewSurfacePlanById({
     nodes,
@@ -879,7 +1192,8 @@ function sceneSpec({
     semanticContentById: longReviewSemanticContentById(nodes),
     primitiveOverrideById: longReviewPrimitiveOverrideById(nodes),
     surfacePlanById,
-    flowLayoutProfile
+    flowLayoutProfile,
+    hierarchyLayoutProfile
   }).layoutSample;
   const typographyProfile = flowLayoutProfile ? "longform-emphasis" : "standard";
   const typographyTokenProfile = flowLayoutProfile ? "longformEmphasis" : "standard";
@@ -908,12 +1222,15 @@ function sceneSpec({
   }));
   const editorial = editorialSceneFromLayout({
     id,
+    narrativeTreatment: resolvedNarrativeTreatment,
+    narrativeTreatmentRationale: resolvedNarrativeTreatmentRationale,
     requestedVisualMode: visualMode,
     nodes,
     relations: edges,
     standaloneIcons,
     visualPlan,
     layoutSample,
+    surfacePlanById,
     typographyProfile
   });
   return Object.freeze({
@@ -922,9 +1239,16 @@ function sceneSpec({
     title,
     deck,
     material,
+    shapeGrammarVersion: EDITORIAL_SHAPE_GRAMMAR_VERSION,
+    shapeGrammarCue: AGENT_SKILL_LONG_REVIEW_SHAPE_GRAMMAR_CUE.sceneId === id
+      ? AGENT_SKILL_LONG_REVIEW_SHAPE_GRAMMAR_CUE
+      : null,
+    narrativeTreatment: resolvedNarrativeTreatment,
+    narrativeTreatmentRationale: resolvedNarrativeTreatmentRationale,
     visualMode: editorial.editorialScene.visualMode,
     layoutStability,
     reflowJustification,
+    hierarchyLayoutProfile,
     chapterId: chapter.id,
     chapterLabel: chapter.label,
     startSecond,
@@ -964,16 +1288,16 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       node("skill-unit", 320, 224, 142, 142, "Agent Skill", "触发 · 执行\n验收 · 版本", "mint")
     ],
     edges: [
-      edge("a-to-skill", "prompt-a", "skill-unit", "M 142 167 H 226 V 268 H 320", "blue"),
-      edge("b-to-skill", "prompt-b", "skill-unit", "M 142 279 H 320", "purple"),
-      edge("c-to-skill", "prompt-c", "skill-unit", "M 142 391 H 226 V 322 H 320", "orange")
+      edge("a-to-skill", "prompt-a", "skill-unit", "M 142 167 H 226 V 268 H 320", "blue", { semanticType: "converges-to", semanticLabel: "汇聚", directed: true }),
+      edge("b-to-skill", "prompt-b", "skill-unit", "M 142 279 H 320", "purple", { semanticType: "converges-to", semanticLabel: "汇聚", directed: true }),
+      edge("c-to-skill", "prompt-c", "skill-unit", "M 142 391 H 226 V 322 H 320", "orange", { semanticType: "converges-to", semanticLabel: "汇聚", directed: true })
     ],
     stages: [
       stage("copy-one", 0, "第一次复制仍是临时提示词", ["prompt-a"]),
       stage("copy-two", 4.694, "第二次复制又形成一份版本", ["prompt-b"]),
       stage("copy-three", 9.388, "第三次复制继续分叉", ["prompt-c"]),
       stage("fragment", 14.082, "经验已经散落为三个版本", [], [], {
-        activeNodeIds: ["prompt-a", "prompt-b", "prompt-c"]
+        activeNodeIds: ["prompt-a", "prompt-b", "prompt-c"], cueText: "三个版本散落"
       }),
       stage("package", 28.163, "把方法收束成可发现、可维护的 Skill", ["skill-unit"], ["a-to-skill", "b-to-skill", "c-to-skill"])
     ]
@@ -998,6 +1322,7 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       }),
       node("drift", 106, 430, 268, 88, "版本持续分叉", "不可发现 · 不可复用 · 不可维护", "orange", {
         dashed: true,
+        semanticBoundaryKind: "risk-boundary",
         semanticGroupId: "prompt-fragmentation",
         semanticRole: "result",
         surfaceRole: "open-canvas",
@@ -1007,8 +1332,8 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
     ],
     edges: [
       edge("task-base", "task", "base", "M 240 82 V 116", "blue"),
-      edge("base-a", "base", "version-a", "M 184 194 V 224 H 78 V 254", "blue"),
-      edge("base-b", "base", "version-b", "M 240 194 V 254", "purple"),
+      edge("base-a", "base", "version-a", "M 184 194 V 224 H 78 V 254", "blue", { semanticType: "compares-on", semanticLabel: "同一任务", directed: false }),
+      edge("base-b", "base", "version-b", "M 240 194 V 254", "purple", { semanticType: "compares-on", semanticLabel: "同一任务", directed: false }),
       edge("base-c", "base", "version-c", "M 296 194 V 224 H 402 V 254", "orange"),
       edge("a-drift", "version-a", "drift", "M 78 340 V 386 H 178 V 430", "orange", { relation: "warning" }),
       edge("b-drift", "version-b", "drift", "M 240 340 V 430", "orange", { relation: "warning" }),
@@ -1016,7 +1341,7 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
     ],
     stages: [
       stage("copied", 30, "背景、步骤与注意事项被反复粘贴", ["task", "base"], ["task-base"], {
-        visibleNodeIds: ["task", "base"], visibleEdgeIds: ["task-base"]
+        visibleNodeIds: ["task", "base"], visibleEdgeIds: ["task-base"], cueText: "反复复制同一任务"
       }),
       stage("longer", 36.159, "文字变长，却没有形成过程单元", [], [], {
         activeNodeIds: ["base"], visibleNodeIds: ["task", "base"], visibleEdgeIds: ["task-base"]
@@ -1028,18 +1353,19 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
         activeNodeIds: ["base"], visibleNodeIds: ["task", "base"], visibleEdgeIds: ["task-base"]
       }),
       stage("collaboration", 52.667, "多人协作开始产生不同版本", ["version-a", "drift"], ["base-a", "a-drift"], {
-        visibleNodeIds: ["base", "version-a", "drift"], visibleEdgeIds: ["base-a", "a-drift"]
+        visibleNodeIds: ["base", "version-a", "drift"], visibleEdgeIds: ["base-a", "a-drift"], cueText: "协作中持续分叉"
       }),
       stage("fragmented", 58.58, "步骤、口径和格式最终分散在三份版本里", ["version-b", "version-c"], ["base-b", "base-c", "b-drift", "c-drift"], {
         visibleNodeIds: ["base", "version-a", "version-b", "version-c", "drift"],
-        visibleEdgeIds: ["base-a", "base-b", "base-c", "a-drift", "b-drift", "c-drift"]
+        visibleEdgeIds: ["base-a", "base-b", "base-c", "a-drift", "b-drift", "c-drift"],
+        cueText: "三个版本继续分叉"
       })
     ]
   }),
   sceneSpec({
     id: "S03", kind: "diagram", title: "从散落版本到一个 Skill 包", deck: "触发、步骤、材料、验收被纳入同一能力边界",
     nodes: [
-      node("chat", 12, 30, 138, 82, "聊天版本", "没人确定复制哪版", "orange", { dashed: true }),
+      node("chat", 12, 30, 138, 82, "聊天版本", "没人确定复制哪版", "orange"),
       node("trigger", 190, 18, 132, 76, "触发条件", "何时命中", "blue"),
       node("steps", 190, 124, 132, 76, "执行步骤", "顺序与不可跳过项", "purple"),
       node("refs", 190, 230, 132, 76, "参考材料", "口径与事实来源", "blue"),
@@ -1051,7 +1377,7 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       edge("trigger-steps", "trigger", "steps", "M 256 94 V 124", "purple"),
       edge("steps-refs", "steps", "refs", "M 256 200 V 230", "blue"),
       edge("refs-accept", "refs", "accept", "M 256 306 V 336", "orange"),
-      edge("accept-package", "accept", "package", "M 322 374 H 336 V 245 H 348", "mint")
+      edge("accept-package", "accept", "package", "M 322 374 H 336 V 245 H 348", "mint", { semanticType: "transforms-to", semanticLabel: "转化", directed: true })
     ],
     stages: [
       stage("versions", 64, "经验先散落在聊天版本里", ["chat"]),
@@ -1059,7 +1385,9 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       stage("steps", 75.657, "再固定执行步骤", ["steps"], ["trigger-steps"]),
       stage("references", 81.243, "把事实口径放入参考材料", ["refs"], ["steps-refs"]),
       stage("acceptance", 86.586, "用验收方式定义完成", ["accept"], ["refs-accept"]),
-      stage("package", 92.171, "最终成为可维护的 Skill 包", ["package"], ["accept-package"])
+      stage("package", 92.171, "最终成为可维护的 Skill 包", ["package"], ["accept-package"], {
+        cueText: "结构化为可复用能力"
+      })
     ]
   }),
   sceneSpec({
@@ -1081,7 +1409,7 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
         semanticGroupId: "definition-effects", surfaceRole: "open-canvas", surfacePurpose: "transition-output", visualPresentation: "diagram-output"
       }),
       node("weights", 256, 382, 160, 82, "模型参数不变", "不是重新训练", "orange", {
-        dashed: true, semanticGroupId: "definition-effects", surfaceRole: "open-canvas", surfacePurpose: "transition-output", visualPresentation: "diagram-output"
+        dashed: true, semanticBoundaryKind: "exclusion", semanticGroupId: "definition-effects", surfaceRole: "open-canvas", surfacePurpose: "transition-output", visualPresentation: "diagram-output"
       }),
       node("description", 146, 500, 188, 70, "描述质量", "决定何时适用", "blue", {
         semanticGroupId: "definition-loop", surfaceRole: "open-canvas", surfacePurpose: "relationship-structure", visualPresentation: "process-anchor"
@@ -1089,9 +1417,13 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
     ],
     edges: [
       edge("discover-pack", "discoverable", "process-pack", "M 78 108 V 150 H 190 V 188", "blue", {
+        semanticType: "defines",
+        semanticLabel: "定义",
         surfaceBoundary: relationSurfaceBoundary("把分散能力特征收束为一个可交付的完整方法包。")
       }),
       edge("demand-pack", "on-demand", "process-pack", "M 240 108 V 188", "orange", {
+        semanticType: "defines",
+        semanticLabel: "定义",
         surfaceBoundary: relationSurfaceBoundary("把分散能力特征收束为一个可交付的完整方法包。")
       }),
       edge("compose-pack", "composable", "process-pack", "M 402 108 V 150 H 290 V 188", "purple", {
@@ -1120,7 +1452,7 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
         visibleNodeIds: ["discoverable", "on-demand", "composable", "process-pack"], visibleEdgeIds: ["discover-pack", "demand-pack", "compose-pack"]
       }),
       stage("method", 121.851, "它扩展做事方法，而不是重新训练模型", ["method", "weights"], ["pack-method", "pack-weights"], {
-        visibleNodeIds: ["process-pack", "method", "weights"], visibleEdgeIds: ["pack-method", "pack-weights"]
+        visibleNodeIds: ["process-pack", "method", "weights"], visibleEdgeIds: ["pack-method", "pack-weights"], cueText: "扩展方法而非模型"
       }),
       stage("description", 127.94, "描述必须让 Agent 判断何时适用", ["description"], ["description-discover"], {
         visibleNodeIds: ["discoverable", "description"], visibleEdgeIds: ["description-discover"]
@@ -1129,6 +1461,8 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
   }),
   sceneSpec({
     id: "S05", kind: "diagram", title: "Skill 是一个有边界的目录", deck: "主说明、脚本、参考和素材按职责展开", visualMode: "open-diagram",
+    layoutStability: "explicit-reflow",
+    reflowJustification: "目录成员分步出现时，当前可见子树必须保持紧凑居中，并以短时重排扩展目录边界",
     nodes: [
       node("root", 165, 20, 150, 74, "agent-skill/", "能力目录边界", "mint", {
         semanticGroupId: "skill-directory", semanticRole: "boundary", surfaceSemanticRole: "hierarchy-root", surfaceRole: "open-canvas", surfacePurpose: "relationship-structure", visualPresentation: "process-anchor"
@@ -1146,7 +1480,7 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
         semanticGroupId: "skill-directory", semanticRole: "concept", surfaceSemanticRole: "hierarchy-entry", surfaceRole: "open-canvas", surfacePurpose: "relationship-structure", visualPresentation: "directory-entry"
       }),
       node("prompt-only", 122, 430, 236, 86, "只有一段长文字", "没有触发、目录和完成标准，仍只是 Prompt", "orange", {
-        dashed: true, semanticGroupId: "skill-directory", semanticRole: "state", surfaceRole: "open-canvas", surfacePurpose: "transition-output", visualPresentation: "diagram-output"
+        dashed: true, semanticBoundaryKind: "exclusion", semanticGroupId: "skill-directory", semanticRole: "state", surfaceRole: "open-canvas", surfacePurpose: "transition-output", visualPresentation: "diagram-output"
       })
     ],
     edges: [
@@ -1156,13 +1490,23 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       edge("root-assets", "root", "assets", "M 240 94 V 286", "mint", { semanticType: "contains", semanticLabel: "包含", directed: false }),
       edge("boundary", "root", "prompt-only", "M 240 372 V 430", "orange", { relation: "warning", semanticType: "contrasts-with", semanticLabel: "对照", directed: false })
     ],
+    groups: [{
+      id: "skill-package-scope",
+      label: "SKILL 目录边界",
+      visualForm: "full-outline",
+      semanticMeaning: "complete-object-or-boundary",
+      boundsMode: "visible-members",
+      nodeIds: ["root", "skill-md", "scripts", "references", "assets"]
+    }],
     stages: [
       stage("root", 132, "先建立可发现的目录边界", ["root"]),
       stage("skill-md", 137.88, "命中后读取完整 SKILL.md", ["skill-md"], ["root-skill"]),
       stage("scripts", 143.759, "脚本只在需要执行时进入", ["scripts"], ["root-scripts"]),
       stage("references", 149.895, "参考资料按事实需要读取", ["references"], ["root-refs"]),
       stage("assets", 156.03, "素材与模板作为可复用资源", ["assets"], ["root-assets"]),
-      stage("boundary", 162.165, "没有结构和完成标准的长文字仍不是 Skill", ["prompt-only"], ["boundary"])
+      stage("boundary", 162.165, "没有结构和完成标准的长文字仍不是 Skill", ["prompt-only"], ["boundary"], {
+        cueText: "结构与标准形成边界"
+      })
     ]
   }),
   sceneSpec({
@@ -1189,9 +1533,13 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
     ],
     edges: [
       edge("prompt-skill", "prompt", "skill", "M 116 122 V 286 H 192 V 326", "orange", {
+        semanticType: "associates",
+        semanticLabel: "组成",
         surfaceBoundary: relationSurfaceBoundary("把组成材料收束为可独立读取和复用的 Skill 包。")
       }),
       edge("metadata-skill", "metadata", "skill", "M 364 122 V 286 H 288 V 326", "blue", {
+        semanticType: "associates",
+        semanticLabel: "组成",
         surfaceBoundary: relationSurfaceBoundary("把组成材料收束为可独立读取和复用的 Skill 包。")
       }),
       edge("structure-skill", "structure", "skill", "M 116 252 V 290 H 192 V 326", "purple", {
@@ -1209,22 +1557,22 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
         visibleNodeIds: ["prompt"]
       }),
       stage("metadata", 171.628, "Skill 还带触发元数据和文件结构", ["metadata", "skill"], ["prompt-skill", "metadata-skill"], {
-        visibleNodeIds: ["prompt", "metadata", "skill"], visibleEdgeIds: ["prompt-skill", "metadata-skill"]
+        visibleNodeIds: ["prompt", "metadata", "skill"], visibleEdgeIds: ["prompt-skill", "metadata-skill"], cueText: "触发与元数据"
       }),
       stage("resources", 177.021, "代码与资源进入可安装、可审查的边界", ["structure", "resources"], ["structure-skill", "resources-skill"], {
-        visibleNodeIds: ["structure", "resources", "skill"], visibleEdgeIds: ["structure-skill", "resources-skill"]
+        visibleNodeIds: ["structure", "resources", "skill"], visibleEdgeIds: ["structure-skill", "resources-skill"], cueText: "资源进入能力边界"
       }),
       stage("contains-prompt", 182.648, "Skill 可以包含 Prompt", [], [], {
-        activeNodeIds: ["prompt", "skill"], activeEdgeIds: ["prompt-skill"], visibleNodeIds: ["prompt", "skill"], visibleEdgeIds: ["prompt-skill"]
+        activeNodeIds: ["prompt", "skill"], activeEdgeIds: ["prompt-skill"], visibleNodeIds: ["prompt", "skill"], visibleEdgeIds: ["prompt-skill"], cueText: "Skill 包含 Prompt"
       }),
       stage("not-longer", 188.276, "但 Skill 不等于更长的 Prompt", [], [], {
         activeNodeIds: ["prompt"], activeEdgeIds: [], visibleNodeIds: ["prompt", "skill"], visibleEdgeIds: ["prompt-skill"]
       }),
       stage("natural-language", 193.669, "相似之处只是核心说明仍用自然语言", ["affordance"], ["skill-affordance"], {
-        activeNodeIds: ["skill", "affordance"], activeEdgeIds: ["skill-affordance"], visibleNodeIds: ["skill", "affordance"], visibleEdgeIds: ["skill-affordance"]
+        activeNodeIds: ["skill", "affordance"], activeEdgeIds: ["skill-affordance"], visibleNodeIds: ["skill", "affordance"], visibleEdgeIds: ["skill-affordance"], cueText: "工程生命周期"
       }),
       stage("lifecycle", 199.297, "真正差异在安装、分享、更新和审查的生命周期", [], [], {
-        activeNodeIds: ["skill", "affordance"], activeEdgeIds: ["skill-affordance"], visibleNodeIds: ["skill", "affordance"], visibleEdgeIds: ["skill-affordance"]
+        activeNodeIds: ["skill", "affordance"], activeEdgeIds: ["skill-affordance"], visibleNodeIds: ["skill", "affordance"], visibleEdgeIds: ["skill-affordance"], cueText: "进入工程生命周期"
       })
     ]
   }),
@@ -1234,15 +1582,15 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       node("prompt", 18, 20, 204, 70, "Prompt", "一次性输入", "orange"),
       node("paste", 18, 128, 204, 74, "临时粘贴", "每次重新复制", "orange"),
       node("memory", 18, 238, 204, 74, "依赖记忆", "旧版难追踪", "orange"),
-      node("fragile", 18, 348, 204, 74, "效果最好那段话", "无法稳定回归", "orange", { dashed: true }),
+      node("fragile", 18, 348, 204, 74, "效果最好那段话", "无法稳定回归", "orange"),
       node("skill", 258, 20, 204, 70, "Agent Skill", "可安装能力", "mint"),
       node("version", 258, 128, 204, 74, "版本管理", "谁在用哪一版", "mint"),
       node("govern", 258, 238, 204, 74, "权限与依赖", "资源与操作可审查", "purple"),
       node("regression", 258, 348, 204, 74, "评测与回退", "比较版本并恢复", "blue")
     ],
     edges: [
-      edge("prompt-paste", "prompt", "paste", "M 120 90 V 128", "orange"),
-      edge("skill-version", "skill", "version", "M 360 90 V 128", "mint"),
+      edge("prompt-paste", "prompt", "paste", "M 120 90 V 128", "orange", { semanticType: "contrasts-with", semanticLabel: "一次性交互", directed: false }),
+      edge("skill-version", "skill", "version", "M 360 90 V 128", "mint", { semanticType: "contrasts-with", semanticLabel: "生命周期能力", directed: false }),
       edge("paste-memory", "paste", "memory", "M 120 202 V 238", "orange"),
       edge("version-govern", "version", "govern", "M 360 202 V 238", "purple"),
       edge("memory-fragile", "memory", "fragile", "M 120 312 V 348", "orange"),
@@ -1250,7 +1598,7 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
     ],
     stages: [
       stage("heads", 200, "同样是自然语言，先看工程归属", ["prompt", "skill"], [], {
-        visibleNodeIds: ["prompt", "skill"]
+        visibleNodeIds: ["prompt", "skill"], cueText: "先看工程归属"
       }),
       stage("temporary", 205.159, "Prompt 常由人临时粘贴", ["paste"], ["prompt-paste"], {
         visibleNodeIds: ["prompt", "paste"], visibleEdgeIds: ["prompt-paste"]
@@ -1266,13 +1614,14 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       }),
       stage("regression", 226.966, "代表性任务支持回归、比较与回退", ["fragile", "regression"], ["memory-fragile", "govern-regression"], {
         visibleNodeIds: ["memory", "fragile", "govern", "regression"],
-        visibleEdgeIds: ["memory-fragile", "govern-regression"]
+        visibleEdgeIds: ["memory-fragile", "govern-regression"], cueText: "用样例持续回归"
       }),
       stage("conclusion", 232.593, "差异不在文字长短，而在完整生命周期", [], [], {
         activeNodeIds: ["memory", "fragile", "govern", "regression"],
         activeEdgeIds: ["memory-fragile", "govern-regression"],
         visibleNodeIds: ["memory", "fragile", "govern", "regression"],
-        visibleEdgeIds: ["memory-fragile", "govern-regression"]
+        visibleEdgeIds: ["memory-fragile", "govern-regression"],
+        cueText: "生命周期决定差异"
       })
     ]
   }),
@@ -1295,17 +1644,23 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
         semanticRole: "state", surfaceRole: "information-card", surfacePurpose: "state-container"
       }),
       node("parked", 126, 500, 228, 64, "其余材料未加载", "不占当前上下文", "orange", {
-        dashed: true, semanticRole: "result", surfaceRole: "information-card", surfacePurpose: "state-container"
+        semanticRole: "result", surfaceRole: "information-card", surfacePurpose: "state-container"
       })
     ],
     edges: [
       edge("metadata-focus", "metadata-slot", "focus", "M 82 116 V 158 H 194 V 198", "blue", {
+        semanticType: "loads-metadata",
+        semanticLabel: "读取元数据",
         surfaceBoundary: relationSurfaceBoundary("从可加载内容容器切换到按需聚焦动作。")
       }),
       edge("instruction-focus", "instruction-slot", "focus", "M 240 116 V 198", "purple", {
+        semanticType: "loads-instructions",
+        semanticLabel: "加载说明",
         surfaceBoundary: relationSurfaceBoundary("从可加载内容容器切换到按需聚焦动作。")
       }),
       edge("resource-focus", "resource-slot", "focus", "M 398 116 V 158 H 286 V 198", "mint", {
+        semanticType: "loads-resource",
+        semanticLabel: "按需加载",
         surfaceBoundary: relationSurfaceBoundary("从可加载内容容器切换到按需聚焦动作。")
       }),
       edge("focus-budget", "focus", "context-budget", "M 240 282 V 356", "mint", {
@@ -1323,26 +1678,29 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       stage("route", 239.956, "少量元数据先完成任务路由", ["focus"], ["metadata-focus"]),
       stage("instruction", 245.912, "命中后才读取完整 SKILL.md", ["instruction-slot"], ["instruction-focus"]),
       stage("resources", 251.869, "脚本、参考和素材只在确实需要时加载", ["resource-slot"], ["resource-focus"]),
-      stage("budget", 257.577, "专业细节被保留，但不会一次占满上下文", ["context-budget", "parked"], ["focus-budget", "budget-parked"]),
-      stage("description", 263.533, "描述写法决定误触发和漏召回", [], [], { activeNodeIds: ["metadata-slot", "focus", "context-budget"] })
+      stage("budget", 257.577, "专业细节被保留，但不会一次占满上下文", ["context-budget", "parked"], ["focus-budget", "budget-parked"], { cueText: "按需使用上下文" }),
+      stage("description", 263.533, "描述写法决定误触发和漏召回", [], [], { activeNodeIds: ["metadata-slot", "focus", "context-budget"], cueText: "描述决定命中" })
     ]
   }),
   sceneSpec({
     id: "S09", kind: "diagram", title: "先路由，再加载，再执行", deck: "有限上下文只进入当前步骤真正需要的知识",
     nodes: [
       node("metadata", 166, 12, 148, 72, "名称 + 描述", "L1 · 始终可见", "blue"),
-      node("router", 166, 118, 148, 72, "任务路由", "匹配当前意图", "orange"),
+      node("router", 166, 118, 148, 72, "任务路由", "匹配当前意图", "orange", {
+        semanticRole: "decision",
+        surfaceSemanticRole: "decision"
+      }),
       node("skill-md", 166, 224, 148, 72, "SKILL.md", "L2 · 命中后", "purple"),
       node("resources", 166, 330, 148, 82, "按需资源", "scripts · references · assets", "mint"),
-      node("wide", 8, 118, 126, 82, "描述过宽", "误触发", "orange", { dashed: true }),
-      node("narrow", 346, 118, 126, 82, "描述过窄", "漏召回", "orange", { dashed: true }),
+      node("wide", 8, 118, 126, 82, "描述过宽", "误触发", "orange"),
+      node("narrow", 346, 118, 126, 82, "描述过窄", "漏召回", "orange"),
       node("context", 148, 466, 184, 76, "当前任务上下文", "只保留需要的知识", "mint")
     ],
     edges: [
       edge("meta-router", "metadata", "router", "M 240 84 V 118", "blue"),
-      edge("wide-router", "wide", "router", "M 134 159 H 166", "orange", { relation: "warning" }),
-      edge("narrow-router", "narrow", "router", "M 346 159 H 314", "orange", { relation: "warning" }),
-      edge("router-skill", "router", "skill-md", "M 240 190 V 224", "purple"),
+      edge("wide-router", "wide", "router", "M 134 159 H 166", "orange", { relation: "warning", semanticType: "branches-to", semanticLabel: "误触发", directed: true }),
+      edge("narrow-router", "narrow", "router", "M 346 159 H 314", "orange", { relation: "warning", semanticType: "branches-to", semanticLabel: "漏召回", directed: true }),
+      edge("router-skill", "router", "skill-md", "M 240 190 V 224", "purple", { semanticType: "qualifies", semanticLabel: "命中", directed: true }),
       edge("skill-resources", "skill-md", "resources", "M 240 296 V 330", "mint"),
       edge("resources-context", "resources", "context", "M 240 412 V 466", "mint")
     ],
@@ -1354,7 +1712,7 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
         visibleNodeIds: ["metadata", "router"], visibleEdgeIds: ["meta-router"]
       }),
       stage("description-risk", 280.25, "描述过宽会误触发，过窄会漏召回", ["wide", "narrow"], ["wide-router", "narrow-router"], {
-        visibleNodeIds: ["wide", "router", "narrow"], visibleEdgeIds: ["wide-router", "narrow-router"]
+        visibleNodeIds: ["wide", "router", "narrow"], visibleEdgeIds: ["wide-router", "narrow-router"], cueText: "宽窄影响召回"
       }),
       stage("instruction", 286.25, "命中后才加载主要说明", ["skill-md"], ["router-skill"], {
         visibleNodeIds: ["router", "skill-md"], visibleEdgeIds: ["router-skill"]
@@ -1394,9 +1752,9 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
     ],
     edges: [
       edge("skill-agent", "skill", "agent", "M 80 112 V 150 H 220 V 184", "mint"),
-      edge("agent-tool", "agent", "tool", "M 220 184 V 144 H 240 V 112", "blue"),
+      edge("agent-tool", "agent", "tool", "M 220 184 V 144 H 240 V 112", "blue", { semanticType: "invokes-capability", semanticLabel: "调用", directed: true }),
       edge("agent-mcp", "agent", "mcp", "M 310 225 H 330", "purple"),
-      edge("mcp-external", "mcp", "external", "M 400 112 V 184", "purple"),
+      edge("mcp-external", "mcp", "external", "M 400 112 V 184", "purple", { semanticType: "connects-system", semanticLabel: "连接", directed: true }),
       edge("skill-combine", "skill", "combine", "M 80 112 V 304 H 170 V 328", "mint", {
         surfaceBoundary: relationSurfaceBoundary("从角色分工节点切换到组合后的完整执行方案。")
       }),
@@ -1419,16 +1777,16 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
     stages: [
       stage("skill", 302, "Skill 说明怎样完成一类任务", ["skill"], [], { visibleNodeIds: ["skill"] }),
       stage("tool", 307.013, "Tool 提供一个可执行动作", ["agent", "tool"], ["skill-agent", "agent-tool"], {
-        visibleNodeIds: ["skill", "agent", "tool"], visibleEdgeIds: ["skill-agent", "agent-tool"]
+        visibleNodeIds: ["skill", "agent", "tool"], visibleEdgeIds: ["skill-agent", "agent-tool"], cueText: "Agent 调用 Tool"
       }),
       stage("mcp", 312.244, "MCP 标准化 prompts、resources 和 tools", ["mcp"], ["agent-mcp"], {
         visibleNodeIds: ["skill", "agent", "tool", "mcp"], visibleEdgeIds: ["skill-agent", "agent-tool", "agent-mcp"]
       }),
       stage("external", 317.038, "外部系统通过协议暴露和调用能力", ["external"], ["mcp-external"], {
-        visibleNodeIds: ["mcp", "external"], visibleEdgeIds: ["mcp-external"]
+        visibleNodeIds: ["mcp", "external"], visibleEdgeIds: ["mcp-external"], cueText: "协议连接外部能力"
       }),
       stage("orchestration", 321.833, "Skill 可以规定 Agent 何时调用 MCP Tool", [], [], {
-        visibleNodeIds: ["skill", "tool", "mcp", "agent"], visibleEdgeIds: ["skill-agent", "agent-tool", "agent-mcp"]
+        visibleNodeIds: ["skill", "tool", "mcp", "agent"], visibleEdgeIds: ["skill-agent", "agent-tool", "agent-mcp"], cueText: "方法编排能力调用"
       }),
       stage("layers", 326.846, "Skill 与 MCP 解决的不是同一层问题", ["combine"], ["skill-combine", "tool-combine", "mcp-combine"], {
         visibleNodeIds: ["skill", "tool", "mcp", "combine"], visibleEdgeIds: ["skill-combine", "tool-combine", "mcp-combine"]
@@ -1467,12 +1825,16 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       edge("user-skill", "user", "skill", "M 240 76 V 108", "blue"),
       edge("skill-agent", "skill", "agent", "M 240 186 V 218", "mint"),
       edge("agent-tool", "agent", "tool", "M 190 296 V 326 H 87 V 350", "blue", {
+        semanticType: "invokes-capability",
+        semanticLabel: "调用",
         surfaceBoundary: relationSurfaceBoundary("从开放的 Agent 决策节点切换到受控执行工具。")
       }),
       edge("agent-mcp", "agent", "mcp", "M 290 296 V 326 H 393 V 350", "purple", {
         surfaceBoundary: relationSurfaceBoundary("从开放的 Agent 决策节点切换到受控协议入口。")
       }),
       edge("mcp-external", "mcp", "external", "M 393 432 V 468", "mint", {
+        semanticType: "connects-system",
+        semanticLabel: "连接",
         surfaceBoundary: relationSurfaceBoundary("从受控协议入口切换到外部系统关系节点。")
       }),
       edge("external-result", "external", "result", "M 324 506 H 156", "orange", {
@@ -1497,14 +1859,14 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
         visibleNodeIds: ["agent", "tool"], visibleEdgeIds: ["agent-tool"]
       }),
       stage("mcp", 357.058, "MCP 让外部能力被统一发现和调用", ["mcp", "external"], ["agent-mcp", "mcp-external"], {
-        visibleNodeIds: ["agent", "mcp", "external"], visibleEdgeIds: ["agent-mcp", "mcp-external"]
+        visibleNodeIds: ["agent", "mcp", "external"], visibleEdgeIds: ["agent-mcp", "mcp-external"], cueText: "MCP 连接外部能力"
       }),
       stage("result", 362.103, "执行结果必须回到可检查的交付", ["result"], ["external-result"], {
         visibleNodeIds: ["mcp", "external", "result"], visibleEdgeIds: ["mcp-external", "external-result"]
       }),
       stage("boundary", 367.368, "只有 Tool 缺方法；只有 Skill 缺获准执行能力", [], [], {
         activeNodeIds: ["skill", "agent", "tool", "mcp"], activeEdgeIds: ["skill-agent", "agent-tool", "agent-mcp"],
-        visibleNodeIds: ["skill", "agent", "tool", "mcp"], visibleEdgeIds: ["skill-agent", "agent-tool", "agent-mcp"]
+        visibleNodeIds: ["skill", "agent", "tool", "mcp"], visibleEdgeIds: ["skill-agent", "agent-tool", "agent-mcp"], cueText: "方法动作连接分层"
       })
     ]
   }),
@@ -1512,15 +1874,21 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
     id: "S12", kind: "native-evidence", title: "什么时候值得做成 Skill", deck: "批准证据转译：用真实任务寻找稳定重复区", material: material(4),
     nodes: [
       node("stable-rare", 18, 52, 204, 112, "稳定但少见", "先不固化", "blue"),
-      node("candidate", 258, 52, 204, 112, "Skill 候选", "稳定 · 重复 · 可验收", "mint"),
-      node("explore", 18, 206, 204, 112, "一次性探索", "目标仍在变化", "orange", { dashed: true }),
-      node("repeat-unstable", 258, 206, 204, 112, "重复但不稳定", "继续观察", "orange", { dashed: true }),
-      node("samples", 106, 390, 268, 86, "10–20 个真实任务", "验证输入、步骤与结果是否存在共性", "blue"),
+      node("candidate", 258, 52, 204, 112, "Skill 候选", "稳定 · 重复 · 可验收", "mint", {
+        semanticRole: "decision",
+        surfaceSemanticRole: "decision"
+      }),
+      node("explore", 18, 206, 204, 112, "一次性探索", "目标仍在变化", "orange"),
+      node("repeat-unstable", 258, 206, 204, 112, "重复但不稳定", "继续观察", "orange"),
+      node("samples", 106, 390, 268, 86, "10–20 个真实任务", "验证输入、步骤与结果是否存在共性", "blue", {
+        semanticRole: "source",
+        surfaceSemanticRole: "source"
+      }),
       node("first-gate", 136, 510, 208, 64, "第一道门", "关键步骤是否稳定", "mint")
     ],
     edges: [
-      edge("samples-stable", "samples", "stable-rare", "M 176 390 V 350 H 120 V 164", "blue"),
-      edge("samples-candidate", "samples", "candidate", "M 304 390 V 350 H 360 V 164", "mint"),
+      edge("samples-stable", "samples", "stable-rare", "M 176 390 V 350 H 120 V 164", "blue", { semanticType: "compares-on", semanticLabel: "共同维度", directed: false }),
+      edge("samples-candidate", "samples", "candidate", "M 304 390 V 350 H 360 V 164", "mint", { semanticType: "compares-on", semanticLabel: "共同维度", directed: false }),
       edge("samples-explore", "samples", "explore", "M 150 390 V 350 H 120 V 318", "orange", { relation: "warning" }),
       edge("samples-unstable", "samples", "repeat-unstable", "M 330 390 V 350 H 360 V 318", "orange", { relation: "warning" }),
       edge("samples-gate", "samples", "first-gate", "M 240 476 V 510", "mint")
@@ -1531,10 +1899,10 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
     stages: [
       stage("candidate", 370, "稳定、重复、可验收且减少返工的流程更像 Skill", ["candidate"]),
       stage("changing", 376.634, "目标快速变化时先保留探索空间", ["explore"]),
-      stage("acceptance", 383.268, "无法定义验收标准时不要急着固化", ["repeat-unstable", "stable-rare"]),
+      stage("acceptance", 383.268, "无法定义验收标准时不要急着固化", ["repeat-unstable", "stable-rare"], [], { cueText: "验收标准不明确" }),
       stage("evaluate", 389.902, "先用代表性任务评测再扩大发布", ["samples"], ["samples-stable", "samples-candidate", "samples-explore", "samples-unstable"]),
       stage("samples", 396.537, "收集十到二十个真实任务观察共性", ["first-gate"], ["samples-gate"], { activeNodeIds: ["samples", "candidate"] }),
-      stage("gate", 402.894, "关键步骤是否稳定是第一道门", [], [], { activeNodeIds: ["candidate", "first-gate"], activeEdgeIds: ["samples-gate"] })
+      stage("gate", 402.894, "关键步骤是否稳定是第一道门", [], [], { activeNodeIds: ["candidate", "first-gate"], activeEdgeIds: ["samples-gate"], cueText: "关键步骤稳定吗" })
     ]
   }),
   sceneSpec({
@@ -1559,7 +1927,7 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
         semanticGroupId: "pilot-outcomes", semanticRole: "result", surfaceRole: "open-canvas", surfacePurpose: "transition-output", visualPresentation: "diagram-output"
       }),
       node("explore", 18, 410, 178, 90, "继续探索", "目标或标准仍不稳定", "orange", {
-        dashed: true, semanticGroupId: "pilot-outcomes", semanticRole: "result", surfaceRole: "open-canvas", surfacePurpose: "transition-output", visualPresentation: "diagram-output"
+        dashed: true, semanticBoundaryKind: "pending-validation", semanticGroupId: "pilot-outcomes", semanticRole: "result", surfaceRole: "open-canvas", surfacePurpose: "transition-output", visualPresentation: "diagram-output"
       })
     ],
     edges: [
@@ -1570,10 +1938,14 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
         surfaceBoundary: relationSurfaceBoundary("从试点证据切换到明确的采用门槛。")
       }),
       edge("accept-pilot", "accept", "pilot", "M 306 301 H 340 V 410", "mint", {
+        semanticType: "branches-to",
+        semanticLabel: "通过",
         surfaceBoundary: relationSurfaceBoundary("从采用门槛切换到通过后的试点路径。")
       }),
       edge("accept-explore", "accept", "explore", "M 174 301 H 107 V 410", "orange", {
         relation: "warning",
+        semanticType: "branches-to",
+        semanticLabel: "未通过",
         surfaceBoundary: relationSurfaceBoundary("从采用门槛切换到未通过时的继续探索路径。")
       })
     ],
@@ -1592,48 +1964,71 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
         visibleNodeIds: ["repeat", "accept"], visibleEdgeIds: ["criteria-accept"]
       }),
       stage("decision", 436.618, "四项成立则试点，否则继续探索", ["pilot", "explore"], ["accept-pilot", "accept-explore"], {
-        visibleNodeIds: ["accept", "pilot", "explore"], visibleEdgeIds: ["accept-pilot", "accept-explore"]
+        visibleNodeIds: ["accept", "pilot", "explore"], visibleEdgeIds: ["accept-pilot", "accept-explore"], cueText: "试点或继续探索"
       })
     ]
   }),
   sceneSpec({
-    id: "S14", kind: "native-evidence", title: "治理不是上传之后再说", deck: "批准证据转译：风险、控制和证据必须对应", material: material(5), visualMode: "card-led",
+    id: "S14", kind: "native-evidence", title: "治理不是上传之后再说", deck: "批准证据转译：风险、控制和证据必须对应", material: material(5), visualMode: "mixed-diagram",
     nodes: [
       node("publisher", 18, 28, 154, 88, "发布前", "Skill 包 · 来源 · 代码 · 工具", "blue", {
-        semanticGroupId: "governance-timeline", semanticRole: "time-anchor", surfaceRole: "information-card", surfacePurpose: "state-container"
+        semanticGroupId: "governance-lifecycle", semanticRole: "time-anchor", surfaceRole: "open-canvas", surfacePurpose: "process-anchor", visualPresentation: "process-anchor"
       }),
       node("installer", 308, 28, 154, 88, "安装时", "角色 · 数据范围", "orange", {
-        semanticGroupId: "governance-timeline", semanticRole: "time-anchor", surfaceRole: "information-card", surfacePurpose: "state-container"
+        semanticGroupId: "governance-lifecycle", semanticRole: "time-anchor", surfaceRole: "open-canvas", surfacePurpose: "process-anchor", visualPresentation: "process-anchor"
       }),
       node("operator", 18, 368, 154, 88, "运行中", "触发 · 调用 · 失败", "purple", {
-        semanticGroupId: "governance-timeline", semanticRole: "time-anchor", surfaceRole: "information-card", surfacePurpose: "state-container"
+        semanticGroupId: "governance-lifecycle", semanticRole: "time-anchor", surfaceRole: "open-canvas", surfacePurpose: "process-anchor", visualPresentation: "process-anchor"
       }),
       node("reviewer", 308, 368, 154, 88, "更新后", "复评 · 停用 · 回退", "blue", {
-        semanticGroupId: "governance-timeline", semanticRole: "time-anchor", surfaceRole: "information-card", surfacePurpose: "state-container"
+        semanticGroupId: "governance-lifecycle", semanticRole: "time-anchor", surfaceRole: "open-canvas", surfacePurpose: "process-anchor", visualPresentation: "process-anchor"
       }),
       node("scanner", 18, 500, 184, 68, "平台扫描", "只能降低风险", "orange", {
-        dashed: true, semanticGroupId: "governance-timeline", semanticRole: "time-anchor", surfaceRole: "information-card", surfacePurpose: "state-container"
+        semanticGroupId: "governance-controls", semanticRole: "decision", surfaceRole: "open-canvas", surfacePurpose: "relationship-structure", visualPresentation: "decision-gate"
       }),
       node("owner", 278, 500, 184, 68, "组织责任人", "判断 + 证据", "mint", {
-        semanticGroupId: "governance-timeline", semanticRole: "time-anchor", importance: "primary", surfaceRole: "information-card", surfacePurpose: "focus-result"
+        semanticGroupId: "governance-accountability", semanticRole: "result", importance: "primary", surfaceRole: "information-card", surfacePurpose: "focus-result"
       })
     ],
     edges: [
-      edge("publisher-installer", "publisher", "installer", "M 95 116 H 385", "orange", { semanticType: "temporal-order", semanticLabel: "安装", directed: true }),
-      edge("installer-operator", "installer", "operator", "M 385 116 V 368 H 95", "purple", { semanticType: "temporal-order", semanticLabel: "运行", directed: true }),
-      edge("operator-reviewer", "operator", "reviewer", "M 95 456 H 385", "blue", { semanticType: "temporal-order", semanticLabel: "更新", directed: true }),
+      edge("publisher-installer", "publisher", "installer", "M 95 116 H 385", "orange", { semanticType: "records-evidence", semanticLabel: "安装证据", directed: true }),
+      edge("installer-operator", "installer", "operator", "M 385 116 V 368 H 95", "purple", { semanticType: "records-evidence", semanticLabel: "运行证据", directed: true }),
+      edge("operator-reviewer", "operator", "reviewer", "M 95 456 H 385", "blue", { semanticType: "records-evidence", semanticLabel: "更新证据", directed: true }),
       edge("reviewer-scanner", "reviewer", "scanner", "M 385 456 V 534 H 202", "orange", { semanticType: "temporal-order", semanticLabel: "扫描", directed: true }),
-      edge("scanner-owner", "scanner", "owner", "M 202 534 H 278", "mint", { semanticType: "accountability", semanticLabel: "责任", directed: true })
+      edge("scanner-owner", "scanner", "owner", "M 202 534 H 278", "mint", {
+        semanticType: "assigns-accountability",
+        semanticLabel: "责任",
+        directed: true,
+        surfaceBoundary: relationSurfaceBoundary("从开放的平台控制节点切换到由责任人承担的完整结果对象。")
+      })
     ],
     stages: [
-      stage("publisher", 438, "Skill 可能携带指令、代码和资源；治理从发布前开始", ["publisher"]),
-      stage("installer", 443.213, "安装时按角色和数据范围授权", ["installer"], ["publisher-installer"]),
-      stage("operator", 448.427, "运行中记录触发、调用与失败", ["operator"], ["installer-operator"]),
-      stage("reviewer", 453.867, "更新后重评，异常时停用和回退", ["reviewer"], ["operator-reviewer"]),
-      stage("scanner", 459.08, "平台扫描只能降低风险", ["scanner"], ["reviewer-scanner"]),
-      stage("owner", 464.52, "扫描不能替代组织责任人", ["owner"], ["scanner-owner"]),
+      stage("publisher", 438, "Skill 可能携带指令、代码和资源；治理从发布前开始", ["publisher"], [], {
+        visibleNodeIds: ["publisher"]
+      }),
+      stage("installer", 443.213, "安装时按角色和数据范围授权", ["installer"], ["publisher-installer"], {
+        visibleNodeIds: ["publisher", "installer"], visibleEdgeIds: ["publisher-installer"]
+      }),
+      stage("operator", 448.427, "运行中记录触发、调用与失败", ["operator"], ["installer-operator"], {
+        visibleNodeIds: ["publisher", "installer", "operator"], visibleEdgeIds: ["publisher-installer", "installer-operator"]
+      }),
+      stage("reviewer", 453.867, "更新后重评，异常时停用和回退", ["reviewer"], ["operator-reviewer"], {
+        visibleNodeIds: ["publisher", "installer", "operator", "reviewer"],
+        visibleEdgeIds: ["publisher-installer", "installer-operator", "operator-reviewer"]
+      }),
+      stage("scanner", 459.08, "平台扫描只能降低风险", ["scanner"], ["reviewer-scanner"], {
+        visibleNodeIds: ["publisher", "installer", "operator", "reviewer", "scanner"],
+        visibleEdgeIds: ["publisher-installer", "installer-operator", "operator-reviewer", "reviewer-scanner"]
+      }),
+      stage("owner", 464.52, "扫描不能替代组织责任人", ["owner"], ["scanner-owner"], {
+        visibleNodeIds: ["publisher", "installer", "operator", "reviewer", "scanner", "owner"],
+        visibleEdgeIds: ["publisher-installer", "installer-operator", "operator-reviewer", "reviewer-scanner", "scanner-owner"]
+      }),
       stage("accountability", 469.733, "治理必须落实到责任人和证据", [], [], {
-        activeNodeIds: ["scanner", "owner"], activeEdgeIds: ["scanner-owner"]
+        activeNodeIds: ["scanner", "owner"], activeEdgeIds: ["scanner-owner"],
+        visibleNodeIds: ["publisher", "installer", "operator", "reviewer", "scanner", "owner"],
+        visibleEdgeIds: ["publisher-installer", "installer-operator", "operator-reviewer", "reviewer-scanner", "scanner-owner"],
+        cueText: "责任人与证据闭环"
       })
     ]
   }),
@@ -1666,17 +2061,28 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       })
     ],
     edges: [
-      edge("source-permission", "source", "permission", "M 144 57 H 174", "orange"),
-      edge("permission-runtime", "permission", "runtime", "M 306 57 H 336", "purple"),
-      edge("runtime-change", "runtime", "change", "M 402 94 V 176", "orange"),
-      edge("change-invalidate", "change", "invalidate", "M 336 213 H 306", "red"),
-      edge("invalidate-review", "invalidate", "review", "M 174 213 H 144", "blue"),
+      edge("source-permission", "source", "permission", "M 144 57 H 174", "orange", { semanticType: "records-evidence", semanticLabel: "来源证据", directed: true }),
+      edge("permission-runtime", "permission", "runtime", "M 306 57 H 336", "purple", { semanticType: "records-evidence", semanticLabel: "权限证据", directed: true }),
+      edge("runtime-change", "runtime", "change", "M 402 94 V 176", "orange", { semanticType: "records-evidence", semanticLabel: "运行证据", directed: true }),
+      edge("change-invalidate", "change", "invalidate", "M 336 213 H 306", "red", { semanticType: "invalidates-review", semanticLabel: "使旧审核失效", directed: true }),
+      edge("invalidate-review", "invalidate", "review", "M 174 213 H 144", "blue", { semanticType: "requires-review", semanticLabel: "重新评测", directed: true }),
       edge("review-enable", "review", "enable", "M 78 250 V 314 H 158 V 354", "mint", {
+        semanticType: "branches-to",
+        semanticLabel: "证据通过",
+        directed: true,
         surfaceBoundary: relationSurfaceBoundary("从审查动作切换到启用后的完整状态结果。")
       }),
       edge("review-rollback", "review", "rollback", "M 78 250 V 300 H 324 V 354", "orange", {
-        relation: "warning",
+        semanticType: "branches-to",
+        semanticLabel: "证据不足",
+        directed: true,
         surfaceBoundary: relationSurfaceBoundary("从审查动作切换到需要回退的完整状态结果。")
+      }),
+      edge("rollback-source", "rollback", "source", "M 258 394 H 42 V 57 H 12", "orange", {
+        semanticType: "requires-review",
+        semanticLabel: "回到来源重验",
+        directed: true,
+        surfaceBoundary: relationSurfaceBoundary("回退结果返回来源核验，重新开启证据生命周期。")
       })
     ],
     stages: [
@@ -1685,19 +2091,58 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
         visibleNodeIds: ["source", "permission"], visibleEdgeIds: ["source-permission"]
       }),
       stage("runtime", 482.653, "运行记录回答谁触发了什么版本", ["runtime"], ["permission-runtime"], {
-        visibleNodeIds: ["permission", "runtime"], visibleEdgeIds: ["permission-runtime"]
+        visibleNodeIds: ["source", "permission", "runtime"],
+        visibleEdgeIds: ["source-permission", "permission-runtime"]
       }),
       stage("change", 488.093, "脚本或外部连接变化必须被识别", ["change"], ["runtime-change"], {
-        visibleNodeIds: ["runtime", "change"], visibleEdgeIds: ["runtime-change"]
+        visibleNodeIds: ["source", "permission", "runtime", "change"],
+        visibleEdgeIds: ["source-permission", "permission-runtime", "runtime-change"]
       }),
-      stage("invalidate", 493.533, "依赖变化自动使旧审核失效", ["invalidate"], ["change-invalidate"], {
-        visibleNodeIds: ["change", "invalidate"], visibleEdgeIds: ["change-invalidate"]
+      stage("invalidate", 493.533, "依赖变化自动使旧审核失效", ["invalidate", "review"], ["change-invalidate", "invalidate-review"], {
+        activeNodeIds: ["invalidate"],
+        activeEdgeIds: ["change-invalidate"],
+        visibleNodeIds: ["source", "permission", "runtime", "change", "invalidate", "review"],
+        visibleEdgeIds: [
+          "source-permission",
+          "permission-runtime",
+          "runtime-change",
+          "change-invalidate",
+          "invalidate-review"
+        ],
+        cueText: "旧审核自动失效"
       }),
-      stage("review", 498.973, "固定样例重新比较新旧结果", ["review"], ["invalidate-review"], {
-        visibleNodeIds: ["invalidate", "review"], visibleEdgeIds: ["invalidate-review"]
+      stage("review-focus", 496.8, "固定样例重新比较新旧结果", [], [], {
+        activeNodeIds: ["review"],
+        activeEdgeIds: ["invalidate-review"],
+        visibleNodeIds: ["change", "invalidate", "review"],
+        visibleEdgeIds: ["change-invalidate", "invalidate-review"],
+        cueText: "重新评测"
       }),
-      stage("decision", 504.187, "通过才重启，否则停用或回退", ["enable", "rollback"], ["review-enable", "review-rollback"], {
-        visibleNodeIds: ["review", "enable", "rollback"], visibleEdgeIds: ["review-enable", "review-rollback"]
+      stage("review", 497.6, "复评结果决定重新启用或回退", ["enable", "rollback"], ["review-enable", "review-rollback", "rollback-source"], {
+        activeNodeIds: ["review"],
+        activeEdgeIds: ["review-enable", "review-rollback"],
+        visibleNodeIds: ["source", "change", "invalidate", "review", "enable", "rollback"],
+        visibleEdgeIds: [
+          "change-invalidate",
+          "invalidate-review",
+          "review-enable",
+          "review-rollback",
+          "rollback-source"
+        ],
+        cueText: "启用或回退"
+      }),
+      stage("decision", 504.187, "通过才重启，否则停用或回退", [], [], {
+        activeNodeIds: ["enable", "rollback"],
+        activeEdgeIds: ["review-enable", "review-rollback", "rollback-source"],
+        visibleNodeIds: ["source", "change", "invalidate", "review", "enable", "rollback"],
+        visibleEdgeIds: [
+          "change-invalidate",
+          "invalidate-review",
+          "review-enable",
+          "review-rollback",
+          "rollback-source"
+        ],
+        cueText: "启用或回退"
       })
     ]
   }),
@@ -1710,7 +2155,7 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       node("authority", 324, 140, 138, 82, "数据与工具？", "谁能安装和执行", "orange"),
       node("version", 171, 272, 138, 82, "版本如何验证？", "比较 · 回归 · 回退", "mint"),
       node("gate", 150, 390, 180, 72, "产品化前置门", "问题必须有答案", "mint"),
-      node("chaos", 18, 500, 190, 72, "只加上传入口", "更快复制一次性混乱", "orange", { dashed: true }),
+      node("chaos", 18, 500, 190, 72, "只加上传入口", "更快复制一次性混乱", "orange"),
       node("trusted", 272, 500, 190, 72, "可信采用路径", "可以进入下一镜", "mint")
     ],
     edges: [
@@ -1721,15 +2166,15 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       edge("stable-gate", "stable", "gate", "M 87 222 V 366 H 190 V 390", "blue"),
       edge("authority-gate", "authority", "gate", "M 393 222 V 366 H 290 V 390", "orange"),
       edge("version-gate", "version", "gate", "M 240 354 V 390", "mint"),
-      edge("gate-chaos", "gate", "chaos", "M 190 462 V 480 H 113 V 500", "orange", { relation: "warning" }),
-      edge("gate-trusted", "gate", "trusted", "M 290 462 V 480 H 367 V 500", "mint")
+      edge("gate-chaos", "gate", "chaos", "M 190 462 V 480 H 113 V 500", "orange", { relation: "warning", semanticType: "branches-to", semanticLabel: "未通过", directed: true }),
+      edge("gate-trusted", "gate", "trusted", "M 290 462 V 480 H 367 V 500", "mint", { semanticType: "branches-to", semanticLabel: "通过", directed: true })
     ],
     stages: [
       stage("candidate", 506, "不要先问能不能做一个 Skill", ["candidate"], [], {
         visibleNodeIds: ["candidate"]
       }),
       stage("stability", 511.746, "先问方法是否稳定、失败能否发现", ["stable", "detect"], ["candidate-stable", "candidate-detect"], {
-        visibleNodeIds: ["candidate", "stable", "detect"], visibleEdgeIds: ["candidate-stable", "candidate-detect"]
+        visibleNodeIds: ["candidate", "stable", "detect"], visibleEdgeIds: ["candidate-stable", "candidate-detect"], cueText: "先问稳定与可检测"
       }),
       stage("authority", 517.732, "再问依赖哪些数据和工具、谁能执行", ["authority"], ["candidate-authority"], {
         visibleNodeIds: ["candidate", "authority"], visibleEdgeIds: ["candidate-authority"]
@@ -1739,7 +2184,7 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       }),
       stage("chaos", 528.986, "否则只会更快复制一次性混乱", ["gate", "chaos"], ["stable-gate", "authority-gate", "version-gate", "gate-chaos"], {
         visibleNodeIds: ["stable", "authority", "version", "gate", "chaos"],
-        visibleEdgeIds: ["stable-gate", "authority-gate", "version-gate", "gate-chaos"]
+        visibleEdgeIds: ["stable-gate", "authority-gate", "version-gate", "gate-chaos"], cueText: "不要复制一次性混乱"
       }),
       stage("trusted", 534.493, "产品重点是建立可信采用路径", ["trusted"], ["gate-trusted"], {
         visibleNodeIds: ["version", "gate", "trusted"], visibleEdgeIds: ["version-gate", "gate-trusted"]
@@ -1769,9 +2214,9 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       })
     ],
     edges: [
-      edge("understand-trial", "understand", "trial", "M 240 82 V 112", "orange"),
-      edge("trial-inspect", "trial", "inspect", "M 240 186 V 216", "purple"),
-      edge("inspect-machine", "inspect", "machine", "M 240 290 V 342", "blue"),
+      edge("understand-trial", "understand", "trial", "M 240 82 V 112", "orange", { semanticType: "records-evidence", semanticLabel: "试运行证据", directed: true }),
+      edge("trial-inspect", "trial", "inspect", "M 240 186 V 216", "purple", { semanticType: "records-evidence", semanticLabel: "检查证据", directed: true }),
+      edge("inspect-machine", "inspect", "machine", "M 240 290 V 342", "blue", { semanticType: "records-evidence", semanticLabel: "证据进入审核", directed: true }),
       edge("machine-human", "machine", "human", "M 324 384 H 348", "mint"),
       edge("human-revise", "human", "revise", "M 408 426 V 472 H 90 V 426", "orange")
     ],
@@ -1785,12 +2230,17 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       stage("trial", 545.706, "在受控范围内试运行", ["trial"], ["understand-trial"]),
       stage("inspect", 551.413, "用可检查结果判断是否继续", ["inspect"], ["trial-inspect"]),
       stage("machine", 557.357, "机器审核先挡住结构、证据和安全问题", ["machine"], ["inspect-machine"]),
-      stage("human", 562.825, "最终采用或退回仍由人决定", ["human"], ["machine-human"]),
-      stage("revise", 568.294, "明确反馈回到同一个产出 Agent 修订", ["revise"], ["human-revise"])
+      stage("human", 562.825, "最终采用或退回仍由人决定", ["human"], ["machine-human"], {
+        cueText: "人承担最终责任"
+      }),
+      stage("revise", 568.294, "明确反馈回到同一个产出 Agent 修订", ["revise"], ["human-revise"], {
+        cueText: "反馈形成可追溯版本"
+      })
     ]
   }),
   sceneSpec({
     id: "S18", kind: "summary", title: "先定义边界，再把方法变成 Skill", deck: "四项共同完成，才是可治理的能力资产",
+    finalHoldStartSecond: 594.5,
     nodes: [
       node("trigger", 34, 98, 184, 86, "01 · 触发条件", "什么时候调用", "blue", { semanticGroupId: "governance-criteria", textWrapMode: "phrase-safe" }),
       node("accept", 262, 98, 184, 86, "02 · 完成标准", "什么证据算完成", "orange", { semanticGroupId: "governance-criteria", textWrapMode: "phrase-safe" }),
@@ -1802,16 +2252,28 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       })
     ],
     edges: [
-      edge("trigger-adopt", "trigger", "adopt", "M 126 184 V 376 H 190 V 420", "blue"),
-      edge("accept-adopt", "accept", "adopt", "M 354 184 V 376 H 290 V 420", "orange"),
-      edge("permission-adopt", "permission", "adopt", "M 126 330 V 382 H 190 V 420", "purple"),
-      edge("rollback-adopt", "rollback", "adopt", "M 354 330 V 382 H 290 V 420", "mint")
+      edge("trigger-adopt", "trigger", "adopt", "M 126 184 V 376 H 190 V 420", "blue", { semanticType: "converges-to", semanticLabel: "汇聚", directed: true }),
+      edge("accept-adopt", "accept", "adopt", "M 354 184 V 376 H 290 V 420", "orange", { semanticType: "converges-to", semanticLabel: "汇聚", directed: true }),
+      edge("permission-adopt", "permission", "adopt", "M 126 330 V 382 H 190 V 420", "purple", { semanticType: "converges-to", semanticLabel: "汇聚", directed: true }),
+      edge("rollback-adopt", "rollback", "adopt", "M 354 330 V 382 H 290 V 420", "mint", { semanticType: "converges-to", semanticLabel: "汇聚", directed: true })
     ],
     stages: [
       stage("trigger", 574, "先定义触发条件", ["trigger"]),
       stage("acceptance", 579.5, "再明确完成标准", ["accept"]),
       stage("permission", 585, "同时写清权限边界", ["permission"]),
-      stage("rollback", 590.25, "最后准备版本回退", ["rollback", "adopt"], ["trigger-adopt", "accept-adopt", "permission-adopt", "rollback-adopt"])
+      stage("rollback", 590.25, "最后准备版本回退", ["rollback"]),
+      stage(
+        "converge",
+        592,
+        "四项条件共同汇聚为可治理的能力资产",
+        ["adopt"],
+        ["trigger-adopt", "accept-adopt", "permission-adopt", "rollback-adopt"],
+        {
+          activeNodeIds: ["adopt"],
+          activeEdgeIds: ["trigger-adopt", "accept-adopt", "permission-adopt", "rollback-adopt"],
+          cueText: "四项条件汇聚"
+        }
+      )
     ]
   })
 ]);
@@ -1842,6 +2304,34 @@ if (unsupportedSuccessMarks.length > 0) {
 
 const specById = new Map(AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.map((scene) => [scene.id, scene]));
 
+export function longReviewVisualSceneCopy(sceneId, episodeScene = null) {
+  const spec = specById.get(sceneId);
+  if (!spec) throw new Error(`未知长片审阅镜头：${sceneId}`);
+  const episodeTitle = typeof episodeScene?.title === "string"
+    ? episodeScene.title.trim()
+    : null;
+  return Object.freeze({
+    title: spec.title,
+    deck: spec.deck ?? episodeScene?.statement ?? "",
+    titleSource: "formal-visual-spec",
+    episodeTitleMismatch: episodeTitle != null && episodeTitle !== spec.title
+  });
+}
+
+export function longReviewSemanticGroupProgress(state, nodeIds) {
+  if (!state || typeof state !== "object" || Array.isArray(state)) {
+    throw new TypeError("语义分组进度必须提供运行时状态");
+  }
+  if (!Array.isArray(nodeIds)) {
+    throw new TypeError("语义分组进度必须提供 nodeIds 数组");
+  }
+  return nodeIds.reduce((maximum, nodeId) => Math.max(
+    maximum,
+    (state.nodeProgress?.[nodeId] ?? 0) *
+      (state.nodeVisibilityProgress?.[nodeId] ?? 0)
+  ), 0);
+}
+
 const LONG_REVIEW_LAYOUT_CACHE_MAX_ENTRIES = 256;
 const longReviewBaseLayoutCache = new Map();
 const longReviewRenderedLayoutCache = new Map();
@@ -1853,7 +2343,8 @@ function longReviewLayoutCacheKey({
   height,
   layoutNodeIds,
   renderedNodeIds,
-  renderedEdgeIds
+  renderedEdgeIds,
+  layoutProgress = null
 }) {
   return JSON.stringify([
     sceneId,
@@ -1861,7 +2352,8 @@ function longReviewLayoutCacheKey({
     height,
     layoutNodeIds,
     renderedNodeIds,
-    renderedEdgeIds
+    renderedEdgeIds,
+    layoutProgress
   ]);
 }
 
@@ -1940,21 +2432,44 @@ function stageIndexAtFrame(spec, frame, stageStartFrames = effectiveStageStartFr
   return stageIndex;
 }
 
+function longReviewSemanticNodeStageStartFrame(spec, nodeId) {
+  const stageIndex = spec.stages.findIndex((item) => item.nodeIds.includes(nodeId));
+  if (stageIndex < 0) {
+    return spec.startFrame + spec.visualPlan.timing.graphicStartFrame;
+  }
+  return effectiveStageStartFrames(spec)[stageIndex];
+}
+
+function packageAnatomyIncomingRelation(spec, nodeId) {
+  if (spec.narrativeTreatment !== "package-anatomy") return null;
+  const stageIndex = longReviewNodeIntroductionStageIndex(spec, nodeId);
+  if (stageIndex < 0) return null;
+  const stageEdgeIds = new Set(spec.stages[stageIndex].edgeIds);
+  return spec.edges.find((relation) => {
+    const semanticType = relation.semanticType ?? relation.type;
+    return stageEdgeIds.has(relation.id) &&
+      relation.to === nodeId &&
+      ["contains", "contrasts-with"].includes(semanticType);
+  }) ?? null;
+}
+
 export function longReviewSemanticNodeRevealFrame(sceneId, nodeId) {
   const spec = specById.get(sceneId);
   if (!spec) throw new Error(`未知长片审阅镜头：${sceneId}`);
   if (!spec.nodes.some((item) => item.id === nodeId)) {
     throw new Error(`${sceneId} 不存在语义节点：${String(nodeId)}`);
   }
-  const stageIndex = spec.stages.findIndex((item) => item.nodeIds.includes(nodeId));
-  if (stageIndex < 0) {
-    return spec.startFrame + spec.visualPlan.timing.graphicStartFrame;
+  const stageStartFrame = longReviewSemanticNodeStageStartFrame(spec, nodeId);
+  const incomingRelation = packageAnatomyIncomingRelation(spec, nodeId);
+  if (incomingRelation == null) return stageStartFrame;
+  const semanticType = incomingRelation.semanticType ?? incomingRelation.type;
+  if (semanticType === "contrasts-with") {
+    return stageStartFrame + AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES;
   }
-  const startFrame = effectiveStageStartFrames(spec)[stageIndex];
-  const establishingEdgeIds = longReviewStageIncomingEdgeIds(spec, stageIndex, nodeId);
-  return stageIndex === 0 || establishingEdgeIds.length > 0
-    ? startFrame
-    : startFrame + AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES;
+  if (semanticType !== "contains") return stageStartFrame;
+  return stageStartFrame + AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES +
+    AGENT_SKILL_LONG_REVIEW_EDGE_DELAY_FRAMES +
+    AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES;
 }
 
 function longReviewNodeIntroductionStageIndex(spec, nodeId) {
@@ -1984,33 +2499,27 @@ function longReviewSemanticEdgeRevealFrameInternal(spec, edgeId, resolvingEdgeId
   }
   resolvingEdgeIds.add(cacheKey);
   const stageStartFrame = effectiveStageStartFrames(spec)[stageIndex];
-  const relationshipStartFrame = stageStartFrame;
-  const sourceIntroductionStageIndex = longReviewNodeIntroductionStageIndex(spec, relation.from);
-  const sourceIntroducedInStage = sourceIntroductionStageIndex === stageIndex;
-  const sourceIncomingEdgeIds = sourceIntroducedInStage
-    ? longReviewStageIncomingEdgeIds(spec, stageIndex, relation.from)
-    : [];
-  let revealFrame;
-  if (!sourceIntroducedInStage) {
-    revealFrame = relationshipStartFrame + AGENT_SKILL_LONG_REVIEW_EDGE_DELAY_FRAMES;
-  } else if (sourceIncomingEdgeIds.length === 0) {
-    revealFrame = Math.max(
-      relationshipStartFrame,
-      longReviewSemanticNodeRevealFrame(spec.id, relation.from)
-    );
-  } else {
-    const sourceEstablishedFrame = Math.max(...sourceIncomingEdgeIds.map((incomingEdgeId) =>
-      longReviewSemanticEdgeRevealFrameInternal(
-        spec,
-        incomingEdgeId,
-        resolvingEdgeIds
-      ) + AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES
-    ));
-    revealFrame = Math.max(
-      relationshipStartFrame,
-      sourceEstablishedFrame + AGENT_SKILL_LONG_REVIEW_EDGE_DELAY_FRAMES
-    );
+  const semanticType = relation.semanticType ?? relation.type;
+  if (
+    spec.narrativeTreatment === "package-anatomy" &&
+    semanticType === "contains"
+  ) {
+    const revealFrame = stageStartFrame + AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES +
+      AGENT_SKILL_LONG_REVIEW_EDGE_DELAY_FRAMES;
+    resolvingEdgeIds.delete(cacheKey);
+    longReviewEdgeRevealFrameCache.set(cacheKey, revealFrame);
+    return revealFrame;
   }
+  const endpointReadyFrame = Math.max(
+    longReviewSemanticNodeRevealFrame(spec.id, relation.from) +
+      AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES,
+    longReviewSemanticNodeRevealFrame(spec.id, relation.to) +
+      AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES
+  );
+  const revealFrame = Math.max(
+    stageStartFrame,
+    endpointReadyFrame
+  ) + AGENT_SKILL_LONG_REVIEW_EDGE_DELAY_FRAMES;
   resolvingEdgeIds.delete(cacheKey);
   longReviewEdgeRevealFrameCache.set(cacheKey, revealFrame);
   return revealFrame;
@@ -2028,14 +2537,7 @@ export function longReviewSemanticNodeVisibleFrame(sceneId, nodeId) {
   if (!spec.nodes.some((item) => item.id === nodeId)) {
     throw new Error(`${sceneId} 不存在语义节点：${String(nodeId)}`);
   }
-  const stageIndex = longReviewNodeIntroductionStageIndex(spec, nodeId);
-  if (stageIndex < 0) return longReviewSemanticNodeRevealFrame(sceneId, nodeId);
-  const incomingEdgeIds = longReviewStageIncomingEdgeIds(spec, stageIndex, nodeId);
-  if (incomingEdgeIds.length === 0) return longReviewSemanticNodeRevealFrame(sceneId, nodeId);
-  return Math.max(...incomingEdgeIds.map((edgeId) =>
-    longReviewSemanticEdgeRevealFrame(sceneId, edgeId) +
-      AGENT_SKILL_LONG_REVIEW_EDGE_DRAW_FRAMES
-  ));
+  return longReviewSemanticNodeRevealFrame(sceneId, nodeId);
 }
 
 export const AGENT_SKILL_LONG_REVIEW_REVEAL_SCHEDULE_REVIEW = (() => {
@@ -2090,7 +2592,11 @@ export function longReviewStageCaptionStateAtFrame(sceneId, frame) {
       previous: null,
       current: Object.freeze({
         id: currentStage.id,
-        label: currentStage.label,
+        label: currentStage.cueText,
+        fullLabel: currentStage.label,
+        render: currentStage.cuePlan.render,
+        origin: currentStage.cuePlan.origin,
+        suppressionReason: currentStage.cuePlan.suppressionReason,
         opacity: 1
       }),
       settled: true
@@ -2112,12 +2618,20 @@ export function longReviewStageCaptionStateAtFrame(sceneId, frame) {
     stageIndex,
     previous: Object.freeze({
       id: previousStage.id,
-      label: previousStage.label,
+      label: previousStage.cueText,
+      fullLabel: previousStage.label,
+      render: previousStage.cuePlan.render,
+      origin: previousStage.cuePlan.origin,
+      suppressionReason: previousStage.cuePlan.suppressionReason,
       opacity: previousOpacity
     }),
     current: Object.freeze({
       id: currentStage.id,
-      label: currentStage.label,
+      label: currentStage.cueText,
+      fullLabel: currentStage.label,
+      render: currentStage.cuePlan.render,
+      origin: currentStage.cuePlan.origin,
+      suppressionReason: currentStage.cuePlan.suppressionReason,
       opacity: currentOpacity
     }),
     settled: currentOpacity === 1
@@ -2134,41 +2648,17 @@ export function longReviewSceneAtFrame(frame) {
 export function longReviewSceneLayersAtFrame(frame) {
   const safeFrame = clampFrame(frame);
   const current = longReviewSceneAtFrame(safeFrame);
-  const index = AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.findIndex((scene) => scene.id === current.id);
-  if (index <= 0) {
-    return [{ sceneId: current.id, opacity: 1, copyOpacity: 1, diagramOpacity: 1, role: "current" }];
-  }
-  const offset = safeFrame - current.startFrame;
-  if (offset >= AGENT_SKILL_LONG_REVIEW_CROSSFADE_FRAMES) {
-    return [{ sceneId: current.id, opacity: 1, copyOpacity: 1, diagramOpacity: 1, role: "current" }];
-  }
-  const incomingOpacity = smoothStep(offset / Math.max(1, AGENT_SKILL_LONG_REVIEW_CROSSFADE_FRAMES - 1));
-  const copyHandoffFrame = Math.floor((AGENT_SKILL_LONG_REVIEW_CROSSFADE_FRAMES - 1) / 2);
-  const outgoingCopyOpacity = offset <= copyHandoffFrame
-    ? 1 - smoothStep(offset / Math.max(1, copyHandoffFrame))
-    : 0;
-  const incomingCopyOpacity = offset >= copyHandoffFrame
-    ? smoothStep(
-      (offset - copyHandoffFrame) /
-        Math.max(1, AGENT_SKILL_LONG_REVIEW_CROSSFADE_FRAMES - 1 - copyHandoffFrame)
-    )
-    : 0;
-  return [
-    {
-      sceneId: AGENT_SKILL_LONG_REVIEW_SCENE_SPECS[index - 1].id,
-      opacity: 1 - incomingOpacity,
-      copyOpacity: outgoingCopyOpacity,
-      diagramOpacity: outgoingCopyOpacity,
-      role: "outgoing"
-    },
-    {
-      sceneId: current.id,
-      opacity: incomingOpacity,
-      copyOpacity: incomingCopyOpacity,
-      diagramOpacity: incomingCopyOpacity,
-      role: "incoming"
-    }
-  ];
+  // Semantic information never crossfades: a complementary alpha sum does
+  // not keep title glyphs, cards or arrows fully opaque at their own pixels.
+  // Scene boundaries therefore have exactly one complete information owner.
+  return [{
+    sceneId: current.id,
+    opacity: 1,
+    copyOpacity: 1,
+    diagramOpacity: 1,
+    role: "current",
+    semanticHandoff: "opaque-hard-cut"
+  }];
 }
 
 function matchingOrphanSubtitleRule(subtitle) {
@@ -2242,6 +2732,55 @@ export function longReviewSubtitleGateAtFrame(subtitles, frame) {
   const carriesAcrossScene = Boolean(
     activeSubtitle && activeSubtitle.start < scene.startSecond
   );
+  const diagramState = longReviewDiagramStateAtFrame(scene.id, safeFrame);
+  const visibleNodes = scene.nodes.filter((node) =>
+    (diagramState.nodeProgress[node.id] ?? 0) *
+      (diagramState.nodeVisibilityProgress[node.id] ?? 0) > 0
+  );
+  const visibleNodeCount = visibleNodes.length;
+  const visibleRelationCount = scene.edges.filter((relation) =>
+    (diagramState.edgeProgress[relation.id] ?? 0) *
+      (diagramState.edgeVisibilityProgress[relation.id] ?? 0) > 0
+  ).length;
+  const firstGraphicFrame = Math.max(
+    scene.startFrame + scene.visualPlan.timing.graphicStartFrame,
+    effectiveStageStartFrames(scene)[0]
+  );
+  const subtitlePhase = safeFrame >= scene.holdStartFrame
+    ? "final-hold"
+    : safeFrame < firstGraphicFrame || (visibleNodeCount === 0 && visibleRelationCount === 0)
+      ? "pre-build"
+      : "active-build";
+  const cuePlan = scene.stages[diagramState.stageIndex].cuePlan;
+  const duplicateCueBelongsToBuildingPackageNode =
+    scene.narrativeTreatment === "package-anatomy" &&
+    subtitlePhase === "active-build" &&
+    cuePlan.render === false;
+  const duplicateCueIsActuallyVisible = cuePlan.render === false && (
+    duplicateCueBelongsToBuildingPackageNode ||
+    visibleNodes.some(
+      (node) => normalizedCueComparisonText(normalizedNodeText(node.label)) ===
+        normalizedCueComparisonText(cuePlan.text)
+    )
+  );
+  const subtitlePresentation = activeSubtitle == null
+    ? null
+    : duplicateCueIsActuallyVisible
+      ? Object.freeze({
+          phase: subtitlePhase,
+          mode: "hidden",
+          visualWeight: "none",
+          opacity: 0,
+          text: activeSubtitle.text,
+          suppressionReason: cuePlan.suppressionReason
+        })
+      : planEditorialSubtitlePresentation({
+        phase: subtitlePhase,
+        visibleNodeCount,
+        visibleRelationCount,
+        fullText: activeSubtitle.text,
+        cueText: cuePlan.text
+      });
   return Object.freeze({
     mode: carriesAcrossScene ? "carry-over" : "scene-title-first",
     opacity: carriesAcrossScene
@@ -2251,7 +2790,21 @@ export function longReviewSubtitleGateAtFrame(subtitles, frame) {
         scene.startFrame + scene.visualPlan.timing.subtitleStartFrame,
         8
       ),
-    activeSubtitle: activeSubtitle ? Object.freeze({ ...activeSubtitle }) : null
+    phase: subtitlePresentation?.phase ?? subtitlePhase,
+    presentationMode: subtitlePresentation?.mode ?? null,
+    visualWeight: subtitlePresentation?.visualWeight ?? null,
+    presentationOpacity: subtitlePresentation?.opacity ?? 1,
+    renderSubtitle: activeSubtitle != null && subtitlePresentation?.mode !== "hidden",
+    suppressionReason: subtitlePresentation?.suppressionReason ?? null,
+    visibleNodeCount,
+    visibleRelationCount,
+    activeSubtitle: activeSubtitle
+      ? Object.freeze({
+          ...activeSubtitle,
+          sourceText: activeSubtitle.text,
+          text: subtitlePresentation.text
+        })
+      : null
   });
 }
 
@@ -2319,14 +2872,8 @@ export function longReviewDiagramStateAtFrame(sceneId, frame) {
       return [item.id, inPrevious ? 1 - stageTransitionProgress : 0];
     }
     if (previousStage && inPrevious) return [item.id, 1];
-    const incomingStageEdgeIds = currentStage.nodeIds.includes(item.id)
-      ? longReviewStageIncomingEdgeIds(spec, stageIndex, item.id)
-      : [];
     const stageVisibilityProgress = previousStage ? stageTransitionProgress : 1;
-    const connectedEntryProgress = incomingStageEdgeIds.length === 0
-      ? stageVisibilityProgress
-      : Math.min(...incomingStageEdgeIds.map((edgeId) => edgeArrowProgress[edgeId] ?? 0));
-    return [item.id, Math.min(stageVisibilityProgress, connectedEntryProgress)];
+    return [item.id, stageVisibilityProgress];
   }));
   const edgeVisibilityProgress = Object.fromEntries(spec.edges.map((item) => {
     const inCurrent = currentEdgeSet.has(item.id);
@@ -2358,10 +2905,29 @@ export function longReviewDiagramStateAtFrame(sceneId, frame) {
   for (const id of currentStage.activeEdgeIds) {
     edgeHighlightProgress[id] = Math.max(edgeHighlightProgress[id] ?? 0, stageTransitionProgress);
   }
+  const convergenceStage = spec.id === "S18"
+    ? spec.stages.find((stageItem) => stageItem.id === "converge")
+    : null;
+  const convergenceProgress = convergenceStage == null
+    ? null
+    : safeFrame < convergenceStage.startFrame
+      ? 0
+      : safeFrame >= spec.holdStartFrame
+        ? 1
+        : smoothStep(
+            (safeFrame - convergenceStage.startFrame + 1) /
+              (spec.holdStartFrame - convergenceStage.startFrame + 1)
+          );
+  if (convergenceProgress != null && safeFrame >= convergenceStage.startFrame) {
+    nodeHighlightProgress.adopt = convergenceProgress;
+    for (const edgeId of convergenceStage.edgeIds) {
+      edgeHighlightProgress[edgeId] = convergenceProgress;
+    }
+  }
   const complete = itemProgress.every((progress) => progress === 1) &&
     [nodeProgress, edgeProgress, edgeArrowProgress].every(
       (progressById) => Object.values(progressById).every((progress) => progress === 1)
-    );
+    ) && (convergenceProgress == null || convergenceProgress === 1);
   return {
     sceneId,
     stageIndex,
@@ -2387,35 +2953,90 @@ export function longReviewDiagramStateAtFrame(sceneId, frame) {
     previousStageLabel: previousStage?.label ?? null,
     stageTransitionProgress,
     stageRevealProgress,
+    convergenceProgress,
     complete,
     hold: safeFrame >= spec.holdStartFrame,
     finalHold: safeFrame >= spec.holdStartFrame
   };
 }
 
-function longReviewGraphIconConnectorGeometryById(spec, geometryById) {
+function longReviewVisibleNodeGeometryMaps(spec, geometryById, primitiveById) {
   const graphIconByAnchorId = new Map(
     spec.standaloneIcons
       .filter((icon) => icon.participation === "graph-node")
       .map((icon) => [icon.anchorId, icon])
   );
-  return Object.freeze(Object.fromEntries(Object.entries(geometryById).map(([nodeId, geometry]) => {
+  const connectorGeometryEntries = [];
+  const iconRenderGeometryEntries = [];
+  for (const [nodeId, geometry] of Object.entries(geometryById)) {
     const icon = graphIconByAnchorId.get(nodeId);
-    if (!icon) return [nodeId, geometry];
     const node = spec.nodes.find((candidate) => candidate.id === nodeId);
-    if (!node) throw new Error(`${spec.id}/${nodeId} 缺少图标节点文案`);
-    const metrics = visualSystemV1SemanticIconNodeMetrics({
-      id: `${spec.id}/${nodeId}`,
+    if (!node) throw new Error(`${spec.id}/${nodeId} 缺少语义节点文案`);
+    if (icon) {
+      const metrics = visualSystemV1SemanticIconNodeMetrics({
+        id: `${spec.id}/${nodeId}`,
+        label: normalizedNodeText(node.label),
+        detail: normalizedNodeText(node.detail),
+        anchorGeometry: geometry,
+        iconSizePx: aiTechIconSize(icon.sizeRole).sizePx
+      });
+      if (!metrics.fitsAnchor) {
+        throw new Error(`${spec.id}/${nodeId} 的图标与文字无法放入语义锚点`);
+      }
+      connectorGeometryEntries.push([nodeId, metrics.connectorGeometry]);
+      iconRenderGeometryEntries.push([nodeId, metrics.renderGeometry]);
+      continue;
+    }
+    const surfaceRole = spec.surfacePlanById[nodeId]?.surfaceRole;
+    const metrics = visualSystemV1SemanticTextConnectorMetrics({
+      id: `${spec.id}/${nodeId}/visible-connector`,
       label: normalizedNodeText(node.label),
       detail: normalizedNodeText(node.detail),
+      marker: node.dashed ? "边界" : null,
+      surfaceRole,
+      textWrapMode: node.textWrapMode ?? "break-word",
       anchorGeometry: geometry,
-      iconSizePx: aiTechIconSize(icon.sizeRole).sizePx
+      typographyProfile: spec.typographyProfile === "longform-emphasis"
+        ? "longformEmphasis"
+        : "standard",
+      bindToFullAnchor: node.dashed === true ||
+        (spec.narrativeTreatment === "package-anatomy" && node.semanticGroupId != null) ||
+        LONG_REVIEW_FULL_EXTENT_OPEN_PRIMITIVES.has(primitiveById[nodeId])
     });
     if (!metrics.fitsAnchor) {
-      throw new Error(`${spec.id}/${nodeId} 的图标与文字无法放入语义锚点`);
+      throw new Error(`${spec.id}/${nodeId} 的可见文字连接范围无法放入语义锚点`);
     }
-    return [nodeId, metrics.connectorGeometry];
-  })));
+    connectorGeometryEntries.push([nodeId, metrics.connectorGeometry]);
+  }
+  return Object.freeze({
+    connectorGeometryById: Object.freeze(Object.fromEntries(connectorGeometryEntries)),
+    iconRenderGeometryById: Object.freeze(Object.fromEntries(iconRenderGeometryEntries))
+  });
+}
+
+function longReviewInterpolatedGeometry(previous, current, progress) {
+  const from = previous ?? current;
+  const to = current ?? previous;
+  if (!from || !to) return null;
+  const normalized = Math.max(0, Math.min(1, Number.isFinite(progress) ? progress : 1));
+  const interpolate = (key) => from[key] + (to[key] - from[key]) * normalized;
+  const x = interpolate("x");
+  const y = interpolate("y");
+  const width = interpolate("width");
+  const height = interpolate("height");
+  return Object.freeze({
+    ...to,
+    x,
+    y,
+    left: x,
+    top: y,
+    width,
+    height,
+    right: x + width,
+    bottom: y + height,
+    centerX: x + width / 2,
+    centerY: y + height / 2
+  });
 }
 
 export function longReviewLayoutAtFrame(sceneId, frame, options = {}) {
@@ -2429,38 +3050,39 @@ export function longReviewLayoutAtFrame(sceneId, frame, options = {}) {
   const state = longReviewDiagramStateAtFrame(sceneId, frame);
   const layoutNodeIds = spec.layoutStability === "stable-final"
     ? spec.nodes.map((item) => item.id)
-    : state.renderedNodeIds;
-  const baseCacheKey = longReviewLayoutCacheKey({
-    sceneId,
-    width,
-    height,
-    layoutNodeIds,
-    renderedNodeIds: spec.nodes.map((item) => item.id),
-    renderedEdgeIds: spec.edges.map((item) => item.id)
-  });
-  const base = readThroughLongReviewLayoutCache(
-    longReviewBaseLayoutCache,
-    baseCacheKey,
-    () => {
+    : state.currentVisibleNodeIds;
+  const baseForNodeIds = (nodeIds) => {
+    const baseCacheKey = longReviewLayoutCacheKey({
+      sceneId,
+      width,
+      height,
+      layoutNodeIds: nodeIds,
+      renderedNodeIds: spec.nodes.map((item) => item.id),
+      renderedEdgeIds: spec.edges.map((item) => item.id)
+    });
+    return readThroughLongReviewLayoutCache(longReviewBaseLayoutCache, baseCacheKey, () => {
       const baseLayout = visualSystemV1GrammarLayout({
         width,
         height,
         visualPlan: spec.visualPlan,
-        visibleElementIds: layoutNodeIds,
+        visibleElementIds: nodeIds,
         semanticContentById: longReviewSemanticContentById(spec.nodes),
         primitiveOverrideById: longReviewPrimitiveOverrideById(spec.nodes),
         surfacePlanById: spec.surfacePlanById,
-        flowLayoutProfile: spec.flowLayoutProfile
+        flowLayoutProfile: spec.flowLayoutProfile,
+        hierarchyLayoutProfile: spec.hierarchyLayoutProfile
       });
       const routeBounds = longReviewConnectorRouteBounds({
         width,
         height,
         safeArea: baseLayout.safeArea
       });
-      const connectorGeometryById = longReviewGraphIconConnectorGeometryById(
+      const visibleGeometry = longReviewVisibleNodeGeometryMaps(
         spec,
-        baseLayout.geometryById
+        baseLayout.geometryById,
+        baseLayout.primitiveById
       );
+      const connectorGeometryById = visibleGeometry.connectorGeometryById;
       const allConnectors = visualSystemV1GrammarConnectors({
         structure: spec.visualPlan.structure,
         semanticRelations: spec.visualPlan.semanticRelations,
@@ -2472,17 +3094,68 @@ export function longReviewLayoutAtFrame(sceneId, frame, options = {}) {
         baseLayout,
         routeBounds,
         connectorGeometryById,
+        iconRenderGeometryById: visibleGeometry.iconRenderGeometryById,
         allConnectors
       });
-    }
-  );
+    });
+  };
+  const currentBase = baseForNodeIds(layoutNodeIds);
+  const previousBase = spec.layoutStability === "explicit-reflow"
+    ? baseForNodeIds(state.previousVisibleNodeIds)
+    : currentBase;
+  let base = currentBase;
+  let previousGeometryById = null;
+  let currentGeometryById = null;
+  if (spec.layoutStability === "explicit-reflow") {
+    previousGeometryById = previousBase.baseLayout.geometryById;
+    currentGeometryById = currentBase.baseLayout.geometryById;
+    const geometryById = Object.freeze(Object.fromEntries(
+      state.renderedNodeIds.flatMap((nodeId) => {
+        const geometry = longReviewInterpolatedGeometry(
+          previousGeometryById[nodeId],
+          currentGeometryById[nodeId],
+          state.stageTransitionProgress
+        );
+        return geometry == null ? [] : [[nodeId, geometry]];
+      })
+    ));
+    const primitiveById = Object.freeze(Object.fromEntries(
+      state.renderedNodeIds.flatMap((nodeId) => {
+        const primitive = currentBase.baseLayout.primitiveById[nodeId] ??
+          previousBase.baseLayout.primitiveById[nodeId];
+        return primitive == null ? [] : [[nodeId, primitive]];
+      })
+    ));
+    const visibleGeometry = longReviewVisibleNodeGeometryMaps(spec, geometryById, primitiveById);
+    const allConnectors = visualSystemV1GrammarConnectors({
+      structure: spec.visualPlan.structure,
+      semanticRelations: spec.visualPlan.semanticRelations,
+      geometryById: visibleGeometry.connectorGeometryById,
+      routeBounds: currentBase.routeBounds,
+      connectorPolicy: "orthogonal-only"
+    });
+    base = Object.freeze({
+      baseLayout: Object.freeze({
+        ...currentBase.baseLayout,
+        geometryById,
+        primitiveById
+      }),
+      routeBounds: currentBase.routeBounds,
+      connectorGeometryById: visibleGeometry.connectorGeometryById,
+      iconRenderGeometryById: visibleGeometry.iconRenderGeometryById,
+      allConnectors
+    });
+  }
   const renderedCacheKey = longReviewLayoutCacheKey({
     sceneId,
     width,
     height,
     layoutNodeIds,
     renderedNodeIds: state.renderedNodeIds,
-    renderedEdgeIds: state.renderedEdgeIds
+    renderedEdgeIds: state.renderedEdgeIds,
+    layoutProgress: spec.layoutStability === "explicit-reflow"
+      ? state.stageTransitionProgress
+      : null
   });
   const rendered = readThroughLongReviewLayoutCache(
     longReviewRenderedLayoutCache,
@@ -2496,21 +3169,35 @@ export function longReviewLayoutAtFrame(sceneId, frame, options = {}) {
       const connectorGeometryById = Object.freeze(Object.fromEntries(
         state.renderedNodeIds.map((nodeId) => [nodeId, base.connectorGeometryById[nodeId]])
       ));
-      const connectors = visualSystemV1GrammarConnectors({
-        structure: spec.visualPlan.structure,
-        semanticRelations: spec.visualPlan.semanticRelations.filter((relation) =>
+      const iconGeometryById = Object.freeze(Object.fromEntries(
+        state.renderedNodeIds.flatMap((nodeId) => {
+          const geometry = base.iconRenderGeometryById[nodeId];
+          return geometry == null ? [] : [[nodeId, geometry]];
+        })
+      ));
+      const visibleRelationIds = new Set(spec.visualPlan.semanticRelations.filter((relation) =>
           renderedEdgeSet.has(relation.id) &&
           renderedNodeSet.has(relation.from) &&
           renderedNodeSet.has(relation.to)
-        ),
-        geometryById: connectorGeometryById,
-        routeBounds: base.routeBounds,
-        connectorPolicy: "orthogonal-only"
-      });
+        ).map((relation) => relation.id));
+      const connectors = spec.layoutStability === "stable-final"
+        ? Object.freeze(base.allConnectors.filter((connector) =>
+          visibleRelationIds.has(connector.relationId)
+        ))
+        : visualSystemV1GrammarConnectors({
+          structure: spec.visualPlan.structure,
+          semanticRelations: spec.visualPlan.semanticRelations.filter((relation) =>
+            visibleRelationIds.has(relation.id)
+          ),
+          geometryById: connectorGeometryById,
+          routeBounds: base.routeBounds,
+          connectorPolicy: "orthogonal-only"
+        });
       return Object.freeze({
         nodeIds: Object.freeze([...state.renderedNodeIds]),
         geometryById,
         connectorGeometryById,
+        iconGeometryById,
         connectors
       });
     }
@@ -2523,9 +3210,13 @@ export function longReviewLayoutAtFrame(sceneId, frame, options = {}) {
     geometryById: rendered.geometryById,
     connectorGeometryById: rendered.connectorGeometryById,
     visibleGeometryById: rendered.connectorGeometryById,
+    iconGeometryById: rendered.iconGeometryById,
     fullGeometryById: base.baseLayout.geometryById,
     fullConnectorGeometryById: base.connectorGeometryById,
     fullVisibleGeometryById: base.connectorGeometryById,
+    fullIconGeometryById: base.iconRenderGeometryById,
+    previousGeometryById,
+    currentGeometryById,
     primitiveById: base.baseLayout.primitiveById,
     connectors: rendered.connectors,
     allConnectors: base.allConnectors,

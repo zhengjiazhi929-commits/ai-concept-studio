@@ -543,7 +543,7 @@ test("八帧预重排连续无超调且连接线始终从当前卡片边缘向�
 });
 
 test("右上角AI品牌水印固定120px与40px安全边距并完整循环三次", () => {
-  assert.equal(VISUAL_SYSTEM_V1_AI_WATERMARK.schemaVersion, "visual-system-v1-ai-watermark-v1");
+  assert.equal(VISUAL_SYSTEM_V1_AI_WATERMARK.schemaVersion, "visual-system-v1-ai-watermark-v2");
   assert.equal(VISUAL_SYSTEM_V1_AI_WATERMARK.outputFormat, "wide-only");
   assert.equal(VISUAL_SYSTEM_V1_AI_WATERMARK.role, "persistent-brand-watermark");
   assert.equal(VISUAL_SYSTEM_V1_AI_WATERMARK.contentSurfacePolicyExempt, true);
@@ -1047,7 +1047,10 @@ test("旧v012透明水印序列完整保留且正式组件仍支持按profile逐
   const persistent = component.slice(component.indexOf("export function VisualSystemV1AiWatermark({"));
   assert.match(persistent, /profile = VISUAL_SYSTEM_V1_AI_WATERMARK\.defaultProfileId/u);
   assert.match(persistent, /data-ai-watermark-raster-sequence=\{resolvedProfile\.rasterSequenceLabel\}/u);
-  assert.match(persistent, /staticFile\(rasterFramePath\(frame, resolvedProfile\)\)/u);
+  assert.match(
+    persistent,
+    /staticFile\(rasterFramePath\(cadenceState\.rasterFrame, resolvedProfile\)\)/u
+  );
   assert.doesNotMatch(persistent, /<AiOpenCube/u);
   assert.match(component, /data-ai-watermark-live-object="css-3d-raster-source-only"/u);
 });

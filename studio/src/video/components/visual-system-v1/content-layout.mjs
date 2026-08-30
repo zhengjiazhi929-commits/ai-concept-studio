@@ -192,29 +192,49 @@ export function visualSystemV1SemanticIconNodeMetrics({
       ? 0
       : defaults.detailGapPx + defaults.detailFontSizePx * defaults.detailLineHeight
   );
-  const requiredWidthPx = defaults.horizontalPaddingPx * 2 + iconSizePx +
-    defaults.gapPx + textWidthPx;
-  const requiredHeightPx = defaults.verticalPaddingPx * 2 +
-    Math.max(iconSizePx, textHeightPx);
-  const connectorWidthPx = Math.min(anchorWidth, requiredWidthPx);
-  const connectorHeightPx = Math.min(anchorHeight, requiredHeightPx);
+  const visibleContentWidthPx = iconSizePx + defaults.gapPx + textWidthPx;
+  const visibleContentHeightPx = Math.max(iconSizePx, textHeightPx);
+  const requiredWidthPx = defaults.horizontalPaddingPx * 2 + visibleContentWidthPx;
+  const requiredHeightPx = defaults.verticalPaddingPx * 2 + visibleContentHeightPx;
+  const renderWidthPx = Math.min(anchorWidth, requiredWidthPx);
+  const renderHeightPx = Math.min(anchorHeight, requiredHeightPx);
   const anchorCenterX = anchorX + anchorWidth / 2;
   const anchorCenterY = anchorY + anchorHeight / 2;
-  const x = round(anchorCenterX - connectorWidthPx / 2);
-  const y = round(anchorCenterY - connectorHeightPx / 2);
-  const width = round(connectorWidthPx);
-  const height = round(connectorHeightPx);
-  const connectorGeometry = deepFreeze({
-    x,
-    y,
-    left: x,
-    top: y,
-    width,
-    height,
+  const renderX = round(anchorCenterX - renderWidthPx / 2);
+  const renderY = round(anchorCenterY - renderHeightPx / 2);
+  const renderWidth = round(renderWidthPx);
+  const renderHeight = round(renderHeightPx);
+  const geometry = ({ x, y, width, height }) => deepFreeze({
+    x: round(x),
+    y: round(y),
+    left: round(x),
+    top: round(y),
+    width: round(width),
+    height: round(height),
     right: round(x + width),
     bottom: round(y + height),
     centerX: round(x + width / 2),
     centerY: round(y + height / 2)
+  });
+  const renderGeometry = geometry({
+    x: renderX,
+    y: renderY,
+    width: renderWidth,
+    height: renderHeight
+  });
+  const connectorWidthPx = Math.max(
+    0,
+    Math.min(visibleContentWidthPx, renderWidthPx - defaults.horizontalPaddingPx * 2)
+  );
+  const connectorHeightPx = Math.max(
+    0,
+    Math.min(visibleContentHeightPx, renderHeightPx - defaults.verticalPaddingPx * 2)
+  );
+  const connectorGeometry = geometry({
+    x: renderX + (renderWidthPx - connectorWidthPx) / 2,
+    y: renderY + (renderHeightPx - connectorHeightPx) / 2,
+    width: connectorWidthPx,
+    height: connectorHeightPx
   });
   return deepFreeze({
     id,
@@ -222,8 +242,11 @@ export function visualSystemV1SemanticIconNodeMetrics({
     labelTextWidthPx,
     detailTextWidthPx,
     textWidthPx: round(textWidthPx),
+    visibleContentWidthPx: round(visibleContentWidthPx),
+    visibleContentHeightPx: round(visibleContentHeightPx),
     requiredWidthPx: round(requiredWidthPx),
     requiredHeightPx: round(requiredHeightPx),
+    renderGeometry,
     connectorGeometry,
     fitsAnchor: requiredWidthPx <= anchorWidth + FIT_TOLERANCE_PX &&
       requiredHeightPx <= anchorHeight + FIT_TOLERANCE_PX
@@ -495,6 +518,115 @@ export function visualSystemV1SemanticTextBoxMetrics({
     labelFitsWidth,
     fitsHeight,
     fits: availableWidthPx > 0 && availableHeightPx > 0 && labelFitsWidth && fitsHeight
+  });
+}
+
+/**
+ * Resolves the geometry that a connector can actually see. Information cards
+ * bind to their complete outline; open-canvas text binds to its left-aligned
+ * rendered copy instead of the much wider allocation cell used for layout.
+ */
+export function visualSystemV1SemanticTextConnectorMetrics({
+  id,
+  label,
+  detail = "",
+  marker = null,
+  surfaceRole,
+  textWrapMode = "break-word",
+  anchorGeometry,
+  typographyProfile = "standard",
+  clearancePx = 8,
+  bindToFullAnchor = false
+} = {}) {
+  if (!anchorGeometry || typeof anchorGeometry !== "object" || Array.isArray(anchorGeometry)) {
+    throw new TypeError(`${id ?? "semantic-text-node"} 的 anchorGeometry 必须是对象`);
+  }
+  const anchorX = anchorGeometry.x ?? anchorGeometry.left;
+  const anchorY = anchorGeometry.y ?? anchorGeometry.top;
+  finiteNumber(anchorX, `${id} 的 anchorGeometry.x`);
+  finiteNumber(anchorY, `${id} 的 anchorGeometry.y`);
+  const anchorWidth = finitePositive(anchorGeometry.width, `${id} 的 anchorGeometry.width`);
+  const anchorHeight = finitePositive(anchorGeometry.height, `${id} 的 anchorGeometry.height`);
+  finiteNonNegative(clearancePx, `${id} 的 connector clearance`);
+  if (typeof bindToFullAnchor !== "boolean") {
+    throw new TypeError(`${id} 的 bindToFullAnchor 必须是布尔值`);
+  }
+  const textBoxMetrics = visualSystemV1SemanticTextBoxMetrics({
+    id,
+    label,
+    detail,
+    marker,
+    surfaceRole,
+    textWrapMode,
+    width: anchorWidth,
+    height: anchorHeight,
+    typographyProfile
+  });
+  const fullAnchorGeometry = {
+    x: round(anchorX),
+    y: round(anchorY),
+    left: round(anchorX),
+    top: round(anchorY),
+    width: round(anchorWidth),
+    height: round(anchorHeight),
+    right: round(anchorX + anchorWidth),
+    bottom: round(anchorY + anchorHeight),
+    centerX: round(anchorX + anchorWidth / 2),
+    centerY: round(anchorY + anchorHeight / 2)
+  };
+  if (surfaceRole === "information-card" || bindToFullAnchor) {
+    return deepFreeze({
+      id,
+      bindingMode: "full-visible-surface",
+      textBoxMetrics,
+      connectorGeometry: fullAnchorGeometry,
+      fitsAnchor: textBoxMetrics.fits
+    });
+  }
+  const visibleTextWidthPx = Math.min(
+    textBoxMetrics.availableWidthPx,
+    Math.max(textBoxMetrics.labelTextWidthPx, textBoxMetrics.detailTextWidthPx, clearancePx * 2)
+  );
+  const connectorWidthPx = Math.min(
+    anchorWidth,
+    visibleTextWidthPx + clearancePx * 2
+  );
+  const connectorHeightPx = Math.min(
+    anchorHeight,
+    textBoxMetrics.requiredContentHeightPx + clearancePx * 2
+  );
+  const left = Math.max(
+    anchorX,
+    Math.min(
+      anchorX + anchorWidth - connectorWidthPx,
+      anchorX + textBoxMetrics.horizontalPaddingPx - clearancePx
+    )
+  );
+  const top = Math.max(
+    anchorY,
+    Math.min(
+      anchorY + anchorHeight - connectorHeightPx,
+      anchorY + anchorHeight / 2 - connectorHeightPx / 2
+    )
+  );
+  const connectorGeometry = {
+    x: round(left),
+    y: round(top),
+    left: round(left),
+    top: round(top),
+    width: round(connectorWidthPx),
+    height: round(connectorHeightPx),
+    right: round(left + connectorWidthPx),
+    bottom: round(top + connectorHeightPx),
+    centerX: round(left + connectorWidthPx / 2),
+    centerY: round(top + connectorHeightPx / 2)
+  };
+  return deepFreeze({
+    id,
+    bindingMode: "visible-text-content",
+    textBoxMetrics,
+    connectorGeometry,
+    fitsAnchor: textBoxMetrics.fits
   });
 }
 

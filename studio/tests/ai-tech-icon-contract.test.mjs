@@ -23,13 +23,13 @@ import {
 } from "../src/shared/ai-tech-icon-contract.mjs";
 
 test("AI 技术图标合同固定28个语义、64视窗和四档受控尺寸", () => {
-  assert.equal(AI_TECH_ICON_CONTRACT_VERSION, "ai-tech-icon-contract-v4");
-  assert.equal(AI_TECH_ICON_REGISTRY_VERSION, "ai-tech-icon-registry-v1");
+  assert.equal(AI_TECH_ICON_CONTRACT_VERSION, "ai-tech-icon-contract-v5");
+  assert.equal(AI_TECH_ICON_REGISTRY_VERSION, "ai-tech-icon-registry-v2");
   assert.deepEqual(AI_TECH_ICON_REGISTRY_APPROVAL, {
-    status: "approved-production-v1",
+    status: "approved-production-v2",
     approvedBy: "Zhengjiazhi",
-    approvedOn: "2026-08-26",
-    sourceCandidate: "ai-tech-icon-system-review-v002",
+    approvedOn: "2026-08-30",
+    sourceCandidate: "agent-skill-current-head-key-clips-v015",
     scope: "28-concept-mapping-geometry-status-motion-and-production-usage-rules"
   });
   assert.equal(AI_TECH_ICON_CONCEPT_KINDS.length, 28);
@@ -75,11 +75,11 @@ test("AI 技术图标合同固定28个语义、64视窗和四档受控尺寸", (
   );
   assert.equal(
     AI_TECH_ICON_POLICY.openDiagramUsage.graphNodeRelationEntryMode,
-    "connector-arrow-first"
+    "endpoint-first"
   );
   assert.equal(
     AI_TECH_ICON_POLICY.openDiagramUsage.graphNodeMultipleIncomingMode,
-    "wait-for-all-establishing-arrows"
+    "all-endpoints-visible-before-connectors"
   );
   assert.deepEqual(AI_TECH_ICON_POLICY.verifiedSuccessUsage, {
     autoInsert: false,

@@ -1,10 +1,10 @@
-export const AI_TECH_ICON_CONTRACT_VERSION = "ai-tech-icon-contract-v4";
-export const AI_TECH_ICON_REGISTRY_VERSION = "ai-tech-icon-registry-v1";
+export const AI_TECH_ICON_CONTRACT_VERSION = "ai-tech-icon-contract-v5";
+export const AI_TECH_ICON_REGISTRY_VERSION = "ai-tech-icon-registry-v2";
 export const AI_TECH_ICON_REGISTRY_APPROVAL = Object.freeze({
-  status: "approved-production-v1",
+  status: "approved-production-v2",
   approvedBy: "Zhengjiazhi",
-  approvedOn: "2026-08-26",
-  sourceCandidate: "ai-tech-icon-system-review-v002",
+  approvedOn: "2026-08-30",
+  sourceCandidate: "agent-skill-current-head-key-clips-v015",
   scope: "28-concept-mapping-geometry-status-motion-and-production-usage-rules"
 });
 export const AI_TECH_ICON_VIEW_BOX = Object.freeze({
@@ -116,8 +116,8 @@ export const AI_TECH_ICON_POLICY = Object.freeze({
     graphNodeLayoutRole: "semantic-icon-node",
     graphNodePlacement: "anchor-bounds",
     graphNodeGeometryMode: "measured-visible-content",
-    graphNodeRelationEntryMode: "connector-arrow-first",
-    graphNodeMultipleIncomingMode: "wait-for-all-establishing-arrows",
+    graphNodeRelationEntryMode: "endpoint-first",
+    graphNodeMultipleIncomingMode: "all-endpoints-visible-before-connectors",
     ownedCalloutLayoutRole: "owned-icon-callout",
     allowedOwnedCalloutPlacements: Object.freeze([
       "right-center",

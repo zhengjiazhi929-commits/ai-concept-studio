@@ -18,12 +18,14 @@ export {
   visualSystemV1AiWatermarkScale
 } from "./ai-watermark.mjs";
 export {
+  VISUAL_SYSTEM_V1_SUBTITLE_VISUAL_WEIGHTS,
   visualSystemV1AdaptiveCardTypography,
   visualSystemV1AdaptiveCardLayout,
   visualSystemV1HorizontalCardConnectors,
   visualSystemV1InterpolateCardDeck,
   visualSystemV1Layout,
-  visualSystemV1Orientation
+  visualSystemV1Orientation,
+  visualSystemV1SubtitleFontSize
 } from "./layout.mjs";
 export { visualSystemV1ChapterDisplayLabel } from "./chapter-progress.mjs";
 export {
@@ -48,6 +50,7 @@ export {
   visualSystemV1EstimateContentTextWidthPx,
   visualSystemV1PackContentCards,
   visualSystemV1SemanticIconNodeMetrics,
+  visualSystemV1SemanticTextConnectorMetrics,
   visualSystemV1SemanticTextBoxMetrics
 } from "./content-layout.mjs";
 export {

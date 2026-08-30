@@ -3,7 +3,8 @@ import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
 
 import {
   visualSystemV1AdaptiveCardTypography,
-  visualSystemV1Layout
+  visualSystemV1Layout,
+  visualSystemV1SubtitleFontSize
 } from "./layout.mjs";
 import {
   VISUAL_SYSTEM_V1_INFORMATION_CARD_PRIMITIVES
@@ -981,16 +982,18 @@ export function VisualSystemV1ChapterProgress({ chapters }) {
   );
 }
 
-export function VisualSystemV1PlainSubtitle({ captions }) {
+export function VisualSystemV1PlainSubtitle({ captions, visualWeight = "primary" }) {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const layout = visualSystemV1Layout(width, height);
+  const fontSize = visualSystemV1SubtitleFontSize(layout, visualWeight);
   const currentTimeMs = (frame / fps) * 1000;
   const caption = captions.find((item) => currentTimeMs >= item.startMs && currentTimeMs < item.endMs) ?? null;
   if (!caption) return null;
   return (
     <div
       data-visual-system-subtitle="stable-black-no-container"
+      data-visual-system-subtitle-weight={visualWeight}
       style={{
         position: "absolute",
         left: layout.vertical ? 72 : 300,
@@ -998,7 +1001,7 @@ export function VisualSystemV1PlainSubtitle({ captions }) {
         bottom: layout.vertical ? 72 : 92,
         zIndex: 10,
         color: VISUAL_SYSTEM_V1.defaults.subtitleColor,
-        fontSize: layout.subtitleFontSize,
+        fontSize,
         fontWeight: 700,
         lineHeight: typography.subtitleLineHeight,
         letterSpacing: "-.025em",

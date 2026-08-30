@@ -7,6 +7,7 @@ import {
   VISUAL_SYSTEM_V1_CONNECTOR_PORTS,
   VISUAL_SYSTEM_V1_CONNECTOR_PRESENTATION_KINDS,
   VISUAL_SYSTEM_V1_GRAMMAR_STRUCTURES,
+  VISUAL_SYSTEM_V1_HIERARCHY_LAYOUT_PROFILES,
   VISUAL_SYSTEM_V1_INFORMATION_CARD_PRIMITIVES,
   VISUAL_SYSTEM_V1_OPEN_DIAGRAM_CONTENT_OCCUPANCY,
   VISUAL_SYSTEM_V1_STANDALONE_OVERLAY_SLOT_SIDES,
@@ -205,6 +206,60 @@ test("六种核心关系语法具有不同几何和原语，不回落同一卡�
   assert.equal(layouts.find((layout) => layout.structure === "flow").primitiveById.a, "flow-step");
   assert.equal(layouts.find((layout) => layout.structure === "timeline").primitiveById.a, "timeline-anchor");
   assert.equal(layouts.find((layout) => layout.structure === "feedback-loop").primitiveById.a, "loop-node");
+});
+
+test("progressive-package 层级保持根节点稳定、当前子树紧凑并把反例放在核心树外", () => {
+  assert.deepEqual(VISUAL_SYSTEM_V1_HIERARCHY_LAYOUT_PROFILES, ["progressive-package"]);
+  const elements = semanticElements(["root", "skill", "scripts", "references", "assets", "prompt"]);
+  const relations = [
+    ["root-skill", "root", "skill", "contains"],
+    ["root-scripts", "root", "scripts", "contains"],
+    ["root-references", "root", "references", "contains"],
+    ["root-assets", "root", "assets", "contains"],
+    ["root-prompt", "root", "prompt", "contrasts-with"]
+  ].map(([id, from, to, type]) => ({ id, from, to, type, directed: false }));
+  const visualPlan = plan("hierarchy", { elements, relations });
+  const rootOnly = visualSystemV1GrammarLayout({
+    width: 1920,
+    height: 1080,
+    visualPlan,
+    visibleElementIds: ["root"],
+    hierarchyLayoutProfile: "progressive-package"
+  });
+  const firstBranch = visualSystemV1GrammarLayout({
+    width: 1920,
+    height: 1080,
+    visualPlan,
+    visibleElementIds: ["root", "skill"],
+    hierarchyLayoutProfile: "progressive-package"
+  });
+  assert.equal(rootOnly.geometryById.root.y, firstBranch.geometryById.root.y);
+  assert.equal(firstBranch.geometryById.root.centerX, firstBranch.geometryById.skill.centerX);
+  assert.deepEqual(firstBranch.connectors[0].route, [
+    { x: firstBranch.geometryById.root.centerX, y: firstBranch.geometryById.root.bottom },
+    { x: firstBranch.geometryById.skill.centerX, y: firstBranch.geometryById.skill.top }
+  ]);
+
+  const complete = visualSystemV1GrammarLayout({
+    width: 1920,
+    height: 1080,
+    visualPlan,
+    visibleElementIds: elements.map((element) => element.id),
+    hierarchyLayoutProfile: "progressive-package"
+  });
+  const coreIds = ["root", "skill", "scripts", "references", "assets"];
+  assert.ok(
+    complete.geometryById.prompt.x > Math.max(...coreIds.map((id) => complete.geometryById[id].right))
+  );
+  const contains = complete.connectors.filter((connector) => connector.relationId !== "root-prompt");
+  assert.equal(contains.length, 4);
+  for (const connector of contains) {
+    assertOrthogonalRoute(connector.route);
+    assert.equal(connector.route[0].x, complete.geometryById.root.centerX);
+    assert.equal(connector.route[0].y, complete.geometryById.root.bottom);
+    const target = complete.geometryById[connector.to];
+    assert.deepEqual(connector.route.at(-1), { x: target.centerX, y: target.top });
+  }
 });
 
 test("卡片原语登记完整边框，非卡片原语保持图解对象", () => {
@@ -548,6 +603,43 @@ test("无障碍的斜向端点也必须生成全正交路径，不能把 diagona
   });
   assert.equal(connector.presentationKind, "orthogonal");
   assertOrthogonalRoute(connector.route);
+});
+
+test("两列卡片向下汇聚时优先使用可见中缝，不沿源卡片边缘制造双边框", () => {
+  const geometryById = {
+    trigger: testGeometry(288, 342, 576, 132),
+    acceptance: testGeometry(896, 342, 576, 132),
+    permission: testGeometry(288, 504, 576, 132),
+    rollback: testGeometry(896, 504, 576, 132),
+    result: testGeometry(560, 666, 640, 132)
+  };
+  const connectors = visualSystemV1GrammarConnectors({
+    structure: "flow",
+    semanticRelations: [
+      { id: "trigger-result", from: "trigger", to: "result", directed: true },
+      { id: "acceptance-result", from: "acceptance", to: "result", directed: true },
+      { id: "permission-result", from: "permission", to: "result", directed: true },
+      { id: "rollback-result", from: "rollback", to: "result", directed: true }
+    ],
+    geometryById,
+    routeBounds: testGeometry(120, 340, 1520, 460),
+    connectorPolicy: "orthogonal-only"
+  });
+  const triggerResult = connectors.find((connector) => connector.relationId === "trigger-result");
+  assert.deepEqual(triggerResult.route, [
+    { x: 864, y: 408 },
+    { x: 880, y: 408 },
+    { x: 880, y: 666 }
+  ]);
+  assertOrthogonalRoute(triggerResult.route);
+  assert.equal(
+    routeSegments(triggerResult.route).some(([start, end]) =>
+      start.y === end.y &&
+      Math.abs(start.y - geometryById.trigger.top) < 10 &&
+      Math.min(start.x, end.x) < geometryById.trigger.right
+    ),
+    false
+  );
 });
 
 test("显式平滑曲线从相向边缘中点出发，并以目标边框法线方向进入", () => {

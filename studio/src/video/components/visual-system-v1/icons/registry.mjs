@@ -97,7 +97,7 @@ export const AI_TECH_ICON_REGISTRY = deepFreeze([
   entry({ conceptKind: "verified-success", canonicalIconId: "verified-status-mark", category: "governance-state", labelZh: "验证通过", labelEn: "Verified success", defaultStateRole: "success", renderKind: "status-mark", sourceType: "shared-visual-system-status-component", contribution: "只在可验证条件全部通过后显示，并统一复用共享方形状态对号" }),
   entry({ conceptKind: "warning", canonicalIconId: "warning-triangle", category: "governance-state", labelZh: "警告", labelEn: "Warning", defaultStateRole: "warning", contribution: "标记需要注意但尚未失败的状态" }),
   entry({ conceptKind: "failure", canonicalIconId: "failure-cross", category: "governance-state", labelZh: "失败", labelEn: "Failure", defaultStateRole: "error", contribution: "标记已经失败或被阻断的状态" }),
-  entry({ conceptKind: "human-approval", canonicalIconId: "human-approval-gate", category: "governance-state", labelZh: "人工确认", labelEn: "Human approval", defaultStateRole: "human", contribution: "标记人工决定 Gate，不绘制人物形象或另一套对号" }),
+  entry({ conceptKind: "human-approval", canonicalIconId: "human-approval-gate", category: "governance-state", labelZh: "人工确认", labelEn: "Human approval", defaultStateRole: "human", contribution: "用非人物的选项面板标记人工决定 Gate，不绘制头像、机器人或另一套对号" }),
   entry({ conceptKind: "permission", canonicalIconId: "permission-lock", category: "governance-state", labelZh: "权限", labelEn: "Permission", contribution: "标记访问权限和执行边界" }),
   entry({ conceptKind: "audit-log", canonicalIconId: "audit-clipboard", category: "governance-state", labelZh: "审计日志", labelEn: "Audit log", contribution: "标记可追溯检查或审计记录" }),
   entry({ conceptKind: "version-history", canonicalIconId: "version-history", category: "governance-state", labelZh: "版本历史", labelEn: "Version history", contribution: "标记版本演进、回退或历史记录" })

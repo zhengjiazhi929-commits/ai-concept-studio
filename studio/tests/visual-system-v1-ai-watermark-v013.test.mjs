@@ -177,9 +177,10 @@ test("approved v013 is the default while approved v012 remains explicitly availa
   assert.match(component, /profile = VISUAL_SYSTEM_V1_AI_WATERMARK\.defaultProfileId/u);
   assert.match(component, /visualSystemV1AiWatermarkProfile\(profile\)/u);
   assert.match(component, /data-ai-watermark-profile=\{resolvedProfile\.id\}/u);
-  assert.match(component, /rasterFramePath\(frame, resolvedProfile\)/u);
+  assert.match(component, /rasterFramePath\(cadenceState\.rasterFrame, resolvedProfile\)/u);
   assert.match(brandLayer, /profile = VISUAL_SYSTEM_V1_AI_WATERMARK\.defaultProfileId/u);
-  assert.match(brandLayer, /<VisualSystemV1AiWatermark profile=\{profile\} \/>/u);
+  assert.match(brandLayer, /motionCadence=\{resolvedTone\.watermarkCadence\}/u);
+  assert.match(brandLayer, /transitionFrames=\{transitionFrames\}/u);
 });
 
 test("v013 manifest and every encoded frame satisfy the stable visible-footprint contract", async () => {

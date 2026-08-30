@@ -151,11 +151,12 @@ export const AI_TECH_ICON_GEOMETRY = deepFreeze({
     { type: "line", x1: 41, y1: 23, x2: 23, y2: 41, colorSlot: "secondary" }
   ]),
   "human-approval-gate": geometry([
-    { type: "path", d: "M15 10v44M49 10v44", colorSlot: "primary" },
-    { type: "path", d: "M15 20h15M15 44h15", colorSlot: "secondary" },
-    { type: "rect", x: 34, y: 22, width: 16, height: 20, rx: 4, colorSlot: "primary" },
-    { type: "line", x1: 39, y1: 29, x2: 45, y2: 29, colorSlot: "secondary" },
-    { type: "line", x1: 39, y1: 35, x2: 45, y2: 35, colorSlot: "secondary" }
+    { type: "rect", x: 10, y: 9, width: 44, height: 46, rx: 7, colorSlot: "primary" },
+    { type: "line", x1: 18, y1: 20, x2: 46, y2: 20, colorSlot: "secondary" },
+    { type: "circle", cx: 20, cy: 33, r: 4, colorSlot: "primary" },
+    { type: "line", x1: 29, y1: 33, x2: 45, y2: 33, colorSlot: "secondary" },
+    { type: "circle", cx: 20, cy: 46, r: 4, colorSlot: "primary", fill: true },
+    { type: "line", x1: 29, y1: 46, x2: 41, y2: 46, colorSlot: "secondary" }
   ]),
   "permission-lock": geometry([
     { type: "rect", x: 11, y: 27, width: 42, height: 29, rx: 7, colorSlot: "primary" },

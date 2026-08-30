@@ -196,6 +196,8 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
     supportingVerticalPx: 32,
     subtitleWidePx: 46,
     subtitleVerticalPx: 42,
+    subtitleSupportingWidePx: 36,
+    subtitleSupportingVerticalPx: 34,
     subtitleLineHeight: 1.25,
     subtitleMaximumLines: 2
   }),

@@ -5,8 +5,14 @@ import {
   EDITORIAL_CARD_SURFACE_PURPOSES,
   EDITORIAL_ICON_PRESENTATIONS,
   EDITORIAL_ICON_PURPOSES,
+  EDITORIAL_NARRATIVE_TREATMENT_MECHANISMS,
+  EDITORIAL_NARRATIVE_TREATMENT_NONE,
+  EDITORIAL_NARRATIVE_TREATMENTS,
   EDITORIAL_OPEN_SURFACE_PURPOSES,
   EDITORIAL_SEQUENCE_PROFILE,
+  EDITORIAL_SHAPE_GRAMMAR,
+  EDITORIAL_SHAPE_GRAMMAR_VERSION,
+  EDITORIAL_SUBTITLE_PHASES,
   EDITORIAL_VISUAL_ERROR_CODES,
   EDITORIAL_VISUAL_MODES,
   EDITORIAL_VISUAL_POLICY,
@@ -14,6 +20,7 @@ import {
   EditorialVisualPolicyError,
   editorialSurfaceCohortKey,
   planEditorialCardTitleLayout,
+  planEditorialSubtitlePresentation,
   validateEditorialRelationSurfaceConsistency,
   validateEditorialScene,
   validateEditorialSequence
@@ -70,21 +77,100 @@ function diagram(id, overrides = {}) {
 function scene(id, overrides = {}) {
   return {
     id,
+    shapeGrammarVersion: EDITORIAL_SHAPE_GRAMMAR_VERSION,
     visualMode: "text-led",
+    narrativeTreatment: EDITORIAL_NARRATIVE_TREATMENT_NONE,
+    narrativeTreatmentRationale: "本专项只验证独立的承载规则，不把无关结构伪装成图解叙事。",
+    treatmentEvidence: null,
     cards: [],
     diagrams: [],
     icons: [],
     relations: [],
+    semanticBoundaries: [],
     ...overrides
   };
 }
 
+const treatmentRoles = Object.freeze({
+  "package-anatomy": ["step", "result", "concept", "concept"],
+  "runtime-resource-flow": ["process-step", "state", "result", "decision"],
+  "governance-evidence-trail": ["evidence", "decision", "source", "result"],
+  "state-transformation": ["source", "result", "concept", "concept"],
+  "decision-path": ["decision", "source", "result", "concept"],
+  "comparison-field": ["state", "source", "result", "concept"],
+  "relationship-map": ["concept", "concept", "concept", "result"]
+});
+
+function sceneWithTreatment(id, narrativeTreatment) {
+  const visibleElementIds = [0, 1, 2, 3].map((index) => `${id}-node-${index}`);
+  const relationIds = [0, 1, 2].map((index) => `${id}-relation-${index}`);
+  const diagrams = visibleElementIds.map((elementId, index) => diagram(elementId, {
+    semanticRole: treatmentRoles[narrativeTreatment][index]
+  }));
+  const relations = relationIds.map((relationId, index) => ({
+    id: relationId,
+    from: visibleElementIds[index],
+    to: visibleElementIds[index + 1],
+    semanticType: index === 0
+      ? EDITORIAL_NARRATIVE_TREATMENT_MECHANISMS[narrativeTreatment].requiredRelationTypes[0]
+      : "then"
+  }));
+  return scene(id, {
+    visualMode: "open-diagram",
+    narrativeTreatment,
+    narrativeTreatmentRationale: `${id} 用真实可见拓扑增强当前主张。`,
+    treatmentEvidence: {
+      mechanism: EDITORIAL_NARRATIVE_TREATMENT_MECHANISMS[narrativeTreatment].mechanism,
+      visibleElementIds,
+      relationIds,
+      contentContribution: `${id} 的对象与关系共同承担解释。`
+    },
+    diagrams,
+    relations
+  });
+}
+
 test("长视频图文编排合同固定纯文字卡片、语义绑定图标和三场图解节奏", () => {
-  assert.equal(EDITORIAL_VISUAL_POLICY_VERSION, "editorial-visual-policy-v6");
+  assert.equal(EDITORIAL_VISUAL_POLICY_VERSION, "editorial-visual-policy-v8");
   assert.equal(EDITORIAL_SEQUENCE_PROFILE, "ai-tech-longform");
+  assert.equal(EDITORIAL_SHAPE_GRAMMAR_VERSION, "editorial-shape-grammar-v1");
+  assert.deepEqual(EDITORIAL_SHAPE_GRAMMAR, {
+    informationCard: {
+      visualForm: "full-outline",
+      semanticMeaning: "complete-object-or-boundary"
+    },
+    openCanvas: {
+      visualForm: "open-node",
+      semanticMeaning: "process-or-relationship-anchor"
+    },
+    semanticBoundary: {
+      visualForm: "dashed-outline",
+      allowedMeanings: ["scope", "exclusion", "pending-validation", "risk-boundary"],
+      forbiddenMeaning: "decoration"
+    },
+    teachingMode: {
+      mode: "single-transient-legend",
+      persistent: false
+    }
+  });
   assert.equal(EDITORIAL_VISUAL_POLICY.sequenceProfile, "ai-tech-longform");
   assert.equal(EDITORIAL_VISUAL_POLICY.maximumCardLedSceneRatio, 0.5);
   assert.equal(EDITORIAL_VISUAL_POLICY.maximumConsecutiveCardLedScenes, 1);
+  assert.equal(EDITORIAL_VISUAL_POLICY.minimumNarrativeTreatmentsPerLongformSequence, 3);
+  assert.equal(EDITORIAL_VISUAL_POLICY.minimumNarrativeDiversitySequenceLength, 8);
+  assert.equal(EDITORIAL_VISUAL_POLICY.narrativeTreatmentWindowSize, 4);
+  assert.equal(EDITORIAL_VISUAL_POLICY.maximumConsecutiveSameNarrativeTreatment, 2);
+  assert.equal(EDITORIAL_VISUAL_POLICY.denseDiagramVisibleNodeThreshold, 5);
+  assert.equal(EDITORIAL_VISUAL_POLICY.denseDiagramVisibleRelationThreshold, 4);
+  assert.equal(EDITORIAL_VISUAL_POLICY.maximumSubtitleCueGraphemes, 16);
+  assert.equal(EDITORIAL_VISUAL_POLICY.maximumStandaloneFinalSubtitleGraphemes, 8);
+  assert.equal(EDITORIAL_VISUAL_POLICY.denseFinalHoldSubtitleMode, "semantic-cue");
+  assert.deepEqual(EDITORIAL_SUBTITLE_PHASES, [
+    "pre-build",
+    "active-build",
+    "dense-build",
+    "final-hold"
+  ]);
   assert.equal(EDITORIAL_VISUAL_POLICY.mixedDiagramMustCarryRelation, true);
   assert.deepEqual(EDITORIAL_VISUAL_MODES, [
     "text-led",
@@ -92,6 +178,20 @@ test("长视频图文编排合同固定纯文字卡片、语义绑定图标和�
     "open-diagram",
     "mixed-diagram"
   ]);
+  assert.deepEqual(EDITORIAL_NARRATIVE_TREATMENTS, [
+    "package-anatomy",
+    "runtime-resource-flow",
+    "governance-evidence-trail",
+    "state-transformation",
+    "decision-path",
+    "comparison-field",
+    "relationship-map"
+  ]);
+  assert.equal(EDITORIAL_NARRATIVE_TREATMENT_NONE, "not-applicable");
+  assert.equal(
+    EDITORIAL_NARRATIVE_TREATMENT_MECHANISMS["package-anatomy"].mechanism,
+    "containment-and-responsibility"
+  );
   assert.deepEqual(EDITORIAL_ICON_PURPOSES, [
     "semantic-anchor",
     "state-proof",
@@ -131,6 +231,216 @@ test("长视频图文编排合同固定纯文字卡片、语义绑定图标和�
     "grow-card",
     "reflow-layout"
   ]);
+});
+
+test("长片场景必须声明解释方式和内容增强理由", () => {
+  const missing = validateEditorialScene({
+    id: "S-treatment-missing",
+    shapeGrammarVersion: EDITORIAL_SHAPE_GRAMMAR_VERSION,
+    visualMode: "text-led",
+    cards: [],
+    diagrams: [],
+    icons: [],
+    relations: []
+  });
+  assert.ok(issueCodes(missing).includes(
+    EDITORIAL_VISUAL_ERROR_CODES.NARRATIVE_TREATMENT_INVALID
+  ));
+  assert.ok(issueCodes(missing).includes(
+    EDITORIAL_VISUAL_ERROR_CODES.NARRATIVE_TREATMENT_RATIONALE_MISSING
+  ));
+
+  const staleShapeGrammar = validateEditorialScene(scene("S-shape-grammar-stale", {
+    shapeGrammarVersion: "legacy-shape-grammar"
+  }));
+  assert.ok(issueCodes(staleShapeGrammar).includes(
+    EDITORIAL_VISUAL_ERROR_CODES.SHAPE_GRAMMAR_VERSION_INVALID
+  ));
+
+  const metadataOnly = validateEditorialScene(scene("S-treatment-metadata-only", {
+    narrativeTreatment: "package-anatomy",
+    narrativeTreatmentRationale: "把目录边界和各组成职责放在同一结构中，减少跨段记忆。"
+  }));
+  assert.equal(metadataOnly.valid, false);
+  assert.ok(issueCodes(metadataOnly).includes(
+    EDITORIAL_VISUAL_ERROR_CODES.NARRATIVE_TREATMENT_EVIDENCE_INVALID
+  ));
+
+  const valid = validateEditorialScene(sceneWithTreatment(
+    "S-treatment-valid",
+    "package-anatomy"
+  ));
+  assert.equal(valid.valid, true);
+
+  const stateTransformation = sceneWithTreatment(
+    "S-treatment-not-relabelable",
+    "state-transformation"
+  );
+  const relabeledWithoutChangingVisibleSemantics = validateEditorialScene({
+    ...stateTransformation,
+    narrativeTreatment: "package-anatomy",
+    treatmentEvidence: {
+      ...stateTransformation.treatmentEvidence,
+      mechanism: EDITORIAL_NARRATIVE_TREATMENT_MECHANISMS["package-anatomy"].mechanism
+    }
+  });
+  assert.equal(relabeledWithoutChangingVisibleSemantics.valid, false);
+  assert.ok(issueCodes(relabeledWithoutChangingVisibleSemantics).includes(
+    EDITORIAL_VISUAL_ERROR_CODES.NARRATIVE_TREATMENT_EVIDENCE_INVALID
+  ));
+});
+
+test("长片序列至少使用三种解释方式且不能连续同构", () => {
+  const treatmentSequence = [
+    "state-transformation",
+    "package-anatomy",
+    "runtime-resource-flow",
+    "relationship-map",
+    "comparison-field",
+    "decision-path",
+    "governance-evidence-trail",
+    "runtime-resource-flow"
+  ];
+  const valid = validateEditorialSequence(treatmentSequence.map((narrativeTreatment, index) =>
+    sceneWithTreatment(`S-diverse-${index + 1}`, narrativeTreatment)
+  ));
+  assert.equal(valid.valid, true);
+
+  const homogeneous = validateEditorialSequence(Array.from({ length: 8 }, (_, index) =>
+    sceneWithTreatment(`S-homogeneous-${index + 1}`, "relationship-map")
+  ));
+  const codes = issueCodes(homogeneous);
+  assert.ok(codes.includes(EDITORIAL_VISUAL_ERROR_CODES.NARRATIVE_DIVERSITY_INSUFFICIENT));
+  assert.ok(codes.includes(
+    EDITORIAL_VISUAL_ERROR_CODES.NARRATIVE_TREATMENT_WINDOW_HOMOGENEOUS
+  ));
+  assert.ok(codes.includes(EDITORIAL_VISUAL_ERROR_CODES.NARRATIVE_TREATMENT_RUN_EXCEEDED));
+});
+
+test("虚线只允许作为带语义声明的开放边界，普通分组和信息卡不能借用", () => {
+  const boundaryDiagram = diagram("excluded-option", {
+    shapeGrammarRole: "semantic-boundary",
+    shapeGrammarVisualForm: "dashed-outline",
+    shapeGrammarMeaning: "exclusion"
+  });
+  const valid = validateEditorialScene(scene("S-boundary-valid", {
+    visualMode: "open-diagram",
+    diagrams: [boundaryDiagram],
+    semanticBoundaries: [{
+      id: "excluded-option-boundary",
+      meaning: "exclusion",
+      memberIds: ["excluded-option"],
+      rationale: "明确指出该方案不属于当前能力边界。"
+    }]
+  }));
+  assert.equal(valid.valid, true);
+
+  const decorative = validateEditorialScene(scene("S-boundary-decoration", {
+    visualMode: "open-diagram",
+    diagrams: [boundaryDiagram],
+    semanticBoundaries: [{
+      id: "decorative-dash",
+      meaning: "decoration",
+      memberIds: ["excluded-option"],
+      rationale: "只为了让画面更丰富。"
+    }]
+  }));
+  assert.ok(issueCodes(decorative).includes(
+    EDITORIAL_VISUAL_ERROR_CODES.SEMANTIC_BOUNDARY_MEANING_INVALID
+  ));
+  assert.ok(issueCodes(decorative).includes(
+    EDITORIAL_VISUAL_ERROR_CODES.SEMANTIC_BOUNDARY_MEMBER_INVALID
+  ));
+
+  const dashedCard = validateEditorialScene(scene("S-boundary-card", {
+    visualMode: "card-led",
+    cards: [card("card-boundary", {
+      shapeGrammarRole: "semantic-boundary",
+      shapeGrammarVisualForm: "dashed-outline",
+      shapeGrammarMeaning: "scope"
+    })],
+    semanticBoundaries: [{
+      id: "card-boundary-declaration",
+      meaning: "scope",
+      memberIds: ["card-boundary"],
+      rationale: "错误地把完整信息卡当作虚线范围。"
+    }]
+  }));
+  assert.ok(issueCodes(dashedCard).includes(
+    EDITORIAL_VISUAL_ERROR_CODES.SEMANTIC_BOUNDARY_MEMBER_INVALID
+  ));
+});
+
+test("关系图构建时字幕降为语义短提示，建立前后才显示完整句", () => {
+  const preBuild = planEditorialSubtitlePresentation({
+    phase: "pre-build",
+    visibleNodeCount: 0,
+    visibleRelationCount: 0,
+    fullText: "完整句子先建立语境。",
+    cueText: "建立语境"
+  });
+  assert.deepEqual(
+    { mode: preBuild.mode, text: preBuild.text, opacity: preBuild.opacity },
+    { mode: "full-sentence", text: "完整句子先建立语境。", opacity: 1 }
+  );
+
+  const denseBuild = planEditorialSubtitlePresentation({
+    phase: "active-build",
+    visibleNodeCount: 5,
+    visibleRelationCount: 4,
+    fullText: "完整句子不能与正在变化的关系图争夺阅读注意力。",
+    cueText: "证据逐步汇入"
+  });
+  assert.equal(denseBuild.phase, "dense-build");
+  assert.equal(denseBuild.mode, "semantic-cue");
+  assert.equal(denseBuild.text, "证据逐步汇入");
+  assert.equal(denseBuild.visualWeight, "supporting");
+  assert.equal(denseBuild.opacity, 0.72);
+
+  const finalHold = planEditorialSubtitlePresentation({
+    phase: "final-hold",
+    visibleNodeCount: 6,
+    visibleRelationCount: 6,
+    fullText: "图解停止变化后恢复完整结论。",
+    cueText: "完成"
+  });
+  assert.equal(finalHold.mode, "semantic-cue");
+  assert.equal(finalHold.text, "完成");
+  assert.equal(finalHold.visualWeight, "supporting");
+  assert.equal(finalHold.denseFinalHold, true);
+
+  const quietFinalHold = planEditorialSubtitlePresentation({
+    phase: "final-hold",
+    visibleNodeCount: 2,
+    visibleRelationCount: 1,
+    fullText: "图解停止变化后恢复完整结论。",
+    cueText: "完成"
+  });
+  assert.equal(quietFinalHold.mode, "full-sentence");
+  assert.equal(quietFinalHold.text, "图解停止变化后恢复完整结论。");
+
+  const fragmentFinalHold = planEditorialSubtitlePresentation({
+    phase: "final-hold",
+    visibleNodeCount: 2,
+    visibleRelationCount: 1,
+    fullText: "以后一直安全",
+    cueText: "证据需持续有效"
+  });
+  assert.equal(fragmentFinalHold.mode, "semantic-cue");
+  assert.equal(fragmentFinalHold.text, "证据需持续有效");
+  assert.equal(fragmentFinalHold.fragmentFinalHold, true);
+
+  assert.throws(
+    () => planEditorialSubtitlePresentation({
+      phase: "dense-build",
+      visibleNodeCount: 6,
+      visibleRelationCount: 5,
+      fullText: "完整句子。",
+      cueText: "这是一个超过十六个字符且不应该作为构建提示的长句子"
+    }),
+    (error) => error instanceof EditorialVisualPolicyError &&
+      error.code === EDITORIAL_VISUAL_ERROR_CODES.SUBTITLE_CUE_TOO_LONG
+  );
 });
 
 test("标题规划先保持或加宽，当前行放不下时重排，永不返回换行方案", () => {
