@@ -1159,6 +1159,8 @@ function storyboardWithoutSubtitleLayout(artifact) {
   return {
     sourceScript: structuredClone(artifact?.sourceScript ?? null),
     draft: {
+      visualContractVersion: artifact?.draft?.visualContractVersion ?? null,
+      visualStyleProfileId: artifact?.draft?.visualStyleProfileId ?? null,
       targetDurationSeconds: artifact?.draft?.targetDurationSeconds ?? null,
       assetChecklist: structuredClone(artifact?.draft?.assetChecklist ?? []),
       visualRules: structuredClone(artifact?.draft?.visualRules ?? []),

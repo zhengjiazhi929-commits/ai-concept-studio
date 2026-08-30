@@ -186,6 +186,21 @@ test("绑定规则升级只让当前 Gate 等待重审，不伪造人工驳回�
   assert.equal(repeated.episode.history.length, result.episode.history.length);
 });
 
+test("结构化视觉意图和解析计划分别进入 Storyboard Gate 哈希", async () => {
+  const episode = structuredClone(await readFixtureEpisode());
+  episode.scenes[0].visualIntent = { schemaVersion: "visual-expression-contract-v1", takeaway: "原结论" };
+  episode.scenes[0].visualPlan = { structure: "none", styleProfileId: "visual-system-v1" };
+  const before = currentGateArtifactHash(episode, "storyboard");
+
+  const changedIntent = structuredClone(episode);
+  changedIntent.scenes[0].visualIntent.takeaway = "改变后的结论";
+  assert.notEqual(currentGateArtifactHash(changedIntent, "storyboard"), before);
+
+  const changedPlan = structuredClone(episode);
+  changedPlan.scenes[0].visualPlan.structure = "flow";
+  assert.notEqual(currentGateArtifactHash(changedPlan, "storyboard"), before);
+});
+
 test("最终成片批准后整期进入 approved 状态", async () => {
   const source = await readFixtureEpisode();
   source.qa.status = "passed";

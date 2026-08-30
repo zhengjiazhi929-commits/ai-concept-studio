@@ -119,6 +119,54 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
       dotMarkerGapWideExpandedBoostPx: 2
     })
   }),
+  semanticNode: Object.freeze({
+    marker: Object.freeze({
+      fontSizePx: 15,
+      minimumContainerHeightPx: 120
+    }),
+    standard: Object.freeze({
+      informationCard: Object.freeze({
+        labelFontSizePx: 32,
+        detailFontSizePx: 20,
+        horizontalPaddingPx: 26,
+        compactHeightThresholdPx: 90,
+        compactLabelFontSizePx: 30,
+        compactDetailFontSizePx: 18,
+        compactVerticalPaddingPx: 5
+      }),
+      openCanvas: Object.freeze({
+        minimumLabelFontSizePx: 28,
+        maximumLabelFontSizePx: 36,
+        minimumDetailFontSizePx: 18,
+        maximumDetailFontSizePx: 24,
+        horizontalPaddingPx: 26
+      }),
+      labelLetterSpacingPx: -0.8,
+      detailFontWeight: 620,
+      detailLineHeight: 1.22
+    }),
+    longformEmphasis: Object.freeze({
+      informationCard: Object.freeze({
+        labelFontSizePx: 34,
+        detailFontSizePx: 22,
+        horizontalPaddingPx: 28,
+        compactHeightThresholdPx: 124,
+        compactLabelFontSizePx: 32,
+        compactDetailFontSizePx: 20,
+        compactVerticalPaddingPx: 6
+      }),
+      openCanvas: Object.freeze({
+        minimumLabelFontSizePx: 32,
+        maximumLabelFontSizePx: 36,
+        minimumDetailFontSizePx: 22,
+        maximumDetailFontSizePx: 24,
+        horizontalPaddingPx: 26
+      }),
+      labelLetterSpacingPx: -0.8,
+      detailFontWeight: 650,
+      detailLineHeight: 1.26
+    })
+  }),
   palette: Object.freeze({
     paper: "#F2F6F3",
     paperWarm: "#F8FAF8",
@@ -148,6 +196,8 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
     supportingVerticalPx: 32,
     subtitleWidePx: 46,
     subtitleVerticalPx: 42,
+    subtitleSupportingWidePx: 36,
+    subtitleSupportingVerticalPx: 34,
     subtitleLineHeight: 1.25,
     subtitleMaximumLines: 2
   }),

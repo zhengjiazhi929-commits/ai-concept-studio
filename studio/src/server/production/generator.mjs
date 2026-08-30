@@ -7,6 +7,13 @@ import { latestReviewFeedback } from "../../shared/workflow.mjs";
 import { ensureInside, workspaceRoot } from "../../shared/paths.mjs";
 import { productionProfileForEpisode } from "../../shared/production-profiles.mjs";
 import {
+  VISUAL_EXPRESSION_CONTRACT_VERSION,
+  VISUAL_EXPRESSION_INTENT_JSON_SCHEMA,
+  VISUAL_EXPRESSION_STYLE_PROFILE_ID,
+  resolveVisualExpressionPlan,
+  visualExpressionPromptDirective
+} from "../../shared/visual-expression-contract.mjs";
+import {
   adaptApprovedSourceToShortScript,
   APPROVED_SOURCE_SHORT_SCRIPT_ADAPTER_VERSION
 } from "./short-script-adapter.mjs";
@@ -61,6 +68,14 @@ function scriptSchemaForProfile(profile) {
 
 function storyboardSchemaForProfile(profile) {
   return closedObject({
+  visualContractVersion: {
+    type: "string",
+    enum: [VISUAL_EXPRESSION_CONTRACT_VERSION]
+  },
+  visualStyleProfileId: {
+    type: "string",
+    enum: [VISUAL_EXPRESSION_STYLE_PROFILE_ID]
+  },
   targetDurationSeconds: {
     type: "integer",
     minimum: profile.targetDurationSeconds.minimum,
@@ -83,6 +98,7 @@ function storyboardSchemaForProfile(profile) {
       subtitle: { type: "string" },
       label: { type: "string" },
       assetHint: { type: "string" },
+      visualIntent: VISUAL_EXPRESSION_INTENT_JSON_SCHEMA,
       subtitleLines: {
         type: "array",
         minItems: 1,
@@ -425,6 +441,14 @@ export async function generateScriptDraft(episode, options = {}) {
 }
 
 function buildTimeline(draft, profile) {
+  if (draft.visualContractVersion !== VISUAL_EXPRESSION_CONTRACT_VERSION) {
+    throw new Error(
+      `分镜缺少当前视觉表达合同：${VISUAL_EXPRESSION_CONTRACT_VERSION}`
+    );
+  }
+  if (draft.visualStyleProfileId !== VISUAL_EXPRESSION_STYLE_PROFILE_ID) {
+    throw new Error(`分镜未绑定已批准视觉参数真源：${VISUAL_EXPRESSION_STYLE_PROFILE_ID}`);
+  }
   const target = Math.max(
     profile.targetDurationSeconds.minimum,
     Math.min(profile.targetDurationSeconds.maximum, draft.targetDurationSeconds)
@@ -439,6 +463,12 @@ function buildTimeline(draft, profile) {
     rawCursor += scene.durationSeconds;
     const end = isLast ? target : Number(((rawCursor / rawTotal) * target).toFixed(3));
     const id = `S${String(index + 1).padStart(2, "0")}`;
+    const visualIntent = structuredClone(scene.visualIntent);
+    const visualPlan = resolveVisualExpressionPlan({
+      sceneId: id,
+      visualIntent,
+      styleProfileId: draft.visualStyleProfileId
+    });
     scenes.push({
       id,
       start: cursor,
@@ -449,7 +479,9 @@ function buildTimeline(draft, profile) {
       statement: scene.statement,
       subtitle: scene.subtitle,
       label: scene.label,
-      assetHint: scene.assetHint
+      assetHint: scene.assetHint,
+      visualIntent,
+      visualPlan
     });
 
     const weights = scene.subtitleLines.map((line) => line.weight);
@@ -518,7 +550,8 @@ export async function generateStoryboardDraft(episode, options = {}) {
   const requestCount = await nextRequestCount(episode);
   const scriptDraft = await readApprovedScriptInput(episode);
   const prompt = await buildWorkerPrompt("storyboard-agent", {
-    profileInstruction: profile.storyboardInstruction
+    profileInstruction: profile.storyboardInstruction,
+    visualExpressionDirective: visualExpressionPromptDirective()
   });
   const client = options.client ?? (await createAiClient({
     sideEffectGrant,
@@ -648,6 +681,12 @@ export async function generateAssetPlan(episode, options = {}) {
   };
   const value = {
     ...result.value,
+    ...(episode.production?.storyboardDraft?.visualContractVersion
+      ? { visualContractVersion: episode.production.storyboardDraft.visualContractVersion }
+      : {}),
+    ...(episode.production?.storyboardDraft?.visualStyleProfileId
+      ? { visualStyleProfileId: episode.production.storyboardDraft.visualStyleProfileId }
+      : {}),
     visualRules: [...(episode.production?.storyboardDraft?.visualRules ?? [])],
     sourceStoryboard
   };

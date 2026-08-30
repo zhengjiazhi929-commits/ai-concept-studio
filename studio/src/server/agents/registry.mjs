@@ -339,6 +339,12 @@ export const agents = {
       });
       const entry = versionEntry(generated, {
         assetChecklist: generated.value.assetChecklist,
+        ...(generated.value.visualContractVersion
+          ? { visualContractVersion: generated.value.visualContractVersion }
+          : {}),
+        ...(generated.value.visualStyleProfileId
+          ? { visualStyleProfileId: generated.value.visualStyleProfileId }
+          : {}),
         ...(generated.value.visualRules
           ? { visualRules: generated.value.visualRules }
           : {})
@@ -741,13 +747,14 @@ export const agents = {
   "render-agent": {
     id: "render-agent",
     label: "渲染 Agent",
-    async run(episode, context) {
+    async run(episode, context = {}) {
       if (episode.approvals.assets.status !== "approved") {
         return outcome("failed", "必须先人工批准素材与声音");
       }
-      const result = await renderPreview(episode, context);
+      const result = await (context.renderPreview ?? renderPreview)(episode, context);
       const version = renderVersion(result.relativeOutputPath);
       const renderedAt = new Date().toISOString();
+      const deterministicLayoutSampleSet = result.deterministicLayoutSampleSet ?? null;
       return outcome("complete", `成片 v${version} 已生成`, {
         artifacts: [result.relativeOutputPath],
         patch: {
@@ -761,7 +768,10 @@ export const agents = {
                 outputPath: result.relativeOutputPath,
                 renderedAt,
                 bytes: result.bytes,
-                sha256: result.sha256
+                sha256: result.sha256,
+                ...(deterministicLayoutSampleSet
+                  ? { deterministicLayoutSampleSet }
+                  : {})
               }
             ],
             status: "complete",
@@ -770,6 +780,7 @@ export const agents = {
             renderedAt,
             bytes: result.bytes,
             sha256: result.sha256,
+            deterministicLayoutSampleSet,
             muted: episode.voice.status !== "ready",
             needsRevision: false
           },

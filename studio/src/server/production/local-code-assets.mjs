@@ -77,6 +77,10 @@ function manifestPayload(episode, item, assetVersion, renderedAt, implementation
     rightsRequirement: item.rightsRequirement,
     visualContract,
     visualContractHash,
+    visualExpressionContractVersion:
+      episode.production.assetPlan.content.visualContractVersion ?? null,
+    visualStyleProfileId:
+      episode.production.assetPlan.content.visualStyleProfileId ?? null,
     visualRules: [...(episode.production.assetPlan.content.visualRules ?? [])],
     renderedAt
   };

@@ -543,11 +543,20 @@ test("八帧预重排连续无超调且连接线始终从当前卡片边缘向�
 });
 
 test("右上角AI品牌水印固定120px与40px安全边距并完整循环三次", () => {
-  assert.equal(VISUAL_SYSTEM_V1_AI_WATERMARK.schemaVersion, "visual-system-v1-ai-watermark-v1");
+  assert.equal(VISUAL_SYSTEM_V1_AI_WATERMARK.schemaVersion, "visual-system-v1-ai-watermark-v2");
   assert.equal(VISUAL_SYSTEM_V1_AI_WATERMARK.outputFormat, "wide-only");
   assert.equal(VISUAL_SYSTEM_V1_AI_WATERMARK.role, "persistent-brand-watermark");
   assert.equal(VISUAL_SYSTEM_V1_AI_WATERMARK.contentSurfacePolicyExempt, true);
   assert.equal(VISUAL_SYSTEM_V1_AI_WATERMARK.renderMode, "validated-transparent-png-sequence");
+  assert.equal(
+    VISUAL_SYSTEM_V1_AI_WATERMARK.defaultProfileId,
+    "approved-v013-stable-footprint"
+  );
+  assert.equal(VISUAL_SYSTEM_V1_AI_WATERMARK.rasterSequence.assetVersion, 13);
+  assert.equal(
+    VISUAL_SYSTEM_V1_AI_WATERMARK.rasterSequence.assetRoot,
+    "assets/visual-system-v1/ai-watermark-v013/frames"
+  );
   assert.equal(
     VISUAL_SYSTEM_V1_AI_WATERMARK.motionSchemaVersion,
     "visual-system-v1-ai-watermark-motion-proof-v12"
@@ -934,13 +943,14 @@ test("v9开放画布使用场景自适应平面流程且保留独立AI品牌水�
   assert.doesNotMatch(all, /animation\s*:|transition\s*:|@keyframes|Math\.random|requestAnimationFrame/iu);
 });
 
-test("统一平面节点使用完整1px边框且没有阴影或伪立体底托", async () => {
+test("统一平面节点使用清晰完整3px边框且没有阴影或伪立体底托", async () => {
   const components = await source("../src/video/components/visual-system-v1/components.jsx");
   const flatNode = components.slice(
     components.indexOf("export function VisualSystemV1FlatNode"),
-    components.indexOf("function VisualSystemV1ShallowDepthObject")
+    components.indexOf("function semanticPrimitiveSurface")
   );
-  assert.match(flatNode, /border: `1px solid \$\{mixHexColors\(palette\.line, focusBorder, normalizedFocus\)\}`/u);
+  assert.match(flatNode, /border: `3px solid \$\{mixHexColors\(palette\.lineStrong, focusBorder, normalizedFocus\)\}`/u);
+  assert.match(flatNode, /data-visual-system-card-border="full-outline-3px"/u);
   assert.match(flatNode, /borderRadius: 18/u);
   assert.match(flatNode, /boxShadow: "none"/u);
   assert.match(flatNode, /backgroundImage: "none"/u);
@@ -960,6 +970,24 @@ test("统一平面节点使用完整1px边框且没有阴影或伪立体底托",
   assert.match(flatNode, /justifyContent: fillsSafeViewport \? "center" : undefined/u);
   assert.match(flatNode, /filter: "none"/u);
   assert.doesNotMatch(flatNode, /borderTop|borderBottom|linear-gradient|depthPx/u);
+});
+
+test("语义信息卡使用完整外框，时间锚点与数量条仍保留非卡片图解形态", async () => {
+  const components = await source("../src/video/components/visual-system-v1/components.jsx");
+  const semanticSurface = components.slice(
+    components.indexOf("function semanticPrimitiveSurface"),
+    components.indexOf("export function VisualSystemV1SemanticNode")
+  );
+  assert.match(semanticSurface, /const fullOutline = \{/u);
+  assert.match(semanticSurface, /border: `3px solid \$\{mixHexColors\(/u);
+  assert.match(semanticSurface, /palette\.lineStrong/u);
+  assert.match(semanticSurface, /borderRadius: 18/u);
+  assert.match(semanticSurface, /boxShadow: "none"/u);
+  assert.match(semanticSurface, /if \(surfaceRole === "information-card"\) return fullOutline/u);
+  assert.doesNotMatch(semanticSurface, /primitive === "flow-step"[\s\S]*\.\.\.fullOutline/u);
+  assert.match(semanticSurface, /primitive === "timeline-anchor"[\s\S]*\.\.\.openDiagram/u);
+  assert.match(semanticSurface, /primitive === "quantity-bar"[\s\S]*\.\.\.openDiagram/u);
+  assert.match(components, /data-visual-system-surface-border=\{surface\.border === "none" \? "open-diagram" : "full-outline"\}/u);
 });
 
 test("标题弹出用逐帧位置和颜色通道而不创建透明变换合成层", async () => {
@@ -989,7 +1017,7 @@ test("场景8帧淡化通过文字颜色通道而不是全屏透明合成面", a
   assert.doesNotMatch(sceneLayer, /style=\{\{[^}]*opacity/u);
 });
 
-test("透明水印序列固定120张RGBA帧并由正式组件逐帧读取", async () => {
+test("旧v012透明水印序列完整保留且正式组件仍支持按profile逐帧读取", async () => {
   const manifestUrl = new URL(
     "../public/assets/visual-system-v1/ai-watermark-v012/manifest.json",
     import.meta.url
@@ -1017,8 +1045,12 @@ test("透明水印序列固定120张RGBA帧并由正式组件逐帧读取", asyn
   }
   const component = await source("../src/video/components/visual-system-v1/ai-watermark.jsx");
   const persistent = component.slice(component.indexOf("export function VisualSystemV1AiWatermark({"));
-  assert.match(persistent, /data-ai-watermark-raster-sequence="approved-v012-120-frame-cycle"/u);
-  assert.match(persistent, /staticFile\(rasterFramePath\(frame\)\)/u);
+  assert.match(persistent, /profile = VISUAL_SYSTEM_V1_AI_WATERMARK\.defaultProfileId/u);
+  assert.match(persistent, /data-ai-watermark-raster-sequence=\{resolvedProfile\.rasterSequenceLabel\}/u);
+  assert.match(
+    persistent,
+    /staticFile\(rasterFramePath\(cadenceState\.rasterFrame, resolvedProfile\)\)/u
+  );
   assert.doesNotMatch(persistent, /<AiOpenCube/u);
   assert.match(component, /data-ai-watermark-live-object="css-3d-raster-source-only"/u);
 });

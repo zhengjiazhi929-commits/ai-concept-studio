@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { integrityHash, isSha256 } from "../../shared/integrity.mjs";
 import { studioRoot } from "../../shared/paths.mjs";
 
-export const WORKER_PROMPT_SET_VERSION = "worker-prompts-v1";
+export const WORKER_PROMPT_SET_VERSION = "worker-prompts-v2";
 
 const promptFiles = Object.freeze({
   "script-agent": "script-agent.v1.json",

@@ -95,8 +95,14 @@ Platform launchers are also available:
   file-level implementation map
 - [`docs/07-motion-library.md`](./docs/07-motion-library.md): curated
   landscape-video motion library, GIF previews, and Remotion usage
+- [`docs/08-visual-expression-contract.md`](./docs/08-visual-expression-contract.md):
+  executable semantic, composition, and rendered-frame QA contract for video
+  visuals
 - [`docs/08-development-governance.md`](./docs/08-development-governance.md):
   adopted development, verification, evaluation, and delivery process
+- [`docs/09-ai-tech-icon-system.md`](./docs/09-ai-tech-icon-system.md):
+  approved semantic icon registry, geometry, usage boundaries, and motion
+  contract for AI technical videos
 - [`docs/STATUS.md`](./docs/STATUS.md): the only current-state source for
   verification, blockers, approvals, merge state, and the next admission gate
 - [`research/2026-07-30-golden-topic-candidates.md`](./research/2026-07-30-golden-topic-candidates.md):

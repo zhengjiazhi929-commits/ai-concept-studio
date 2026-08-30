@@ -1,0 +1,5690 @@
+{
+  "algorithm": {
+    "alphaThresholdInclusive": 16,
+    "aspectTolerance": "target raster preserves aspect by half-up pixel rounding; encoded threshold bbox may differ by at most 2px per axis",
+    "builderPath": "studio/scripts/build-visual-system-v1-ai-watermark-v013.py",
+    "builderSha256": "abee6e4f3f77561d669ac82937a602d9601bdef94ce6992faa37f52f7f435c41",
+    "canvas": {
+      "height": 120,
+      "mode": "RGBA",
+      "width": 120
+    },
+    "canvasCenter": {
+      "x": 60.0,
+      "y": 60.0
+    },
+    "centerTolerance": 1.0,
+    "crop": "minimal source bbox where alpha >= threshold",
+    "id": "per-frame-alpha-bbox-isotropic-fit-center-v1",
+    "pillowVersion": "12.3.0",
+    "placement": "integer translation that centers resized threshold bbox",
+    "resample": "Pillow Image.Resampling.LANCZOS in premultiplied-alpha RGBa",
+    "scale": "per-frame isotropic fit to target visible long edge",
+    "targetVisibleLongEdge": 108,
+    "visibleLongEdgeTolerance": 2
+  },
+  "approval": {
+    "acceptedDirection": "v002",
+    "approvedBy": "Zhengjiazhi",
+    "approvedOn": "2026-08-26",
+    "approvedProfileId": "approved-v013-stable-footprint",
+    "scope": "stable-visible-footprint-watermark-profile"
+  },
+  "approved": true,
+  "assetVersion": 13,
+  "frameCount": 120,
+  "frames": {
+    "0": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 64.0,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 10,
+        "longEdge": 108,
+        "rightExclusive": 118,
+        "top": 11,
+        "width": 108
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-000.png",
+      "outputSha256": "15701c9c91d5a9dc050b7fc084bdda90f620e65a36aed5d20aee71a0986f7a36",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-000.png",
+      "sourceSha256": "270ba0c269c8b6ffb68f793ec08b3f0623a2bc2ed2b371c6833cc4f20924e8c1",
+      "transform": {
+        "isotropicScale": 1.0,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.0,
+          "centerY": 53.5,
+          "height": 107,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10010
+    },
+    "1": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 62.5,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 8,
+        "longEdge": 109,
+        "rightExclusive": 117,
+        "top": 11,
+        "width": 109
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 106,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-001.png",
+      "outputSha256": "f8acbc939455cd472a932bf1376597fc8afd25e988080e45611967a7bab7ec94",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-001.png",
+      "sourceSha256": "0c224acfe84c101f9657367398cd31971e727d5ac996f285a8f6f4536708db28",
+      "transform": {
+        "isotropicScale": 0.9908256880733946,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 106,
+          "centerX": 54.0,
+          "centerY": 53.0,
+          "height": 106,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 106,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9208
+    },
+    "10": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 116,
+        "centerX": 58.5,
+        "centerY": 63.5,
+        "height": 105,
+        "left": 3,
+        "longEdge": 111,
+        "rightExclusive": 114,
+        "top": 11,
+        "width": 111
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 111,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 102,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 9,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-010.png",
+      "outputSha256": "4d0a581b3d75be483b78b6572eceb61957d68852ad203e54dd246e5a448e974e",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-010.png",
+      "sourceSha256": "8883896b849043afc3fe6993a2fd769a3f6f04721fc3f54e80f1dd2a98ba78e6",
+      "transform": {
+        "isotropicScale": 0.972972972972973,
+        "pasteLeft": 6,
+        "pasteTop": 9,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 102,
+          "centerX": 54.0,
+          "centerY": 51.0,
+          "height": 102,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 102,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9709
+    },
+    "100": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 116,
+        "centerX": 61.5,
+        "centerY": 59.0,
+        "height": 114,
+        "left": 4,
+        "longEdge": 115,
+        "rightExclusive": 119,
+        "top": 2,
+        "width": 115
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.5,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 7,
+        "longEdge": 107,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 107
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-100.png",
+      "outputSha256": "9db9eba7578df95bfce7925fb0a4800684d2e54ec59039ddaf73632ee6bf4f32",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-100.png",
+      "sourceSha256": "095c64ba154ab6cade5bf19caef18517be2ab48bff985b1de53e9f9bca7fc9b8",
+      "transform": {
+        "isotropicScale": 0.9391304347826087,
+        "pasteLeft": 7,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 53.5,
+          "centerY": 53.5,
+          "height": 107,
+          "left": 0,
+          "longEdge": 107,
+          "rightExclusive": 107,
+          "top": 0,
+          "width": 107
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10923
+    },
+    "101": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 112,
+        "centerX": 61.0,
+        "centerY": 57.5,
+        "height": 109,
+        "left": 2,
+        "longEdge": 118,
+        "rightExclusive": 120,
+        "top": 3,
+        "width": 118
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 110,
+        "centerX": 60.5,
+        "centerY": 60.0,
+        "height": 100,
+        "left": 7,
+        "longEdge": 107,
+        "rightExclusive": 114,
+        "top": 10,
+        "width": 107
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-101.png",
+      "outputSha256": "6abaff4a634ec04b6b577b1c74dd790730aedfffba79bdd4453a766d06a67e25",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-101.png",
+      "sourceSha256": "1f0839845f559eb7d1b5eba59b959ac3faed90e1265c74e93e2d25d1d8a04ea2",
+      "transform": {
+        "isotropicScale": 0.9152542372881356,
+        "pasteLeft": 7,
+        "pasteTop": 10,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 100,
+          "centerX": 53.5,
+          "centerY": 50.0,
+          "height": 100,
+          "left": 0,
+          "longEdge": 107,
+          "rightExclusive": 107,
+          "top": 0,
+          "width": 107
+        },
+        "targetRasterHeight": 100,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10089
+    },
+    "102": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 112,
+        "centerX": 61.5,
+        "centerY": 56.5,
+        "height": 111,
+        "left": 6,
+        "longEdge": 111,
+        "rightExclusive": 117,
+        "top": 1,
+        "width": 111
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 6,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-102.png",
+      "outputSha256": "5332f3cf84b2f3334618ced4b20ea858f64f5cf16f8d65cf8ad6f76bbfed068c",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-102.png",
+      "sourceSha256": "bc4a46bba84571a1472f0af274e656e36dd5d5c302beb614262a1fcf7761d5b5",
+      "transform": {
+        "isotropicScale": 0.972972972972973,
+        "pasteLeft": 6,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 54.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9033
+    },
+    "103": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 117,
+        "centerX": 62.0,
+        "centerY": 59.0,
+        "height": 116,
+        "left": 11,
+        "longEdge": 116,
+        "rightExclusive": 113,
+        "top": 1,
+        "width": 102
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.5,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 13,
+        "longEdge": 108,
+        "rightExclusive": 108,
+        "top": 6,
+        "width": 95
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-103.png",
+      "outputSha256": "dcbebeed02382f25179e124c4db0819aae2d94d9e4ba3eec46d75dcf73f04fe6",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-103.png",
+      "sourceSha256": "68c74990b57abf9104e8e04fc93db0acff82f1b33f3ce3e024b13dbc61603274",
+      "transform": {
+        "isotropicScale": 0.9310344827586207,
+        "pasteLeft": 13,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 47.5,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 95,
+          "top": 0,
+          "width": 95
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 95
+      },
+      "transparentPixelCount": 9491
+    },
+    "104": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 57.0,
+        "centerY": 61.0,
+        "height": 114,
+        "left": 7,
+        "longEdge": 114,
+        "rightExclusive": 107,
+        "top": 4,
+        "width": 100
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.5,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 13,
+        "longEdge": 108,
+        "rightExclusive": 108,
+        "top": 6,
+        "width": 95
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-104.png",
+      "outputSha256": "001d55ead1e04017d33619e23fbd9af434fddc84baf70b451abb1f3d2c11f8a8",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-104.png",
+      "sourceSha256": "60d775a6b59bee8cd73de795c82a849c17b1f10229bd5aa8124dd617ed317ac7",
+      "transform": {
+        "isotropicScale": 0.9473684210526315,
+        "pasteLeft": 13,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 47.5,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 95,
+          "top": 0,
+          "width": 95
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 95
+      },
+      "transparentPixelCount": 9975
+    },
+    "105": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 57.5,
+        "centerY": 62.5,
+        "height": 111,
+        "left": 7,
+        "longEdge": 111,
+        "rightExclusive": 108,
+        "top": 7,
+        "width": 101
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 11,
+        "longEdge": 108,
+        "rightExclusive": 109,
+        "top": 6,
+        "width": 98
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-105.png",
+      "outputSha256": "7b0b74925c0e7933c96f5d0a98aa794e958d67abec63c2507eb3fbd0eede5d29",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-105.png",
+      "sourceSha256": "6d70c58d4137526be64a5adb84e393b8752061cc2eac6afffd71b0e720cb8dfe",
+      "transform": {
+        "isotropicScale": 0.972972972972973,
+        "pasteLeft": 11,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 49.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 98,
+          "top": 0,
+          "width": 98
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 98
+      },
+      "transparentPixelCount": 10689
+    },
+    "106": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 115,
+        "centerX": 57.5,
+        "centerY": 63.0,
+        "height": 104,
+        "left": 3,
+        "longEdge": 109,
+        "rightExclusive": 112,
+        "top": 11,
+        "width": 109
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 112,
+        "centerX": 60.5,
+        "centerY": 60.5,
+        "height": 103,
+        "left": 7,
+        "longEdge": 107,
+        "rightExclusive": 114,
+        "top": 9,
+        "width": 107
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-106.png",
+      "outputSha256": "972f695a28a25ae0de4182c47e54bbbd113fbff975431072cff1d5a28a218808",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-106.png",
+      "sourceSha256": "6bbeb1c009183d05677fd8fe31e81a8a7eca01e603147a81357d0f21afdbf374",
+      "transform": {
+        "isotropicScale": 0.9908256880733946,
+        "pasteLeft": 6,
+        "pasteTop": 9,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 103,
+          "centerX": 54.5,
+          "centerY": 51.5,
+          "height": 103,
+          "left": 1,
+          "longEdge": 107,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 107
+        },
+        "targetRasterHeight": 103,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10561
+    },
+    "107": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 115,
+        "centerX": 58.5,
+        "centerY": 65.0,
+        "height": 100,
+        "left": 2,
+        "longEdge": 113,
+        "rightExclusive": 115,
+        "top": 15,
+        "width": 113
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 108,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 96,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 12,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-107.png",
+      "outputSha256": "3e2bbc6ff7c89eaf5680f3352243f63b8389a01750e810bbb93d1b6bbf1191fd",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-107.png",
+      "sourceSha256": "53ee6b34a189d9566eb01a628c797e5be980690c421d637dc084809786089f2b",
+      "transform": {
+        "isotropicScale": 0.9557522123893806,
+        "pasteLeft": 6,
+        "pasteTop": 12,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 96,
+          "centerX": 54.0,
+          "centerY": 48.0,
+          "height": 96,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 96,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10243
+    },
+    "108": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 112,
+        "centerX": 59.5,
+        "centerY": 63.0,
+        "height": 98,
+        "left": 2,
+        "longEdge": 115,
+        "rightExclusive": 117,
+        "top": 14,
+        "width": 115
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 106,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 92,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 14,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-108.png",
+      "outputSha256": "c0cb75bf728ff03f0f38726ec838890cc987dea52724b6475768f6df6de3fbaf",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-108.png",
+      "sourceSha256": "238b02938886e694c4393d6a9f044aa7ba01588b97d3d2c76cf5126aa8fc8328",
+      "transform": {
+        "isotropicScale": 0.9391304347826087,
+        "pasteLeft": 6,
+        "pasteTop": 14,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 92,
+          "centerX": 54.0,
+          "centerY": 46.0,
+          "height": 92,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 92,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9867
+    },
+    "109": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 108,
+        "centerX": 61.0,
+        "centerY": 60.0,
+        "height": 96,
+        "left": 3,
+        "longEdge": 116,
+        "rightExclusive": 119,
+        "top": 12,
+        "width": 116
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 105,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 89,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 16,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-109.png",
+      "outputSha256": "38786dc6fdf394328ee8d3c29be4918c31ff3f51db0fcec04d119e5a5395eb52",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-109.png",
+      "sourceSha256": "e27cfcb460b1f8978d78bb9129d30714beb72e6c500c17e9acbe44e570ebdec7",
+      "transform": {
+        "isotropicScale": 0.9310344827586207,
+        "pasteLeft": 6,
+        "pasteTop": 16,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 89,
+          "centerX": 54.0,
+          "centerY": 44.5,
+          "height": 89,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 89,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9623
+    },
+    "11": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 107,
+        "centerX": 55.5,
+        "centerY": 64.5,
+        "height": 85,
+        "left": 6,
+        "longEdge": 99,
+        "rightExclusive": 105,
+        "top": 22,
+        "width": 99
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 107,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 93,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 14,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-011.png",
+      "outputSha256": "0c09c82bbff4fd62bc3bf49991b2f2c974ad67eaec34db17930a372d3285005c",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-011.png",
+      "sourceSha256": "230e7563e716bcc484e84dd29e024b19b06b85b8ebf558703ec8266b9c9bf5fd",
+      "transform": {
+        "isotropicScale": 1.0909090909090908,
+        "pasteLeft": 6,
+        "pasteTop": 14,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 93,
+          "centerX": 54.0,
+          "centerY": 46.5,
+          "height": 93,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 93,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10468
+    },
+    "110": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 110,
+        "centerX": 62.0,
+        "centerY": 60.5,
+        "height": 99,
+        "left": 5,
+        "longEdge": 114,
+        "rightExclusive": 119,
+        "top": 11,
+        "width": 114
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 107,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 93,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 14,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-110.png",
+      "outputSha256": "ab0e034f002c67ecb4820f2dfcea225fe3fe4fdc72fe6fab0117cc6dd4d836c3",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-110.png",
+      "sourceSha256": "f98f90b17a1444b44f9f1eef976c066d2bce40db50e4146a55506feb97bb4a6e",
+      "transform": {
+        "isotropicScale": 0.9473684210526315,
+        "pasteLeft": 6,
+        "pasteTop": 13,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 94,
+          "centerX": 54.0,
+          "centerY": 47.5,
+          "height": 93,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 1,
+          "width": 108
+        },
+        "targetRasterHeight": 94,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9333
+    },
+    "111": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 63.0,
+        "centerY": 62.0,
+        "height": 102,
+        "left": 6,
+        "longEdge": 114,
+        "rightExclusive": 120,
+        "top": 11,
+        "width": 114
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 109,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 97,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 12,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-111.png",
+      "outputSha256": "1c8f08ffffd4532687b21cd72ce8d237b4f0769d72663251f33abe0fad4da3fa",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-111.png",
+      "sourceSha256": "f980b08819c206109e377c234f54ae01293925810770105c22ebc9131061a823",
+      "transform": {
+        "isotropicScale": 0.9473684210526315,
+        "pasteLeft": 6,
+        "pasteTop": 12,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 97,
+          "centerX": 54.0,
+          "centerY": 48.5,
+          "height": 97,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 97,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9270
+    },
+    "112": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 64.0,
+        "centerY": 62.0,
+        "height": 104,
+        "left": 8,
+        "longEdge": 112,
+        "rightExclusive": 120,
+        "top": 10,
+        "width": 112
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 110,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 100,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 10,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-112.png",
+      "outputSha256": "9e7ef139f95826d4862c8bef991d1acc586e5a87d8990b48d7be9d2e8f8e72be",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-112.png",
+      "sourceSha256": "bfb506be351ed69322639ed7ef7e432380ec9a515e3dd840b8168d5c5f2c0f70",
+      "transform": {
+        "isotropicScale": 0.9642857142857143,
+        "pasteLeft": 6,
+        "pasteTop": 10,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 100,
+          "centerX": 54.0,
+          "centerY": 50.0,
+          "height": 100,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 100,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9134
+    },
+    "113": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 116,
+        "centerX": 65.0,
+        "centerY": 63.0,
+        "height": 106,
+        "left": 10,
+        "longEdge": 110,
+        "rightExclusive": 120,
+        "top": 10,
+        "width": 110
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 112,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 104,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 8,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-113.png",
+      "outputSha256": "c57c9149726f380602bead96bcb884fe07507a0c6b440070de114e9d1bab3caa",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-113.png",
+      "sourceSha256": "27f130cdf3fb6cc63b4404de8ce1fee2b721130b7f12adc3c7ca2124ddfb96d9",
+      "transform": {
+        "isotropicScale": 0.9818181818181818,
+        "pasteLeft": 6,
+        "pasteTop": 8,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 104,
+          "centerX": 54.0,
+          "centerY": 52.0,
+          "height": 104,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 104,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9011
+    },
+    "114": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 117,
+        "centerX": 65.0,
+        "centerY": 63.5,
+        "height": 107,
+        "left": 11,
+        "longEdge": 108,
+        "rightExclusive": 119,
+        "top": 10,
+        "width": 108
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-114.png",
+      "outputSha256": "4178a89b316bee6a7371e42387f344ed887981943e514852d3ac4073f00775c0",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-114.png",
+      "sourceSha256": "23e3a42b7d0c2d1de3965a526fbc00727579354bc588701025aed5e8ebe7e4c0",
+      "transform": {
+        "isotropicScale": 1.0,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.0,
+          "centerY": 53.5,
+          "height": 107,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9690
+    },
+    "115": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 117,
+        "centerX": 66.0,
+        "centerY": 63.5,
+        "height": 107,
+        "left": 13,
+        "longEdge": 107,
+        "rightExclusive": 119,
+        "top": 10,
+        "width": 106
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.5,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 7,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 6,
+        "width": 107
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-115.png",
+      "outputSha256": "d65781bbd80df743dc2ca04549ba21fd1136aa98439084ad71604337a14a4317",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-115.png",
+      "sourceSha256": "10bd3513d4aeb7c678395d7895aba093d96b6febe16fe37f313630801c3556da",
+      "transform": {
+        "isotropicScale": 1.0093457943925233,
+        "pasteLeft": 7,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 53.5,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 107,
+          "top": 0,
+          "width": 107
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 107
+      },
+      "transparentPixelCount": 8827
+    },
+    "116": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 117,
+        "centerX": 65.5,
+        "centerY": 63.5,
+        "height": 107,
+        "left": 12,
+        "longEdge": 107,
+        "rightExclusive": 119,
+        "top": 10,
+        "width": 107
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-116.png",
+      "outputSha256": "ac712dfa19cde67521d4b15866aaa15676b407ae0cdec796075816bce3603d60",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-116.png",
+      "sourceSha256": "588eb4cb7fa8feea62ae93302da8a80727e1ac976f6d0c37709c519b5a0333ff",
+      "transform": {
+        "isotropicScale": 1.0093457943925233,
+        "pasteLeft": 6,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 54.0,
+          "centerY": 54.5,
+          "height": 107,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 1,
+          "width": 108
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 8913
+    },
+    "117": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 65.0,
+        "centerY": 64.0,
+        "height": 108,
+        "left": 11,
+        "longEdge": 108,
+        "rightExclusive": 119,
+        "top": 10,
+        "width": 108
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 6,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-117.png",
+      "outputSha256": "4ef69742afbb7ecbff2d2158ace0ba31afe95a253e09952d0f9ab120a3c2ff1b",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-117.png",
+      "sourceSha256": "dd9ba535a235a3d70f9bdfb9e0dfcdd43071a00a768f5f7ded9078d1330eef3a",
+      "transform": {
+        "isotropicScale": 1.0,
+        "pasteLeft": 6,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 54.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9878
+    },
+    "118": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 64.0,
+        "centerY": 64.0,
+        "height": 108,
+        "left": 10,
+        "longEdge": 108,
+        "rightExclusive": 118,
+        "top": 10,
+        "width": 108
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 6,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-118.png",
+      "outputSha256": "4d029d89dfee0e76cfcc2c0d735de8442cf3ccd4333ce49684d23b3926dea4f1",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-118.png",
+      "sourceSha256": "979a23f8a5dc12b249541e74df46381e3c9fd14f5ebc1c1023676c4fce7ce18c",
+      "transform": {
+        "isotropicScale": 1.0,
+        "pasteLeft": 6,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 54.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9939
+    },
+    "119": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 64.0,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 10,
+        "longEdge": 108,
+        "rightExclusive": 118,
+        "top": 11,
+        "width": 108
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-119.png",
+      "outputSha256": "5d5562102841a4a6ecc0ca2079dd5a536e3c1a86ea77c9ad152696eeec591c24",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-119.png",
+      "sourceSha256": "9db07ac61de702c5d9b719f18f285dca3df72dac025af1f7f2e342327eacda19",
+      "transform": {
+        "isotropicScale": 1.0,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.0,
+          "centerY": 53.5,
+          "height": 107,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9960
+    },
+    "12": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 107,
+        "centerX": 59.5,
+        "centerY": 69.5,
+        "height": 75,
+        "left": 24,
+        "longEdge": 75,
+        "rightExclusive": 95,
+        "top": 32,
+        "width": 71
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 9,
+        "longEdge": 108,
+        "rightExclusive": 111,
+        "top": 6,
+        "width": 102
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-012.png",
+      "outputSha256": "b8a9095b16e86961fa09083fb72bbdb0cc98841dde758de9ba98e01567abbed5",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-012.png",
+      "sourceSha256": "87fd93bd11ec16a7def5c35a6a6cee66d63f75090dd327e27f8050fec0fdf4bf",
+      "transform": {
+        "isotropicScale": 1.44,
+        "pasteLeft": 9,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 51.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 102,
+          "top": 0,
+          "width": 102
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 102
+      },
+      "transparentPixelCount": 9330
+    },
+    "13": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 64.5,
+        "centerY": 64.0,
+        "height": 98,
+        "left": 15,
+        "longEdge": 99,
+        "rightExclusive": 114,
+        "top": 15,
+        "width": 99
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-013.png",
+      "outputSha256": "a803116b95c5b214891024aff31bd77b6ee0966be60e0875bf06bd1e760b6583",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-013.png",
+      "sourceSha256": "a86d921d7df30c3b9277fc7477f0c7960c8274970e0b2bf4e0d0bd0113f06918",
+      "transform": {
+        "isotropicScale": 1.0909090909090908,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.0,
+          "centerY": 53.5,
+          "height": 107,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10407
+    },
+    "14": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 116,
+        "centerX": 61.0,
+        "centerY": 60.0,
+        "height": 112,
+        "left": 6,
+        "longEdge": 112,
+        "rightExclusive": 116,
+        "top": 4,
+        "width": 110
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 7,
+        "longEdge": 108,
+        "rightExclusive": 113,
+        "top": 6,
+        "width": 106
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-014.png",
+      "outputSha256": "6817d7559fb8859001e2557e2b939e417a165852825d6df9da049c70297147a2",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-014.png",
+      "sourceSha256": "a68d1e8876a88a652d219cb5d4418db85240ebfc5eaf27c9da1d75844cc5e9ca",
+      "transform": {
+        "isotropicScale": 0.9642857142857143,
+        "pasteLeft": 7,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 53.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 106,
+          "top": 0,
+          "width": 106
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 106
+      },
+      "transparentPixelCount": 10013
+    },
+    "15": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 116,
+        "centerX": 61.0,
+        "centerY": 60.5,
+        "height": 111,
+        "left": 4,
+        "longEdge": 114,
+        "rightExclusive": 118,
+        "top": 5,
+        "width": 114
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 105,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 8,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-015.png",
+      "outputSha256": "0cad9738057f1fb1162f2425247750167e4020e40fdd5afb4d4296ce8a4c2336",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-015.png",
+      "sourceSha256": "9aacb85c23c989b29da4f0516dc5a83a1d257a6a832d89e2c6f93c77c81a76ae",
+      "transform": {
+        "isotropicScale": 0.9473684210526315,
+        "pasteLeft": 6,
+        "pasteTop": 8,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 105,
+          "centerX": 54.0,
+          "centerY": 52.5,
+          "height": 105,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 105,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9725
+    },
+    "16": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 117,
+        "centerX": 60.0,
+        "centerY": 62.0,
+        "height": 110,
+        "left": 2,
+        "longEdge": 116,
+        "rightExclusive": 118,
+        "top": 7,
+        "width": 116
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 111,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 102,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 9,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-016.png",
+      "outputSha256": "8631f892f4fb8167ac8c361f5d3f18403ec500b009c97f1128812653b9c08778",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-016.png",
+      "sourceSha256": "302744f0e64059f5a776dfe792a899bd242e51a7cf0ec548db700490551cd9bb",
+      "transform": {
+        "isotropicScale": 0.9310344827586207,
+        "pasteLeft": 6,
+        "pasteTop": 9,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 102,
+          "centerX": 54.0,
+          "centerY": 51.0,
+          "height": 102,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 102,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9740
+    },
+    "17": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 119,
+        "centerX": 59.0,
+        "centerY": 65.0,
+        "height": 108,
+        "left": 0,
+        "longEdge": 118,
+        "rightExclusive": 118,
+        "top": 11,
+        "width": 118
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 110,
+        "centerX": 60.5,
+        "centerY": 60.5,
+        "height": 99,
+        "left": 7,
+        "longEdge": 107,
+        "rightExclusive": 114,
+        "top": 11,
+        "width": 107
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-017.png",
+      "outputSha256": "9a01b43b7393744f43478925499b87ba315da16c214ca98290927a930bfedfc3",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-017.png",
+      "sourceSha256": "701d29c57b89c623642b3ff437cf840fce5431c883403ff827043ace6196e091",
+      "transform": {
+        "isotropicScale": 0.9152542372881356,
+        "pasteLeft": 6,
+        "pasteTop": 11,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 99,
+          "centerX": 54.5,
+          "centerY": 49.5,
+          "height": 99,
+          "left": 1,
+          "longEdge": 107,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 107
+        },
+        "targetRasterHeight": 99,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9918
+    },
+    "18": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 120,
+        "centerX": 58.5,
+        "centerY": 66.5,
+        "height": 107,
+        "left": 0,
+        "longEdge": 117,
+        "rightExclusive": 117,
+        "top": 13,
+        "width": 117
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 110,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 99,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 11,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-018.png",
+      "outputSha256": "8008972b9483622de529712714ced99e909bf737244de88fc35caeec95246fd8",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-018.png",
+      "sourceSha256": "dbd74a22c74d7c50e15d801b85c2a30480d405cf1b9d44f61aa10404a3309491",
+      "transform": {
+        "isotropicScale": 0.9230769230769231,
+        "pasteLeft": 6,
+        "pasteTop": 11,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 99,
+          "centerX": 54.0,
+          "centerY": 49.5,
+          "height": 99,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 99,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10226
+    },
+    "19": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 120,
+        "centerX": 58.0,
+        "centerY": 66.5,
+        "height": 107,
+        "left": 1,
+        "longEdge": 114,
+        "rightExclusive": 115,
+        "top": 13,
+        "width": 114
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 111,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 101,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 10,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-019.png",
+      "outputSha256": "5d2bab851dc1ca3837d73b1deaca5f567cb2bcb397a16afe69846b37ce8a49b9",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-019.png",
+      "sourceSha256": "07e41159937291119d108c903a848b43eb4d58892025b70291767ef8af036e0d",
+      "transform": {
+        "isotropicScale": 0.9473684210526315,
+        "pasteLeft": 6,
+        "pasteTop": 10,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 101,
+          "centerX": 54.0,
+          "centerY": 50.5,
+          "height": 101,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 101,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10568
+    },
+    "2": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 60.0,
+        "centerY": 65.5,
+        "height": 105,
+        "left": 5,
+        "longEdge": 110,
+        "rightExclusive": 115,
+        "top": 13,
+        "width": 110
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 112,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 103,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 9,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-002.png",
+      "outputSha256": "ae636190d570cafc9255d8586404321f592be278ed53be98b42040767d19b7d2",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-002.png",
+      "sourceSha256": "9ea9740255fcce3344eaf63557c5b9303f2d6d033a13f8a10569e5ef9e228115",
+      "transform": {
+        "isotropicScale": 0.9818181818181818,
+        "pasteLeft": 6,
+        "pasteTop": 9,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 103,
+          "centerX": 54.0,
+          "centerY": 51.5,
+          "height": 103,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 103,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9426
+    },
+    "20": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 61.5,
+        "centerY": 63.5,
+        "height": 101,
+        "left": 9,
+        "longEdge": 105,
+        "rightExclusive": 114,
+        "top": 13,
+        "width": 105
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 112,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 104,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 8,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-020.png",
+      "outputSha256": "31f4a8b8ec6958ff09030dba8be969f67e581bf1632980c4ceecfcd8497935bc",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-020.png",
+      "sourceSha256": "72989f5a970d02167579b0667b44e0408036b30dc0f9eeaa4642dda2561ed672",
+      "transform": {
+        "isotropicScale": 1.0285714285714285,
+        "pasteLeft": 6,
+        "pasteTop": 8,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 104,
+          "centerX": 54.0,
+          "centerY": 52.0,
+          "height": 104,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 104,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10221
+    },
+    "21": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 115,
+        "centerX": 61.0,
+        "centerY": 64.0,
+        "height": 102,
+        "left": 10,
+        "longEdge": 102,
+        "rightExclusive": 112,
+        "top": 13,
+        "width": 102
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 6,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-021.png",
+      "outputSha256": "e249032b9cfcebdf23e713c98da1f31b75d286c37af9225ecae5c0427160af4a",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-021.png",
+      "sourceSha256": "e24b68ff295147da8064ffc4f972da50d179fd3d42ccb58d51495760a97da06e",
+      "transform": {
+        "isotropicScale": 1.0588235294117647,
+        "pasteLeft": 6,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 54.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9967
+    },
+    "22": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 116,
+        "centerX": 61.0,
+        "centerY": 64.0,
+        "height": 104,
+        "left": 11,
+        "longEdge": 104,
+        "rightExclusive": 111,
+        "top": 12,
+        "width": 100
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 8,
+        "longEdge": 108,
+        "rightExclusive": 112,
+        "top": 6,
+        "width": 104
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-022.png",
+      "outputSha256": "c08162516e71d1cd128e56e072d4e218ee0036a8e3c96a110ae46820133fd0bf",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-022.png",
+      "sourceSha256": "86bc7c5e21901ad0ed441b43528ed744020b07637a461fb8912a1a931db313ec",
+      "transform": {
+        "isotropicScale": 1.0384615384615385,
+        "pasteLeft": 8,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 52.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 104,
+          "top": 0,
+          "width": 104
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 104
+      },
+      "transparentPixelCount": 10109
+    },
+    "23": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 117,
+        "centerX": 66.0,
+        "centerY": 64.0,
+        "height": 106,
+        "left": 12,
+        "longEdge": 108,
+        "rightExclusive": 120,
+        "top": 11,
+        "width": 108
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 106,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-023.png",
+      "outputSha256": "31175becbbed57cd6a2eb36dd1ad756d4e892b12b61ad3ef16277520b9c0c7f2",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-023.png",
+      "sourceSha256": "9990941b07ce1d6891ba4c677b666ef0824c468e893b828ff847c2103628b0a4",
+      "transform": {
+        "isotropicScale": 1.0,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 106,
+          "centerX": 54.0,
+          "centerY": 53.0,
+          "height": 106,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 106,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10570
+    },
+    "24": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 117,
+        "centerX": 66.0,
+        "centerY": 64.0,
+        "height": 106,
+        "left": 13,
+        "longEdge": 106,
+        "rightExclusive": 119,
+        "top": 11,
+        "width": 106
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 6,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-024.png",
+      "outputSha256": "e96517438c08bc75c76ef9b3de72d01beb7dcdda944cfb708dc1f5dd1678ac30",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-024.png",
+      "sourceSha256": "8dcc59ecfd47175ad5ff04f9a034d0d5a1991ad28a8cec159741f04400945f02",
+      "transform": {
+        "isotropicScale": 1.0188679245283019,
+        "pasteLeft": 6,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 54.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9482
+    },
+    "25": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 65.5,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 12,
+        "longEdge": 107,
+        "rightExclusive": 119,
+        "top": 11,
+        "width": 107
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 6,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-025.png",
+      "outputSha256": "0c45ecf5078baf7f9ccaef92b57ee0c22d20b2aea5f47544f8aa6d1f5b0c452b",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-025.png",
+      "sourceSha256": "f7c5c049f393630c7589681bca5e84943a44df2fc666b681ace1cd9aeefcb731",
+      "transform": {
+        "isotropicScale": 1.0093457943925233,
+        "pasteLeft": 6,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 54.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9362
+    },
+    "26": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 65.0,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 11,
+        "longEdge": 108,
+        "rightExclusive": 119,
+        "top": 11,
+        "width": 108
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-026.png",
+      "outputSha256": "fb7e80188d2c04c8248e0aa38d0cab2a73a2366e2bf3e1f8715e816c25bc344a",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-026.png",
+      "sourceSha256": "f0b4aeb2309fec2048ab26229beba5907b0768f07fca0f145c87cd2cb6fdad71",
+      "transform": {
+        "isotropicScale": 1.0,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.0,
+          "centerY": 53.5,
+          "height": 107,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10144
+    },
+    "27": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 65.0,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 11,
+        "longEdge": 108,
+        "rightExclusive": 119,
+        "top": 11,
+        "width": 108
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-027.png",
+      "outputSha256": "a6df998b5c6e897cee8b6c0a145290f0c4478fd7034481bb2fd1025f4f03e935",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-027.png",
+      "sourceSha256": "6bbc9d1c4a5819467dc4259958c11ba71d7bdcf1fdf7ef86b19c4ab827ad3c8d",
+      "transform": {
+        "isotropicScale": 1.0,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.0,
+          "centerY": 53.5,
+          "height": 107,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10043
+    },
+    "28": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 64.0,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 10,
+        "longEdge": 108,
+        "rightExclusive": 118,
+        "top": 11,
+        "width": 108
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-028.png",
+      "outputSha256": "931d511a48cef62dd0b25fc48853d391a1e6e3cbad2776e7b53ae90dd737c580",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-028.png",
+      "sourceSha256": "879dd31d63d53bbe20af7d0f1902de10f380f427900e27fe0af0005f7a149bdc",
+      "transform": {
+        "isotropicScale": 1.0,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.0,
+          "centerY": 53.5,
+          "height": 107,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9980
+    },
+    "29": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 64.0,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 10,
+        "longEdge": 108,
+        "rightExclusive": 118,
+        "top": 11,
+        "width": 108
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-029.png",
+      "outputSha256": "bd19f7a1c276934e1c03c74ce69f3a86a82517eb589afc29dcdda9056440bd52",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-029.png",
+      "sourceSha256": "5cb7f79c60f98d025ccd3f1d447b4d176cf7e1fd54a680229228fdd23ca34a6f",
+      "transform": {
+        "isotropicScale": 1.0,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.0,
+          "centerY": 53.5,
+          "height": 107,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10013
+    },
+    "3": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 116,
+        "centerX": 59.5,
+        "centerY": 66.5,
+        "height": 99,
+        "left": 4,
+        "longEdge": 111,
+        "rightExclusive": 115,
+        "top": 17,
+        "width": 111
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 108,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 96,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 12,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-003.png",
+      "outputSha256": "c93f20b063331bd464863ee51aac588f84e58a069ae79f1ab44327728705e8b4",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-003.png",
+      "sourceSha256": "ad99c8c80b4c576b1346aa46d99f8c2e3c28fe2b680ada0544d2e0f49e55314c",
+      "transform": {
+        "isotropicScale": 0.972972972972973,
+        "pasteLeft": 6,
+        "pasteTop": 12,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 96,
+          "centerX": 54.0,
+          "centerY": 48.0,
+          "height": 96,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 96,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10024
+    },
+    "30": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 64.0,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 10,
+        "longEdge": 108,
+        "rightExclusive": 118,
+        "top": 11,
+        "width": 108
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-030.png",
+      "outputSha256": "15701c9c91d5a9dc050b7fc084bdda90f620e65a36aed5d20aee71a0986f7a36",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-030.png",
+      "sourceSha256": "270ba0c269c8b6ffb68f793ec08b3f0623a2bc2ed2b371c6833cc4f20924e8c1",
+      "transform": {
+        "isotropicScale": 1.0,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.0,
+          "centerY": 53.5,
+          "height": 107,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10010
+    },
+    "31": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 117,
+        "centerX": 65.5,
+        "centerY": 63.5,
+        "height": 107,
+        "left": 12,
+        "longEdge": 107,
+        "rightExclusive": 119,
+        "top": 10,
+        "width": 107
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 6,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-031.png",
+      "outputSha256": "bfcc7d018ab9673a3600dc336814ae5c044ad72985b060efaf59b05aedb6bdc5",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-031.png",
+      "sourceSha256": "b0e104609c94f2ea0d0cf74f27fa33414671bfa08303f635717c09745d8a81a6",
+      "transform": {
+        "isotropicScale": 1.0093457943925233,
+        "pasteLeft": 6,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 54.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 8785
+    },
+    "32": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 64.0,
+        "centerY": 62.5,
+        "height": 103,
+        "left": 8,
+        "longEdge": 112,
+        "rightExclusive": 120,
+        "top": 11,
+        "width": 112
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 110,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 99,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 11,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-032.png",
+      "outputSha256": "8de56b63278dd2479e00ba486aec1c15dbdd486f38012f2dead4d12a1453e588",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-032.png",
+      "sourceSha256": "015fc7accb4b9204d647730304af489adb9bb1901390471f49e2800b8294779f",
+      "transform": {
+        "isotropicScale": 0.9642857142857143,
+        "pasteLeft": 6,
+        "pasteTop": 11,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 99,
+          "centerX": 54.0,
+          "centerY": 49.5,
+          "height": 99,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 99,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9130
+    },
+    "33": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 108,
+        "centerX": 60.5,
+        "centerY": 60.5,
+        "height": 95,
+        "left": 3,
+        "longEdge": 115,
+        "rightExclusive": 118,
+        "top": 13,
+        "width": 115
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 105,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 89,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 16,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-033.png",
+      "outputSha256": "c291225b42e50147b161cb6ee93af5549e239908c0f1976234e270f8862cbe07",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-033.png",
+      "sourceSha256": "40e15617b31afcbbadcb3af8efc1169dfaa1303d62cbc23ad8b4e95f32b3137f",
+      "transform": {
+        "isotropicScale": 0.9391304347826087,
+        "pasteLeft": 6,
+        "pasteTop": 16,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 89,
+          "centerX": 54.0,
+          "centerY": 44.5,
+          "height": 89,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 89,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9533
+    },
+    "34": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 116,
+        "centerX": 58.5,
+        "centerY": 64.5,
+        "height": 103,
+        "left": 3,
+        "longEdge": 111,
+        "rightExclusive": 114,
+        "top": 13,
+        "width": 111
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 110,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 100,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 10,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-034.png",
+      "outputSha256": "d16bde66e356096159b64a9e03c7e7e24b54818a20729049f5beab2b6cf00f36",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-034.png",
+      "sourceSha256": "3edc83c6089efed09b6d8efc870d884be192cd1fb1e8e5f6b6ec515355e2f551",
+      "transform": {
+        "isotropicScale": 0.972972972972973,
+        "pasteLeft": 6,
+        "pasteTop": 10,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 100,
+          "centerX": 54.0,
+          "centerY": 50.0,
+          "height": 100,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 100,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10482
+    },
+    "35": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 55.5,
+        "centerY": 61.5,
+        "height": 113,
+        "left": 6,
+        "longEdge": 113,
+        "rightExclusive": 105,
+        "top": 5,
+        "width": 99
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.5,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 13,
+        "longEdge": 108,
+        "rightExclusive": 108,
+        "top": 6,
+        "width": 95
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-035.png",
+      "outputSha256": "41bbb879d3e0a558cd0a4f19836360951cb4814bfde3c401adf043373771c6d7",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-035.png",
+      "sourceSha256": "060f4317f491d90db5532e34594fdbb25c5c9b4b384ae514e51227aae7e07c53",
+      "transform": {
+        "isotropicScale": 0.9557522123893806,
+        "pasteLeft": 13,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 47.5,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 95,
+          "top": 0,
+          "width": 95
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 95
+      },
+      "transparentPixelCount": 10191
+    },
+    "36": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 61.5,
+        "centerY": 57.5,
+        "height": 113,
+        "left": 8,
+        "longEdge": 113,
+        "rightExclusive": 115,
+        "top": 1,
+        "width": 107
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 9,
+        "longEdge": 108,
+        "rightExclusive": 111,
+        "top": 6,
+        "width": 102
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-036.png",
+      "outputSha256": "20242d50a429979dc3ccf652e355489d491445f843caf5cd9d5b11994b90b9f0",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-036.png",
+      "sourceSha256": "f7285760bd0a8c64e91d418ec8ddd3e755bb338641a206fca2088d1edc511646",
+      "transform": {
+        "isotropicScale": 0.9557522123893806,
+        "pasteLeft": 9,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 51.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 102,
+          "top": 0,
+          "width": 102
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 102
+      },
+      "transparentPixelCount": 9213
+    },
+    "37": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 61.0,
+        "centerY": 58.0,
+        "height": 110,
+        "left": 2,
+        "longEdge": 118,
+        "rightExclusive": 120,
+        "top": 3,
+        "width": 118
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 111,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 101,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 10,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-037.png",
+      "outputSha256": "b80468f9bb393fe1f24f9809c11af6568f3bccb20e92d6d3ca4081fd743f590d",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-037.png",
+      "sourceSha256": "8f7a8c13d106f61bb9f79894c0e7a77755df4a0d85ea3807d50b0ece4f682dd9",
+      "transform": {
+        "isotropicScale": 0.9152542372881356,
+        "pasteLeft": 6,
+        "pasteTop": 10,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 101,
+          "centerX": 54.0,
+          "centerY": 50.5,
+          "height": 101,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 101,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10136
+    },
+    "38": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 61.5,
+        "centerY": 59.5,
+        "height": 117,
+        "left": 6,
+        "longEdge": 117,
+        "rightExclusive": 117,
+        "top": 1,
+        "width": 111
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 9,
+        "longEdge": 108,
+        "rightExclusive": 111,
+        "top": 6,
+        "width": 102
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-038.png",
+      "outputSha256": "ea846b834d880fd1053760d0be10b05aecf5089407e2e5727779817cb99c5008",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-038.png",
+      "sourceSha256": "dc8057b6ec73bd78606614dce57fe48e9bbe0434983192d20811cf6c2fca8baa",
+      "transform": {
+        "isotropicScale": 0.9230769230769231,
+        "pasteLeft": 9,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 51.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 102,
+          "top": 0,
+          "width": 102
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 102
+      },
+      "transparentPixelCount": 11050
+    },
+    "39": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 117,
+        "centerX": 61.0,
+        "centerY": 59.0,
+        "height": 116,
+        "left": 12,
+        "longEdge": 116,
+        "rightExclusive": 110,
+        "top": 1,
+        "width": 98
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.5,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 15,
+        "longEdge": 108,
+        "rightExclusive": 106,
+        "top": 6,
+        "width": 91
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-039.png",
+      "outputSha256": "076bf170856eb221cca3dc9df1720a6c464e6b16dfbfebe20faede0855fea85f",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-039.png",
+      "sourceSha256": "6a251a18096cd61ef0daa3f0894866007d849438fd45e8e6633b63a2e64f2b61",
+      "transform": {
+        "isotropicScale": 0.9310344827586207,
+        "pasteLeft": 15,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 45.5,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 91,
+          "top": 0,
+          "width": 91
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 91
+      },
+      "transparentPixelCount": 9669
+    },
+    "4": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 61.5,
+        "centerY": 70.0,
+        "height": 88,
+        "left": 13,
+        "longEdge": 97,
+        "rightExclusive": 110,
+        "top": 26,
+        "width": 97
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 109,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 98,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 11,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-004.png",
+      "outputSha256": "01347e37ae8cb0fc1afe1b1863e6503176a852a8cd0c429d115bf0f4037aa1b1",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-004.png",
+      "sourceSha256": "a5fc78fcb900c97a6e735fce958a60c77f54b1f30d0aa2d8b6dabff6fa454baf",
+      "transform": {
+        "isotropicScale": 1.1134020618556701,
+        "pasteLeft": 6,
+        "pasteTop": 11,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 98,
+          "centerX": 54.0,
+          "centerY": 49.0,
+          "height": 98,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 98,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10954
+    },
+    "40": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 110,
+        "centerX": 59.5,
+        "centerY": 58.5,
+        "height": 103,
+        "left": 5,
+        "longEdge": 109,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 109
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 111,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 102,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 9,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-040.png",
+      "outputSha256": "ec37658f1638edee3cec3ec36d97bf427c4c22a6d03cf99f57b884671b97936d",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-040.png",
+      "sourceSha256": "7d20689c038328df022eaa1994e4b4e0dacd9e56b6a8f82ec6ec014d787116f2",
+      "transform": {
+        "isotropicScale": 0.9908256880733946,
+        "pasteLeft": 6,
+        "pasteTop": 9,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 102,
+          "centerX": 54.0,
+          "centerY": 51.0,
+          "height": 102,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 102,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 8857
+    },
+    "41": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 58.0,
+        "centerY": 64.5,
+        "height": 99,
+        "left": 2,
+        "longEdge": 112,
+        "rightExclusive": 114,
+        "top": 15,
+        "width": 112
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 108,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 95,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 13,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-041.png",
+      "outputSha256": "3fa411bb80cbe9336274b47852447b4907d10e7e621395f9fdcaa9cb8147d68b",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-041.png",
+      "sourceSha256": "30313458211096852ebc174a5ebef2522964740a953f66ca08c5441aef625651",
+      "transform": {
+        "isotropicScale": 0.9642857142857143,
+        "pasteLeft": 6,
+        "pasteTop": 13,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 95,
+          "centerX": 54.0,
+          "centerY": 47.5,
+          "height": 95,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 95,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9931
+    },
+    "42": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 116,
+        "centerX": 56.0,
+        "centerY": 62.5,
+        "height": 107,
+        "left": 5,
+        "longEdge": 107,
+        "rightExclusive": 107,
+        "top": 9,
+        "width": 102
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.5,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 9,
+        "longEdge": 108,
+        "rightExclusive": 112,
+        "top": 6,
+        "width": 103
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-042.png",
+      "outputSha256": "e112e2a482cbb5047dabe6264feb7b9a8a260feb19869a4fa716724cb393964b",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-042.png",
+      "sourceSha256": "a21e6597cd215d453ed45395631f9f1bec0d38c6cb634f847862101e0d8944b3",
+      "transform": {
+        "isotropicScale": 1.0093457943925233,
+        "pasteLeft": 9,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 51.5,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 103,
+          "top": 0,
+          "width": 103
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 103
+      },
+      "transparentPixelCount": 10383
+    },
+    "43": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 119,
+        "centerX": 56.0,
+        "centerY": 61.5,
+        "height": 115,
+        "left": 6,
+        "longEdge": 115,
+        "rightExclusive": 106,
+        "top": 4,
+        "width": 100
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 13,
+        "longEdge": 108,
+        "rightExclusive": 107,
+        "top": 6,
+        "width": 94
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-043.png",
+      "outputSha256": "68168b88cbadd571b840d7cd557660cbc80e890283204f34d428cc2f34a96c11",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-043.png",
+      "sourceSha256": "152892791e9e38f16234d35486834eabee5759b1d60ca00244013c08e08520ea",
+      "transform": {
+        "isotropicScale": 0.9391304347826087,
+        "pasteLeft": 13,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 47.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 94,
+          "top": 0,
+          "width": 94
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 94
+      },
+      "transparentPixelCount": 10132
+    },
+    "44": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 117,
+        "centerX": 62.0,
+        "centerY": 59.5,
+        "height": 115,
+        "left": 12,
+        "longEdge": 115,
+        "rightExclusive": 112,
+        "top": 2,
+        "width": 100
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 13,
+        "longEdge": 108,
+        "rightExclusive": 107,
+        "top": 6,
+        "width": 94
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-044.png",
+      "outputSha256": "e706a8ba96e38974ecef175507812e1dbface159bc6e7a55165bcc843a9fab24",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-044.png",
+      "sourceSha256": "31782a0162cd4e93d9994f1ac0fd2d86912d66c7cc3ab6daebc6df16e12f31cb",
+      "transform": {
+        "isotropicScale": 0.9391304347826087,
+        "pasteLeft": 13,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 47.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 94,
+          "top": 0,
+          "width": 94
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 94
+      },
+      "transparentPixelCount": 9456
+    },
+    "45": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 61.5,
+        "centerY": 57.5,
+        "height": 113,
+        "left": 7,
+        "longEdge": 113,
+        "rightExclusive": 116,
+        "top": 1,
+        "width": 109
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 8,
+        "longEdge": 108,
+        "rightExclusive": 112,
+        "top": 6,
+        "width": 104
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-045.png",
+      "outputSha256": "99152a268b0fdb0a9931512144e4bf3463c7952c66039cceb3f1a6685d5c17a7",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-045.png",
+      "sourceSha256": "9173751682e674bc15ec3f66bd10e2ffff86b177ceac19c499aeeea680a059f3",
+      "transform": {
+        "isotropicScale": 0.9557522123893806,
+        "pasteLeft": 8,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 52.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 104,
+          "top": 0,
+          "width": 104
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 104
+      },
+      "transparentPixelCount": 9123
+    },
+    "46": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 109,
+        "centerX": 61.0,
+        "centerY": 55.0,
+        "height": 108,
+        "left": 4,
+        "longEdge": 114,
+        "rightExclusive": 118,
+        "top": 1,
+        "width": 114
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 111,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 102,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 9,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-046.png",
+      "outputSha256": "66fc9c1e5db65a0ef6bebff7871f7c8197328260f2ff7e7b1b853af2397ed794",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-046.png",
+      "sourceSha256": "7cb8385cd955e0251767d619e374107c4c19c41fc875f1373b9dd883dc83530e",
+      "transform": {
+        "isotropicScale": 0.9473684210526315,
+        "pasteLeft": 6,
+        "pasteTop": 9,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 102,
+          "centerX": 54.0,
+          "centerY": 51.0,
+          "height": 102,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 102,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9316
+    },
+    "47": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 111,
+        "centerX": 61.0,
+        "centerY": 56.5,
+        "height": 109,
+        "left": 2,
+        "longEdge": 118,
+        "rightExclusive": 120,
+        "top": 2,
+        "width": 118
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 110,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 100,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 10,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-047.png",
+      "outputSha256": "4cabc3626eb7f67e58f5a9b230d68f9769ecc116bea7c6b18ebced9bd74f89eb",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-047.png",
+      "sourceSha256": "3dd2ccc865dcb59f879dc68cfa6f64d4a9717d0faac77d9e88178ddc8bdb5740",
+      "transform": {
+        "isotropicScale": 0.9152542372881356,
+        "pasteLeft": 6,
+        "pasteTop": 10,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 100,
+          "centerX": 54.0,
+          "centerY": 50.0,
+          "height": 100,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 100,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9881
+    },
+    "48": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 115,
+        "centerX": 61.0,
+        "centerY": 60.0,
+        "height": 110,
+        "left": 2,
+        "longEdge": 118,
+        "rightExclusive": 120,
+        "top": 5,
+        "width": 118
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 111,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 101,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 10,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-048.png",
+      "outputSha256": "494f8c8b273967bc1eeaf7ee2372402eba3194d839ea8e8ad2b9915dad372e69",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-048.png",
+      "sourceSha256": "42453862a423c18e73493c63b5cf95ebd555d8fed3ff45a8648372abc88b6231",
+      "transform": {
+        "isotropicScale": 0.9152542372881356,
+        "pasteLeft": 6,
+        "pasteTop": 10,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 101,
+          "centerX": 54.0,
+          "centerY": 50.5,
+          "height": 101,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 101,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10368
+    },
+    "49": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 61.0,
+        "centerY": 60.0,
+        "height": 106,
+        "left": 3,
+        "longEdge": 116,
+        "rightExclusive": 119,
+        "top": 7,
+        "width": 116
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 110,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 99,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 11,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-049.png",
+      "outputSha256": "ea04dd67f1b2475f2f52955235d8519ff03fbda5405aa902318c5ee207c403f7",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-049.png",
+      "sourceSha256": "24450a68a6abd6957ac7a5399e31026b907a954ad89f446858d09ab8678dc9c7",
+      "transform": {
+        "isotropicScale": 0.9310344827586207,
+        "pasteLeft": 6,
+        "pasteTop": 11,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 99,
+          "centerX": 54.0,
+          "centerY": 49.5,
+          "height": 99,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 99,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10907
+    },
+    "5": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 105,
+        "centerX": 58.5,
+        "centerY": 55.5,
+        "height": 99,
+        "left": 8,
+        "longEdge": 101,
+        "rightExclusive": 109,
+        "top": 6,
+        "width": 101
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 106,
+        "left": 7,
+        "longEdge": 106,
+        "rightExclusive": 113,
+        "top": 7,
+        "width": 106
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-005.png",
+      "outputSha256": "ec1a5ef4c017bbd210154ac8e520ce4a5226a5e8241567ab606f4c08edcff6df",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-005.png",
+      "sourceSha256": "f84be70a52e8f6845f3729fcd99b0afdc31cf4a8f075aef41d70e03843022c7e",
+      "transform": {
+        "isotropicScale": 1.0693069306930694,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 106,
+          "centerX": 54.0,
+          "centerY": 53.0,
+          "height": 106,
+          "left": 1,
+          "longEdge": 106,
+          "rightExclusive": 107,
+          "top": 0,
+          "width": 106
+        },
+        "targetRasterHeight": 106,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10820
+    },
+    "50": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 116,
+        "centerX": 61.5,
+        "centerY": 62.5,
+        "height": 107,
+        "left": 4,
+        "longEdge": 115,
+        "rightExclusive": 119,
+        "top": 9,
+        "width": 115
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 110,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 100,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 10,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-050.png",
+      "outputSha256": "2cb19d8004c0bc49c80a8535d5f4239723f17273355499c684b5f61ea3760e83",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-050.png",
+      "sourceSha256": "297ead6038264e1c35393131cbc756e7209fbd79786b28969f8dc91b915dbf92",
+      "transform": {
+        "isotropicScale": 0.9391304347826087,
+        "pasteLeft": 6,
+        "pasteTop": 10,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 100,
+          "centerX": 54.0,
+          "centerY": 50.0,
+          "height": 100,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 100,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10882
+    },
+    "51": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 117,
+        "centerX": 62.0,
+        "centerY": 64.5,
+        "height": 105,
+        "left": 6,
+        "longEdge": 112,
+        "rightExclusive": 118,
+        "top": 12,
+        "width": 112
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 111,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 101,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 10,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-051.png",
+      "outputSha256": "17021e53d753c609ccd39f2e66aa362b418c5f014a2a1bdbb67b2d97b697112c",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-051.png",
+      "sourceSha256": "6c6e6f7811cf214e3b55d49c05cb830b0d3471829ba4a4491c34afe2dd196c7a",
+      "transform": {
+        "isotropicScale": 0.9642857142857143,
+        "pasteLeft": 6,
+        "pasteTop": 10,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 101,
+          "centerX": 54.0,
+          "centerY": 50.5,
+          "height": 101,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 101,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10729
+    },
+    "52": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 62.5,
+        "centerY": 65.0,
+        "height": 106,
+        "left": 8,
+        "longEdge": 109,
+        "rightExclusive": 117,
+        "top": 12,
+        "width": 109
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 105,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 8,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-052.png",
+      "outputSha256": "f930fdb3e0ff3acd509645e087bdb08d8f2d0d746627080cd1733fb5f438dc5a",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-052.png",
+      "sourceSha256": "be25b8eae47dcf5a9c4dfea66e254f309443bf99d32e7c29659ec4bdc34e1803",
+      "transform": {
+        "isotropicScale": 0.9908256880733946,
+        "pasteLeft": 6,
+        "pasteTop": 8,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 105,
+          "centerX": 54.0,
+          "centerY": 52.5,
+          "height": 105,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 105,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10481
+    },
+    "53": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 60.5,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 5,
+        "longEdge": 111,
+        "rightExclusive": 116,
+        "top": 11,
+        "width": 111
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 112,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 104,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 8,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-053.png",
+      "outputSha256": "9620d47e3321cc20033d5926daee78bc9ed9c9e2ef08a0ed883ef32dae81718b",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-053.png",
+      "sourceSha256": "8880814ed13b1b3af9461ffa4c7956efe4fe67baf5ac6c1ad98e7cf1397e6dfb",
+      "transform": {
+        "isotropicScale": 0.972972972972973,
+        "pasteLeft": 6,
+        "pasteTop": 8,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 104,
+          "centerX": 54.0,
+          "centerY": 52.0,
+          "height": 104,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 104,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10150
+    },
+    "54": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 61.5,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 111,
+        "rightExclusive": 117,
+        "top": 11,
+        "width": 111
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 112,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 104,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 8,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-054.png",
+      "outputSha256": "b6af0d71c50aab174ab3e0e42de44affb9d5c82b643bf27be9263a06c03fa148",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-054.png",
+      "sourceSha256": "7dcaef51d4a89010cb8fc24aab12b6d89ab5420387d0b536700e00947838c457",
+      "transform": {
+        "isotropicScale": 0.972972972972973,
+        "pasteLeft": 6,
+        "pasteTop": 8,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 104,
+          "centerX": 54.0,
+          "centerY": 52.0,
+          "height": 104,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 104,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9962
+    },
+    "55": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 62.0,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 7,
+        "longEdge": 110,
+        "rightExclusive": 117,
+        "top": 11,
+        "width": 110
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 105,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 8,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-055.png",
+      "outputSha256": "66970635bd2f254ce1529be227bd36a923afd5b713b88293b760ab4652700a46",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-055.png",
+      "sourceSha256": "29c10e371e993ac747e31a0fbd6a4000b93c0af0d1d9d8c32ca9b75048d61e4a",
+      "transform": {
+        "isotropicScale": 0.9818181818181818,
+        "pasteLeft": 6,
+        "pasteTop": 8,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 105,
+          "centerX": 54.0,
+          "centerY": 52.5,
+          "height": 105,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 105,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9698
+    },
+    "56": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 63.0,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 8,
+        "longEdge": 110,
+        "rightExclusive": 118,
+        "top": 11,
+        "width": 110
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 105,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 8,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-056.png",
+      "outputSha256": "1f6312aaa3050dfae1c85a834460dc3909c213c75a0e7483afe82bb4053ba8e8",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-056.png",
+      "sourceSha256": "ee2b879bd9e7a4f12d41951621956f6b2cdd70742b0bf4a52ddbca7365f4adda",
+      "transform": {
+        "isotropicScale": 0.9818181818181818,
+        "pasteLeft": 6,
+        "pasteTop": 8,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 105,
+          "centerX": 54.0,
+          "centerY": 52.5,
+          "height": 105,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 105,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9561
+    },
+    "57": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 63.5,
+        "centerY": 64.0,
+        "height": 108,
+        "left": 9,
+        "longEdge": 109,
+        "rightExclusive": 118,
+        "top": 10,
+        "width": 109
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-057.png",
+      "outputSha256": "c5cf0bd5a8553d83dc5ed82f4c7008107e0ca2a58d19264c962ac2982487c601",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-057.png",
+      "sourceSha256": "8ff0208f296a5c1df6755fdb15eae7b450235622132b4a3c63b7c15aeb96d7c0",
+      "transform": {
+        "isotropicScale": 0.9908256880733946,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.0,
+          "centerY": 53.5,
+          "height": 107,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9367
+    },
+    "58": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 63.5,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 9,
+        "longEdge": 109,
+        "rightExclusive": 118,
+        "top": 11,
+        "width": 109
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 106,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-058.png",
+      "outputSha256": "0a825f4694fec79cb8418864a73f24c5696e83f5a344939c9e07e5d332fa232f",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-058.png",
+      "sourceSha256": "1a77e7998aabff57e3dbf9a1c6754eb9181492b82e98d6aa21b9dfa56f09044d",
+      "transform": {
+        "isotropicScale": 0.9908256880733946,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 106,
+          "centerX": 54.0,
+          "centerY": 53.0,
+          "height": 106,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 106,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9306
+    },
+    "59": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 64.0,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 10,
+        "longEdge": 108,
+        "rightExclusive": 118,
+        "top": 11,
+        "width": 108
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-059.png",
+      "outputSha256": "a5c9d2796cf4adc787478835d1cd99f45b147879325c53bd09265129b18f7e6f",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-059.png",
+      "sourceSha256": "ee45fb838704a3742f8c7238ad3e19b5229cfa8e46878b6ca33013d5ecbb9dff",
+      "transform": {
+        "isotropicScale": 1.0,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.0,
+          "centerY": 53.5,
+          "height": 107,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10010
+    },
+    "6": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 116,
+        "centerX": 60.5,
+        "centerY": 59.0,
+        "height": 114,
+        "left": 5,
+        "longEdge": 114,
+        "rightExclusive": 116,
+        "top": 2,
+        "width": 111
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.5,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 8,
+        "longEdge": 108,
+        "rightExclusive": 113,
+        "top": 6,
+        "width": 105
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-006.png",
+      "outputSha256": "c803764ab0a6b5f2ceff0badaa29ee48197bfa70b622e74e6cfab7d157837f33",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-006.png",
+      "sourceSha256": "aa93075c5e35f8f63e2ba474e9059bc1d0192ac138a4a14991947f1a4cefacd9",
+      "transform": {
+        "isotropicScale": 0.9473684210526315,
+        "pasteLeft": 8,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 52.5,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 105,
+          "top": 0,
+          "width": 105
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 105
+      },
+      "transparentPixelCount": 9873
+    },
+    "60": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 64.0,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 10,
+        "longEdge": 108,
+        "rightExclusive": 118,
+        "top": 11,
+        "width": 108
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-060.png",
+      "outputSha256": "15701c9c91d5a9dc050b7fc084bdda90f620e65a36aed5d20aee71a0986f7a36",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-060.png",
+      "sourceSha256": "270ba0c269c8b6ffb68f793ec08b3f0623a2bc2ed2b371c6833cc4f20924e8c1",
+      "transform": {
+        "isotropicScale": 1.0,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.0,
+          "centerY": 53.5,
+          "height": 107,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10010
+    },
+    "61": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 117,
+        "centerX": 66.0,
+        "centerY": 64.0,
+        "height": 106,
+        "left": 13,
+        "longEdge": 106,
+        "rightExclusive": 119,
+        "top": 11,
+        "width": 106
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 6,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-061.png",
+      "outputSha256": "98d0af5c34bd3b251f46bd085df836816dfe51ce5c525b4342699343c153ddb8",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-061.png",
+      "sourceSha256": "26c12635706b3a764f2a337bed5c95fd861232c2f52db166e45b614c6e923360",
+      "transform": {
+        "isotropicScale": 1.0188679245283019,
+        "pasteLeft": 6,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 54.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9382
+    },
+    "62": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 116,
+        "centerX": 61.0,
+        "centerY": 64.0,
+        "height": 104,
+        "left": 11,
+        "longEdge": 104,
+        "rightExclusive": 111,
+        "top": 12,
+        "width": 100
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 8,
+        "longEdge": 108,
+        "rightExclusive": 112,
+        "top": 6,
+        "width": 104
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-062.png",
+      "outputSha256": "20d28552100f127b857081eae8c2945954bd79a1848745a2857d28d36dc5c7dc",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-062.png",
+      "sourceSha256": "85aac4475eb502c720b6fec771718b9efb2819c1d1fa25e4a3f31f11ecae311e",
+      "transform": {
+        "isotropicScale": 1.0384615384615385,
+        "pasteLeft": 8,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 52.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 104,
+          "top": 0,
+          "width": 104
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 104
+      },
+      "transparentPixelCount": 10118
+    },
+    "63": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 120,
+        "centerX": 58.5,
+        "centerY": 66.5,
+        "height": 107,
+        "left": 1,
+        "longEdge": 115,
+        "rightExclusive": 116,
+        "top": 13,
+        "width": 115
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 110,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 100,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 10,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-063.png",
+      "outputSha256": "ac5f7d64e72f6f85cc383a3401b99b100e235b7ef758a486450cec7ab2df31cb",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-063.png",
+      "sourceSha256": "f0ed3e758a88c0d0dcb63b1c126a11df1e056be6dac42013c01eccd026a6dd6b",
+      "transform": {
+        "isotropicScale": 0.9391304347826087,
+        "pasteLeft": 6,
+        "pasteTop": 10,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 100,
+          "centerX": 54.0,
+          "centerY": 50.0,
+          "height": 100,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 100,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10569
+    },
+    "64": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 59.5,
+        "centerY": 63.5,
+        "height": 109,
+        "left": 1,
+        "longEdge": 117,
+        "rightExclusive": 118,
+        "top": 9,
+        "width": 117
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 111,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 101,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 10,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-064.png",
+      "outputSha256": "1c0c14dcc8c3d41ab00ec83412ad3269d7cb37df09cc6ad3939bdb290a4ebac4",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-064.png",
+      "sourceSha256": "e1c468de5875ff6157e123fdfda8fc31f1d81f62664324b6ffe83cf6c8895d89",
+      "transform": {
+        "isotropicScale": 0.9230769230769231,
+        "pasteLeft": 6,
+        "pasteTop": 10,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 101,
+          "centerX": 54.0,
+          "centerY": 50.5,
+          "height": 101,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 101,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9742
+    },
+    "65": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 116,
+        "centerX": 60.5,
+        "centerY": 60.0,
+        "height": 112,
+        "left": 4,
+        "longEdge": 113,
+        "rightExclusive": 117,
+        "top": 4,
+        "width": 113
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.5,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 7,
+        "longEdge": 107,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 107
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-065.png",
+      "outputSha256": "885d6ac68e76c9f61b0b8daeb9626381e61e0d4fac4d3d98e464f246bc8dc8c9",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-065.png",
+      "sourceSha256": "5b46149328c25e6d0d145505bb1f313f6607d8d0eae98c8430b6a415aa4ccc50",
+      "transform": {
+        "isotropicScale": 0.9557522123893806,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.5,
+          "centerY": 53.5,
+          "height": 107,
+          "left": 1,
+          "longEdge": 107,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 107
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9920
+    },
+    "66": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 110,
+        "centerX": 55.0,
+        "centerY": 73.0,
+        "height": 74,
+        "left": 19,
+        "longEdge": 74,
+        "rightExclusive": 91,
+        "top": 36,
+        "width": 72
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.5,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 8,
+        "longEdge": 108,
+        "rightExclusive": 113,
+        "top": 6,
+        "width": 105
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-066.png",
+      "outputSha256": "b4661f847b5e019d21ae4988dfaad3f60087e34dc83955b718da4fd0c6ae7efb",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-066.png",
+      "sourceSha256": "3458c440cfdc20dddccf4910b463dc2f0bad4fb7017df9314056f2d1dd7cc3cd",
+      "transform": {
+        "isotropicScale": 1.4594594594594594,
+        "pasteLeft": 8,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 52.5,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 105,
+          "top": 0,
+          "width": 105
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 105
+      },
+      "transparentPixelCount": 9130
+    },
+    "67": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 107,
+        "centerX": 56.0,
+        "centerY": 64.0,
+        "height": 86,
+        "left": 6,
+        "longEdge": 100,
+        "rightExclusive": 106,
+        "top": 21,
+        "width": 100
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 106,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 92,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 14,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-067.png",
+      "outputSha256": "57856bb572968fb7811443ce73637ca11f7365918f9d56eace75a2720a798972",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-067.png",
+      "sourceSha256": "a0fe29685aa4ea1270d94c33f7cc30f27030704808862b02ec2d257307d833fc",
+      "transform": {
+        "isotropicScale": 1.08,
+        "pasteLeft": 6,
+        "pasteTop": 14,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 92,
+          "centerX": 54.0,
+          "centerY": 46.0,
+          "height": 92,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 93,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10411
+    },
+    "68": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 116,
+        "centerX": 59.0,
+        "centerY": 62.0,
+        "height": 108,
+        "left": 2,
+        "longEdge": 114,
+        "rightExclusive": 116,
+        "top": 8,
+        "width": 114
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 111,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 102,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 9,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-068.png",
+      "outputSha256": "8e88cc49cd05d7577407a3b8e09a723fa61d5437cc7dac21629faf4c54590b96",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-068.png",
+      "sourceSha256": "01e742662abccb9ca2fae924a9bb71e666bb8a338a756bcf6d985022f47f76db",
+      "transform": {
+        "isotropicScale": 0.9473684210526315,
+        "pasteLeft": 6,
+        "pasteTop": 9,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 102,
+          "centerX": 54.0,
+          "centerY": 51.0,
+          "height": 102,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 102,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9710
+    },
+    "69": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 109,
+        "centerX": 61.5,
+        "centerY": 55.5,
+        "height": 107,
+        "left": 3,
+        "longEdge": 117,
+        "rightExclusive": 120,
+        "top": 2,
+        "width": 117
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 110,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 99,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 11,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-069.png",
+      "outputSha256": "eafa7479a914f10f0e0c25269b06b03c2660de0492bc3a1dd12cc6e8ea2f9577",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-069.png",
+      "sourceSha256": "64c6ca78fbc42d4a94c27dad175cf4f6a3ee7065ae7727d650414e635a21a1b4",
+      "transform": {
+        "isotropicScale": 0.9230769230769231,
+        "pasteLeft": 6,
+        "pasteTop": 11,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 99,
+          "centerX": 54.0,
+          "centerY": 49.5,
+          "height": 99,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 99,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10008
+    },
+    "7": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 120,
+        "centerX": 59.0,
+        "centerY": 61.5,
+        "height": 117,
+        "left": 9,
+        "longEdge": 117,
+        "rightExclusive": 109,
+        "top": 3,
+        "width": 100
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 14,
+        "longEdge": 108,
+        "rightExclusive": 106,
+        "top": 6,
+        "width": 92
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-007.png",
+      "outputSha256": "5f6a7ee09339f4cd3c5e29e302ab014f73277e69d7f6d49c5011500e76f92521",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-007.png",
+      "sourceSha256": "8bc1f885561b91ee3c4f4d2277123493310bed1517bc3153bb83b705c091246d",
+      "transform": {
+        "isotropicScale": 0.9230769230769231,
+        "pasteLeft": 14,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 46.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 92,
+          "top": 0,
+          "width": 92
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 92
+      },
+      "transparentPixelCount": 10139
+    },
+    "70": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 107,
+        "centerX": 58.5,
+        "centerY": 57.0,
+        "height": 100,
+        "left": 7,
+        "longEdge": 103,
+        "rightExclusive": 110,
+        "top": 7,
+        "width": 103
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 105,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 8,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-070.png",
+      "outputSha256": "699857996ba036e85d7cb3f8fae96bad1d91cbdc9c71e37d10a4cb4685d87c60",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-070.png",
+      "sourceSha256": "d7fc391fa285430123e05d09ffc20d517ae138bde29b38ece4ab6d435c5f2d4d",
+      "transform": {
+        "isotropicScale": 1.0485436893203883,
+        "pasteLeft": 6,
+        "pasteTop": 8,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 105,
+          "centerX": 54.0,
+          "centerY": 52.5,
+          "height": 105,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 105,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10140
+    },
+    "71": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 120,
+        "centerX": 59.0,
+        "centerY": 61.5,
+        "height": 117,
+        "left": 9,
+        "longEdge": 117,
+        "rightExclusive": 109,
+        "top": 3,
+        "width": 100
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 14,
+        "longEdge": 108,
+        "rightExclusive": 106,
+        "top": 6,
+        "width": 92
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-071.png",
+      "outputSha256": "990427333abffbef9cc1043896e8d21eec04fb789f715555f534d05077a557d6",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-071.png",
+      "sourceSha256": "831b9051dfbff42e26b15f796dd37ef6b0903ab11ea9dcedf12ef6939098d535",
+      "transform": {
+        "isotropicScale": 0.9230769230769231,
+        "pasteLeft": 14,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 46.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 92,
+          "top": 0,
+          "width": 92
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 92
+      },
+      "transparentPixelCount": 10086
+    },
+    "72": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 116,
+        "left": 5,
+        "longEdge": 116,
+        "rightExclusive": 115,
+        "top": 2,
+        "width": 110
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 9,
+        "longEdge": 108,
+        "rightExclusive": 111,
+        "top": 6,
+        "width": 102
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-072.png",
+      "outputSha256": "23123cdd08dbcd4e70070e6aec2feffaf79d8dc753d75803e0380217cb1124a7",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-072.png",
+      "sourceSha256": "a3c48ce69294a549da4cccaf7f24e986bcedbfcaa910c8a132899a1db01d30df",
+      "transform": {
+        "isotropicScale": 0.9310344827586207,
+        "pasteLeft": 9,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 51.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 102,
+          "top": 0,
+          "width": 102
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 102
+      },
+      "transparentPixelCount": 9908
+    },
+    "73": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.5,
+        "centerY": 58.0,
+        "height": 110,
+        "left": 5,
+        "longEdge": 111,
+        "rightExclusive": 116,
+        "top": 3,
+        "width": 111
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-073.png",
+      "outputSha256": "99fcf84b19bf023f8ea57aaf11267c0f2be428b4f1b58e950e9647aab8efa013",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-073.png",
+      "sourceSha256": "c243547dcd1fcfdb3149653b815ec3b581675d4eda33fe55195d53a31cd32371",
+      "transform": {
+        "isotropicScale": 0.972972972972973,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.0,
+          "centerY": 53.5,
+          "height": 107,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9952
+    },
+    "74": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 107,
+        "centerX": 58.5,
+        "centerY": 56.5,
+        "height": 101,
+        "left": 7,
+        "longEdge": 103,
+        "rightExclusive": 110,
+        "top": 6,
+        "width": 103
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 106,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-074.png",
+      "outputSha256": "fcfdac3c6ed50a76fb7a3ce11f6eb8f47ed7d591a3e6000dff1a4fc3a43b1146",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-074.png",
+      "sourceSha256": "b9fff69e49bf1076ef6b1cf495a70925855cf6d34fe24f98f68e1810c565285b",
+      "transform": {
+        "isotropicScale": 1.0485436893203883,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 106,
+          "centerX": 54.0,
+          "centerY": 53.0,
+          "height": 106,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 106,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10625
+    },
+    "75": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 101,
+        "centerX": 57.0,
+        "centerY": 68.0,
+        "height": 66,
+        "left": 12,
+        "longEdge": 90,
+        "rightExclusive": 102,
+        "top": 35,
+        "width": 90
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 100,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 79,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 21,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-075.png",
+      "outputSha256": "c735452dc2f0ec804170ca3dff62a40ff5f720e15a9aa7f9a79cb9f48080c29b",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-075.png",
+      "sourceSha256": "06db3d8375fb495993f73af8c8a83a6aa49d7f0fe6b11a953c3535d850527e13",
+      "transform": {
+        "isotropicScale": 1.2,
+        "pasteLeft": 6,
+        "pasteTop": 21,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 79,
+          "centerX": 54.0,
+          "centerY": 39.5,
+          "height": 79,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 79,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10795
+    },
+    "76": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 94,
+        "centerX": 62.5,
+        "centerY": 61.5,
+        "height": 65,
+        "left": 17,
+        "longEdge": 91,
+        "rightExclusive": 108,
+        "top": 29,
+        "width": 91
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 99,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 77,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 22,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-076.png",
+      "outputSha256": "28f8ce00e0561159e7b06b154f94301d654829f4c231da91cc1bc7d208daf00b",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-076.png",
+      "sourceSha256": "9a27955698a9006d9110e4fb01cc4d3cd056b7fd0e5ef5faadefb1c396e4ba4f",
+      "transform": {
+        "isotropicScale": 1.1868131868131868,
+        "pasteLeft": 6,
+        "pasteTop": 22,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 77,
+          "centerX": 54.0,
+          "centerY": 38.5,
+          "height": 77,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 77,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10908
+    },
+    "77": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 62.0,
+        "centerY": 68.5,
+        "height": 89,
+        "left": 12,
+        "longEdge": 100,
+        "rightExclusive": 112,
+        "top": 24,
+        "width": 100
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 108,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 96,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 12,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-077.png",
+      "outputSha256": "db6bd9aabc269de6be5cc66b0be0a5a728e53ed6ab8e43e32f1d937c3fdd31c9",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-077.png",
+      "sourceSha256": "432f80612599b2d3044a93e3f2cc1b9ffb1825838da47801ffb232b48a55e142",
+      "transform": {
+        "isotropicScale": 1.08,
+        "pasteLeft": 6,
+        "pasteTop": 12,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 96,
+          "centerX": 54.0,
+          "centerY": 48.0,
+          "height": 96,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 96,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10821
+    },
+    "78": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 115,
+        "centerX": 59.5,
+        "centerY": 67.5,
+        "height": 95,
+        "left": 5,
+        "longEdge": 109,
+        "rightExclusive": 114,
+        "top": 20,
+        "width": 109
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 107,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 94,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 13,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-078.png",
+      "outputSha256": "4fb1c161f53b9e6460fcbed6deed0a602c0cc5d77441169964f4d664b8b1dae9",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-078.png",
+      "sourceSha256": "ecf2bf53855950ac9b4430628259c3492ccd573c51609b8ef743341eb009e1f3",
+      "transform": {
+        "isotropicScale": 0.9908256880733946,
+        "pasteLeft": 6,
+        "pasteTop": 13,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 94,
+          "centerX": 54.0,
+          "centerY": 47.0,
+          "height": 94,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 94,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10380
+    },
+    "79": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 116,
+        "centerX": 59.5,
+        "centerY": 66.5,
+        "height": 99,
+        "left": 4,
+        "longEdge": 111,
+        "rightExclusive": 115,
+        "top": 17,
+        "width": 111
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 108,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 96,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 12,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-079.png",
+      "outputSha256": "c0f3282f7d9f8bb7d727839a5937cee36206296c872b06e65177a44e2218a886",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-079.png",
+      "sourceSha256": "dabcca6d6ff628591865d6222485958fd31854135c85624f33591f91a525bc85",
+      "transform": {
+        "isotropicScale": 0.972972972972973,
+        "pasteLeft": 6,
+        "pasteTop": 12,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 96,
+          "centerX": 54.0,
+          "centerY": 48.0,
+          "height": 96,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 96,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10037
+    },
+    "8": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 107,
+        "centerX": 58.5,
+        "centerY": 58.0,
+        "height": 98,
+        "left": 5,
+        "longEdge": 107,
+        "rightExclusive": 112,
+        "top": 9,
+        "width": 107
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 110,
+        "centerX": 60.5,
+        "centerY": 60.5,
+        "height": 99,
+        "left": 7,
+        "longEdge": 107,
+        "rightExclusive": 114,
+        "top": 11,
+        "width": 107
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-008.png",
+      "outputSha256": "e0dfa3866a8662102ac16007e81bddaa4b30f87eb57fa645e4e4dbc88f3740fb",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-008.png",
+      "sourceSha256": "115d9cfd14cd71b2df1a5e7ebfdbc9694c5dadf28212d99b8f69af5442531e1a",
+      "transform": {
+        "isotropicScale": 1.0093457943925233,
+        "pasteLeft": 7,
+        "pasteTop": 11,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 99,
+          "centerX": 53.5,
+          "centerY": 49.5,
+          "height": 99,
+          "left": 0,
+          "longEdge": 107,
+          "rightExclusive": 107,
+          "top": 0,
+          "width": 107
+        },
+        "targetRasterHeight": 99,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10417
+    },
+    "80": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 117,
+        "centerX": 60.0,
+        "centerY": 66.0,
+        "height": 102,
+        "left": 4,
+        "longEdge": 112,
+        "rightExclusive": 116,
+        "top": 15,
+        "width": 112
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 109,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 98,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 11,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-080.png",
+      "outputSha256": "7f004a3424a25895b01cf52507c6718e6aeebe05a9a5d6c6d7d62867b931c98b",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-080.png",
+      "sourceSha256": "eff95b076a848c09d8b76c73ff9464d554dd5efc2da00f4162a0a8b4e26725ca",
+      "transform": {
+        "isotropicScale": 0.9642857142857143,
+        "pasteLeft": 6,
+        "pasteTop": 11,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 98,
+          "centerX": 54.0,
+          "centerY": 49.0,
+          "height": 98,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 98,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9818
+    },
+    "81": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 60.5,
+        "centerY": 65.5,
+        "height": 105,
+        "left": 5,
+        "longEdge": 111,
+        "rightExclusive": 116,
+        "top": 13,
+        "width": 111
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 111,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 102,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 9,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-081.png",
+      "outputSha256": "e8550324404de6796d675ead5eb3dd7077bf742562b6e95d9a80b4fd05ea530e",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-081.png",
+      "sourceSha256": "d2a419020e286a04d46ef553f7a0e493e36709df7e0bb2af6e8040cfd9e43f35",
+      "transform": {
+        "isotropicScale": 0.972972972972973,
+        "pasteLeft": 6,
+        "pasteTop": 9,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 102,
+          "centerX": 54.0,
+          "centerY": 51.0,
+          "height": 102,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 102,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9613
+    },
+    "82": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 60.0,
+        "centerY": 65.0,
+        "height": 106,
+        "left": 5,
+        "longEdge": 110,
+        "rightExclusive": 115,
+        "top": 12,
+        "width": 110
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 112,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 104,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 8,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-082.png",
+      "outputSha256": "80fb0675d7402f45127b07e55084c0c77fd8c40d8d7f7d5666b9fbfa582e9090",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-082.png",
+      "sourceSha256": "1193d14ff6eb998c2232dd4f40cae734ea89145c873ba60485393df29cc1c338",
+      "transform": {
+        "isotropicScale": 0.9818181818181818,
+        "pasteLeft": 6,
+        "pasteTop": 8,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 104,
+          "centerX": 54.0,
+          "centerY": 52.0,
+          "height": 104,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 104,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9366
+    },
+    "83": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 61.0,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 110,
+        "rightExclusive": 116,
+        "top": 11,
+        "width": 110
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 105,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 8,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-083.png",
+      "outputSha256": "328f6ae40ee779d7866b6170b7db045a6f791218afa63c031fa6b414fae6a6c8",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-083.png",
+      "sourceSha256": "ff2298390ee9d61081c9229eeaa794d52c462e3525faabcbc5b9748b1f190c02",
+      "transform": {
+        "isotropicScale": 0.9818181818181818,
+        "pasteLeft": 6,
+        "pasteTop": 8,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 105,
+          "centerX": 54.0,
+          "centerY": 52.5,
+          "height": 105,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 105,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9326
+    },
+    "84": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 61.5,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 7,
+        "longEdge": 109,
+        "rightExclusive": 116,
+        "top": 11,
+        "width": 109
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 106,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-084.png",
+      "outputSha256": "5396c9105612a645ab259aa08879ef38ae265dca847eee56a018ebf5c1bea72c",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-084.png",
+      "sourceSha256": "194b8d4b54fd146aa2d709ea706057c6562cbaa808da9373fae092771a8ad353",
+      "transform": {
+        "isotropicScale": 0.9908256880733946,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 106,
+          "centerX": 54.0,
+          "centerY": 53.0,
+          "height": 106,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 106,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9227
+    },
+    "85": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 62.5,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 8,
+        "longEdge": 109,
+        "rightExclusive": 117,
+        "top": 11,
+        "width": 109
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 106,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-085.png",
+      "outputSha256": "90ccf011604ef0b8799cb353bf5a761646282e8fcafadb06d2e7e6c7ed129eef",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-085.png",
+      "sourceSha256": "216ce4ad4145a6296e2fed4bad263aca5906b8c2ac9a0b7e79f5602f0051e9a0",
+      "transform": {
+        "isotropicScale": 0.9908256880733946,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 106,
+          "centerX": 54.0,
+          "centerY": 53.0,
+          "height": 106,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 106,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9213
+    },
+    "86": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 63.5,
+        "centerY": 64.0,
+        "height": 108,
+        "left": 9,
+        "longEdge": 109,
+        "rightExclusive": 118,
+        "top": 10,
+        "width": 109
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 106,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-086.png",
+      "outputSha256": "d3b8408acb9ff616fde11ae24afc9b6b8bd47d54b6cf68f6bad669d899eaf9d2",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-086.png",
+      "sourceSha256": "584f148ee9795873b4e433c2cf772730c04ab6063da4f0cf1458156eb71d5fc6",
+      "transform": {
+        "isotropicScale": 0.9908256880733946,
+        "pasteLeft": 6,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.0,
+          "centerY": 54.0,
+          "height": 106,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 1,
+          "width": 108
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9199
+    },
+    "87": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 63.5,
+        "centerY": 64.0,
+        "height": 108,
+        "left": 9,
+        "longEdge": 109,
+        "rightExclusive": 118,
+        "top": 10,
+        "width": 109
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 106,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-087.png",
+      "outputSha256": "417cecb984ea7c3897daac81767e8e8e82dc586a86c87960f1da13cf4e2f44fa",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-087.png",
+      "sourceSha256": "088ba827505fc90dda84665a458681b16fffc61b5abb674a535c3a335842b880",
+      "transform": {
+        "isotropicScale": 0.9908256880733946,
+        "pasteLeft": 6,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.0,
+          "centerY": 54.0,
+          "height": 106,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 1,
+          "width": 108
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9224
+    },
+    "88": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 64.0,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 10,
+        "longEdge": 108,
+        "rightExclusive": 118,
+        "top": 11,
+        "width": 108
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-088.png",
+      "outputSha256": "c674821c9a7a29839cf0824251a079eecc82e23dc6b486dbb515ddf4964f664c",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-088.png",
+      "sourceSha256": "d5fefcffba4ee5bc94a8987c3f32f0af750bf72f0911812e1a7655dbd6b92d50",
+      "transform": {
+        "isotropicScale": 1.0,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.0,
+          "centerY": 53.5,
+          "height": 107,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9986
+    },
+    "89": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 64.0,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 10,
+        "longEdge": 108,
+        "rightExclusive": 118,
+        "top": 11,
+        "width": 108
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-089.png",
+      "outputSha256": "856b9826bc49f912c90be2bf1e64f74a16bfaa4803d169ee675bc6efe7ac680a",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-089.png",
+      "sourceSha256": "19795506e9eb090e42a768c5e15c9c7af5f967f82ac515bc5d6ad6c43aeb9fe5",
+      "transform": {
+        "isotropicScale": 1.0,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.0,
+          "centerY": 53.5,
+          "height": 107,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10005
+    },
+    "9": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.5,
+        "centerY": 58.5,
+        "height": 109,
+        "left": 2,
+        "longEdge": 117,
+        "rightExclusive": 119,
+        "top": 4,
+        "width": 117
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 111,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 101,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 10,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-009.png",
+      "outputSha256": "ed020c69d5674641c2c301b0c40cf48a775f74fc904dbe1f29dfc97070c38e52",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-009.png",
+      "sourceSha256": "9278adaf0098bb99db3401dc9fc14bf007f3da43d3b1ef7b2857af30ed1f22f9",
+      "transform": {
+        "isotropicScale": 0.9230769230769231,
+        "pasteLeft": 6,
+        "pasteTop": 10,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 101,
+          "centerX": 54.0,
+          "centerY": 50.5,
+          "height": 101,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 101,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9728
+    },
+    "90": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 64.0,
+        "centerY": 64.5,
+        "height": 107,
+        "left": 10,
+        "longEdge": 108,
+        "rightExclusive": 118,
+        "top": 11,
+        "width": 108
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 107,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-090.png",
+      "outputSha256": "15701c9c91d5a9dc050b7fc084bdda90f620e65a36aed5d20aee71a0986f7a36",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-090.png",
+      "sourceSha256": "270ba0c269c8b6ffb68f793ec08b3f0623a2bc2ed2b371c6833cc4f20924e8c1",
+      "transform": {
+        "isotropicScale": 1.0,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 107,
+          "centerX": 54.0,
+          "centerY": 53.5,
+          "height": 107,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 107,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10010
+    },
+    "91": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 119,
+        "centerX": 62.0,
+        "centerY": 65.0,
+        "height": 108,
+        "left": 7,
+        "longEdge": 110,
+        "rightExclusive": 117,
+        "top": 11,
+        "width": 110
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 106,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 7,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-091.png",
+      "outputSha256": "76cc4035a62a969486b1e764211ce13022f4c3dcd3172d0e1ae525a0e2de3b8e",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-091.png",
+      "sourceSha256": "0e751513600263208b3bb4a92be109140aa47f3e663bcdea1ed4abaa7549b0eb",
+      "transform": {
+        "isotropicScale": 0.9818181818181818,
+        "pasteLeft": 6,
+        "pasteTop": 7,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 106,
+          "centerX": 54.0,
+          "centerY": 53.0,
+          "height": 106,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 106,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9730
+    },
+    "92": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 62.0,
+        "centerY": 65.0,
+        "height": 106,
+        "left": 7,
+        "longEdge": 110,
+        "rightExclusive": 117,
+        "top": 12,
+        "width": 110
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 112,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 104,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 8,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-092.png",
+      "outputSha256": "223708b99888b5a0ec8beb627d1d442eaa6aa64a03200bc1e18883dc179c5b9e",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-092.png",
+      "sourceSha256": "007f8ad37fa4ae2e9735df995ba587a6ca211762e4830473da43a1f88cd17b37",
+      "transform": {
+        "isotropicScale": 0.9818181818181818,
+        "pasteLeft": 6,
+        "pasteTop": 8,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 104,
+          "centerX": 54.0,
+          "centerY": 52.0,
+          "height": 104,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 104,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10575
+    },
+    "93": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 61.0,
+        "centerY": 60.0,
+        "height": 106,
+        "left": 3,
+        "longEdge": 116,
+        "rightExclusive": 119,
+        "top": 7,
+        "width": 116
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 110,
+        "centerX": 60.0,
+        "centerY": 60.5,
+        "height": 99,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 11,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-093.png",
+      "outputSha256": "c2e3db6f4a4ee8718183824015fa9d979412f89e0786cd141c42152a93a27c7d",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-093.png",
+      "sourceSha256": "1d2d69063a27abf8da4db2fa8c3df74270a2f9fd9196d89401e6d90788244526",
+      "transform": {
+        "isotropicScale": 0.9310344827586207,
+        "pasteLeft": 6,
+        "pasteTop": 11,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 99,
+          "centerX": 54.0,
+          "centerY": 49.5,
+          "height": 99,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 99,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 10899
+    },
+    "94": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 109,
+        "centerX": 61.0,
+        "centerY": 55.0,
+        "height": 108,
+        "left": 3,
+        "longEdge": 116,
+        "rightExclusive": 119,
+        "top": 1,
+        "width": 116
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 110,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 100,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 10,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-094.png",
+      "outputSha256": "cb32fb2a399d6b48c0977d3dcbc8d6756973096366eb74d6f483684e4676557f",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-094.png",
+      "sourceSha256": "74dc6cd024812a896ad01b0663a2521ed939208275e4d1c1607ae0e3dad0d8dc",
+      "transform": {
+        "isotropicScale": 0.9310344827586207,
+        "pasteLeft": 6,
+        "pasteTop": 9,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 101,
+          "centerX": 54.0,
+          "centerY": 51.0,
+          "height": 100,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 1,
+          "width": 108
+        },
+        "targetRasterHeight": 101,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9551
+    },
+    "95": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 116,
+        "centerX": 62.5,
+        "centerY": 59.0,
+        "height": 114,
+        "left": 11,
+        "longEdge": 114,
+        "rightExclusive": 114,
+        "top": 2,
+        "width": 103
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 11,
+        "longEdge": 108,
+        "rightExclusive": 109,
+        "top": 6,
+        "width": 98
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-095.png",
+      "outputSha256": "49d2475ad4e1260ea7e909313da104576b5d56f7d2ed674447ece2bb4f38b812",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-095.png",
+      "sourceSha256": "060c33e38aa4829c4d84e9c11a1f9013ca40d015d90f003b6249719fcbf8ecd3",
+      "transform": {
+        "isotropicScale": 0.9473684210526315,
+        "pasteLeft": 11,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 49.0,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 98,
+          "top": 0,
+          "width": 98
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 98
+      },
+      "transparentPixelCount": 9277
+    },
+    "96": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 57.0,
+        "centerY": 62.5,
+        "height": 111,
+        "left": 8,
+        "longEdge": 111,
+        "rightExclusive": 106,
+        "top": 7,
+        "width": 98
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.5,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 13,
+        "longEdge": 108,
+        "rightExclusive": 108,
+        "top": 6,
+        "width": 95
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-096.png",
+      "outputSha256": "ab4e54f6a38e8e2bf98858b0c0d8ae808247427432fa699ba3972b865957b96e",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-096.png",
+      "sourceSha256": "54db076e5cc659b07ded93844808d368a96893147208f39b56de6808eeaeca52",
+      "transform": {
+        "isotropicScale": 0.972972972972973,
+        "pasteLeft": 13,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 47.5,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 95,
+          "top": 0,
+          "width": 95
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 95
+      },
+      "transparentPixelCount": 10655
+    },
+    "97": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 58.0,
+        "centerY": 64.0,
+        "height": 100,
+        "left": 2,
+        "longEdge": 112,
+        "rightExclusive": 114,
+        "top": 14,
+        "width": 112
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 108,
+        "centerX": 60.0,
+        "centerY": 60.0,
+        "height": 96,
+        "left": 6,
+        "longEdge": 108,
+        "rightExclusive": 114,
+        "top": 12,
+        "width": 108
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-097.png",
+      "outputSha256": "8acb89fa305c49d68e9e92b448ae5404fdfbd7c95601477cbca9bc8ac6b1f117",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-097.png",
+      "sourceSha256": "6587fbc08bf32632bcb7d0f9659d569ce8ebf541633dbc15308d695881c1fe72",
+      "transform": {
+        "isotropicScale": 0.9642857142857143,
+        "pasteLeft": 6,
+        "pasteTop": 12,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 96,
+          "centerX": 54.0,
+          "centerY": 48.0,
+          "height": 96,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 108,
+          "top": 0,
+          "width": 108
+        },
+        "targetRasterHeight": 96,
+        "targetRasterWidth": 108
+      },
+      "transparentPixelCount": 9857
+    },
+    "98": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 113,
+        "centerX": 60.0,
+        "centerY": 58.5,
+        "height": 109,
+        "left": 7,
+        "longEdge": 109,
+        "rightExclusive": 113,
+        "top": 4,
+        "width": 106
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.5,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 8,
+        "longEdge": 108,
+        "rightExclusive": 113,
+        "top": 6,
+        "width": 105
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-098.png",
+      "outputSha256": "27dab087f65a747007ac3412ffec40f0ccb9098370e75d237b60f1adf64b73e7",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-098.png",
+      "sourceSha256": "1ee7aa9b04d569aaa266952b374e578f8fa4ba5d6874174d57355cad9cafcafe",
+      "transform": {
+        "isotropicScale": 0.9908256880733946,
+        "pasteLeft": 8,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 52.5,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 105,
+          "top": 0,
+          "width": 105
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 105
+      },
+      "transparentPixelCount": 8812
+    },
+    "99": {
+      "inputAlphaBBox": {
+        "bottomExclusive": 118,
+        "centerX": 60.5,
+        "centerY": 59.5,
+        "height": 117,
+        "left": 8,
+        "longEdge": 117,
+        "rightExclusive": 113,
+        "top": 1,
+        "width": 105
+      },
+      "outputAlphaBBox": {
+        "bottomExclusive": 114,
+        "centerX": 60.5,
+        "centerY": 60.0,
+        "height": 108,
+        "left": 12,
+        "longEdge": 108,
+        "rightExclusive": 109,
+        "top": 6,
+        "width": 97
+      },
+      "outputPath": "assets/visual-system-v1/ai-watermark-v013/frames/frame-099.png",
+      "outputSha256": "1926cc0720f0ffe2e1955939b80267e1abbe3adf68240e56ec419d4c7c2478f7",
+      "sourcePath": "assets/visual-system-v1/ai-watermark-v012/frames/frame-099.png",
+      "sourceSha256": "350c18568e4b7e928c75544be87fbf26e4b8d2804d50a877833d11913558b2a5",
+      "transform": {
+        "isotropicScale": 0.9230769230769231,
+        "pasteLeft": 12,
+        "pasteTop": 6,
+        "resizedAlphaBBox": {
+          "bottomExclusive": 108,
+          "centerX": 48.5,
+          "centerY": 54.0,
+          "height": 108,
+          "left": 0,
+          "longEdge": 108,
+          "rightExclusive": 97,
+          "top": 0,
+          "width": 97
+        },
+        "targetRasterHeight": 108,
+        "targetRasterWidth": 97
+      },
+      "transparentPixelCount": 10098
+    }
+  },
+  "integrationMode": "default-approved-profile-frame-indexed-transparent-png-sequence",
+  "reviewOnly": false,
+  "schemaVersion": "visual-system-v1-ai-watermark-stable-footprint-assets-v1",
+  "source": {
+    "assetRoot": "assets/visual-system-v1/ai-watermark-v012",
+    "assetVersion": 12,
+    "manifestPath": "assets/visual-system-v1/ai-watermark-v012/manifest.json",
+    "manifestSha256": "a2927d48aeea2433c23fc380d725b926c5c579b40ae0d15bdc9641ad2eeebe56",
+    "sourceMotionSchemaVersion": "visual-system-v1-ai-watermark-motion-proof-v12"
+  },
+  "status": "approved-default",
+  "transparentBackgroundRequired": true
+}

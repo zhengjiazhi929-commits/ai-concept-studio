@@ -27,8 +27,8 @@
       "hash": "2d6874883b6e468c094eff45b6b8955cd56022881c41db0b0e7ac38c80757569"
     },
     "workerPrompts": {
-      "version": "worker-prompts-v1",
-      "hash": "ebca66d8de7daeed9fe5b6cde252a3600fa3a39a2a81c5bd14aa1115cd1f3471"
+      "version": "worker-prompts-v2",
+      "hash": "2613350755a96e044c8fbdef87e359d79089aea172fc2b6e3bb289cddb8d62e2"
     },
     "routingPolicy": {
       "version": "routing-policy-v1",
@@ -48,7 +48,7 @@
     },
     "implementation": {
       "version": "agent-control-release-v5",
-      "hash": "2907d78fddd0f1ff59d47cf3a04c6bd203de933dbdc3c125caf8c8f2dfe8fa70"
+      "hash": "2b3e9f458e680d7d1c377c445217f60142871509355451a6a29cd741e16fdec7"
     }
   },
   "requiredCases": [

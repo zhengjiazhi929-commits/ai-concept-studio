@@ -42,6 +42,7 @@
     "eval:attested": "node scripts/run-attested-evaluation.mjs",
     "rehearse:rollback": "node scripts/rehearse-remediation-rollback.mjs",
     "test": "node --test tests/*.test.mjs",
+    "check:visual-expression": "node --check src/shared/visual-expression-contract.mjs && node --check src/video/components/visual-system-v1/resolver.mjs && node --check src/video/components/visual-system-v1/grammar-layout.mjs && node --check src/video/production-semantic-preview.mjs && node --check src/server/renderer.mjs && node --check src/server/production/quality.mjs && node --test tests/visual-expression-contract.test.mjs tests/visual-system-v1-resolver.test.mjs tests/visual-system-v1-grammar-layout.test.mjs tests/production-semantic-preview.test.mjs tests/deterministic-layout-sample.test.mjs",
     "precheck": "node --check src/shared/redaction.mjs && node --check src/video/agent-skill-motion-plan.mjs && node --check src/video/agent-skill-full-video-plan.mjs && node --check src/server/reviews/human-approval-view.mjs && node --check src/server/reviews/asset-execution-preflight-runner.mjs && node --check src/server/production/external-assets.mjs && node --check src/server/security/operator-session.mjs && node --check scripts/render-agent-skill-full-video-stills.mjs && node --check scripts/start-studio.mjs",
     "check": "node scripts/check-syntax.mjs",
     "diff:check": "git diff --check && git diff --cached --check",

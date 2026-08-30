@@ -9,31 +9,44 @@ import {
 
 import {
   VISUAL_SYSTEM_V1,
-  VisualSystemV1AiWatermark,
   VisualSystemV1ChapterProgress,
-  VisualSystemV1FlatNode,
   VisualSystemV1PlainSubtitle,
   VisualSystemV1PopText,
-  visualSystemV1AdaptiveCardLayout,
-  visualSystemV1SmoothStep
+  VisualSystemV1SemanticNode,
+  VisualSystemV1StandaloneIcon,
+  visualSystemV1ProgressAtFrame,
+  visualSystemV1StandaloneOverlaySlot
 } from "./components/visual-system-v1/index.jsx";
+import { aiTechIconSize } from "../shared/ai-tech-icon-contract.mjs";
+import { VisualSystemV1WideBrandLayer } from "./components/visual-system-v1/brand-layer.jsx";
+import {
+  longReviewBoundaryContrastRoute,
+  longReviewIsBoundaryContrastTarget,
+  longReviewResolvedSemanticGroupBounds
+} from "./agent-skill-long-review-contrast.mjs";
 import {
   AGENT_SKILL_LONG_REVIEW_CHAPTERS,
+  AGENT_SKILL_LONG_REVIEW_CONNECTOR_TONES,
+  AGENT_SKILL_LONG_REVIEW_SCENE_START_FRAMES,
   AGENT_SKILL_LONG_REVIEW_SCENE_SPECS,
-  longReviewDiagramStateAtFrame,
-  longReviewSceneLayersAtFrame
+  AGENT_SKILL_LONG_REVIEW_TITLE_PREROLL_FRAMES,
+  longReviewDisplaySubtitles,
+  longReviewLayoutAtFrame,
+  longReviewSceneLayersAtFrame,
+  longReviewSemanticGroupProgress,
+  longReviewSemanticNodeRevealFrame,
+  longReviewStageCaptionLayout,
+  longReviewStageCaptionStateAtFrame,
+  longReviewSubtitleGateAtFrame,
+  longReviewVisualSceneCopy
 } from "./agent-skill-long-review-plan.mjs";
 
 const { palette, typography } = VISUAL_SYSTEM_V1;
-const CARD_CONSTRAINTS = Object.freeze({
-  copyBottomPx: 318,
-  subtitleTopPx: 872,
-  minimumCardWidthPx: VISUAL_SYSTEM_V1.cardDeck.minimumCardWidthPx,
-  minimumCardHeightPx: VISUAL_SYSTEM_V1.cardDeck.minimumCardHeightPx
-});
 
 const humanNodePattern = /(?:\bhuman\b|人工(?:决定|确认)|等待人工)/iu;
 const WIDE_BACKDROP_LOOP_SECONDS = 25;
+const SHAPE_GRAMMAR_LEGEND_FONT_SIZE_PX = 24;
+const SHAPE_GRAMMAR_LEGEND_MIN_HEIGHT_PX = 48;
 
 function interpolateBackdropAnchor(phase, phaseOffset, width, height) {
   const loopProgress = ((phase + phaseOffset) % 1 + 1) % 1;
@@ -61,8 +74,9 @@ function interpolateBackdropAnchor(phase, phaseOffset, width, height) {
   };
 }
 
-function WideMovingBackdrop() {
-  const frame = useCurrentFrame();
+function WideMovingBackdrop({ frameOverride = null }) {
+  const currentFrame = useCurrentFrame();
+  const frame = frameOverride == null ? currentFrame : frameOverride;
   const { width, height, fps } = useVideoConfig();
   const periodFrames = WIDE_BACKDROP_LOOP_SECONDS * fps;
   const phase = (((frame % periodFrames) + periodFrames) % periodFrames) / periodFrames;
@@ -96,6 +110,7 @@ function WideMovingBackdrop() {
     <div
       data-visual-system-wallpaper="three-edge-blobs-25s-seamless"
       data-wallpaper-loop-frames={periodFrames}
+      data-wallpaper-sample-frame={frame}
       style={{ position: "absolute", inset: 0, overflow: "hidden", backgroundColor: palette.paper }}
     >
       {blobs.map((blob) => {
@@ -135,171 +150,168 @@ function isHumanNode(node) {
   return humanNodePattern.test(`${node.id} ${normalizeNodeCopy(node.label)} ${normalizeNodeCopy(node.detail)}`);
 }
 
-function nodeMarker(node, spec) {
-  if (isHumanNode(node)) return "HUMAN GATE";
-  if (node.dashed) return "BOUNDARY";
-  if (spec.kind === "native-evidence") return "EVIDENCE";
-  if (spec.kind === "summary") return "SUMMARY";
-  return "NODE";
+function nodeMarker(node) {
+  if (node.dashed) return "边界";
+  return null;
 }
 
-function uniqueNodeIds(stages) {
-  return [...new Set(stages.flatMap((stage) => stage.nodeIds))];
+function standaloneIconSize(icon) {
+  const size = aiTechIconSize(icon.sizeRole).sizePx;
+  if (!icon.caption) return { width: size, height: size };
+  return { width: Math.max(120, size), height: size + 36 };
 }
 
-function cardGeometry(card) {
-  return {
-    left: card.left,
-    top: card.top,
-    width: card.width,
-    height: card.height
-  };
+function preferredOverlaySides(placement) {
+  const normalized = ({
+    "right-center": "right",
+    "left-center": "left",
+    "above-center": "top",
+    "below-center": "bottom"
+  })[placement] ?? placement;
+  const sides = ["right", "left", "top", "bottom"];
+  if (!sides.includes(normalized)) return sides;
+  return [normalized, ...sides.filter((side) => side !== normalized)];
 }
 
-function interpolateGeometry(from, to, progress) {
-  const amount = visualSystemV1SmoothStep(progress);
-  const interpolate = (start, end) => start + (end - start) * amount;
-  return {
-    left: interpolate(from.left, to.left),
-    top: interpolate(from.top, to.top),
-    width: interpolate(from.width, to.width),
-    height: interpolate(from.height, to.height)
-  };
-}
-
-function adaptiveNodeLayout(spec, state, width, height) {
-  const targetNodeIds = uniqueNodeIds(spec.stages.slice(0, state.stageIndex + 1));
-  if (targetNodeIds.length === 0) {
-    return { nodeIds: [], geometryById: {}, visibleCount: 0 };
+function ownedCalloutLeaderPoints(bounds, anchor, side) {
+  if (side === "left") {
+    return `${bounds.x + bounds.width},${bounds.y + bounds.height / 2} ${anchor.x},${anchor.centerY}`;
   }
-  const previousNodeIds = uniqueNodeIds(spec.stages.slice(0, state.stageIndex));
-  const targetDeck = visualSystemV1AdaptiveCardLayout(
-    width,
-    height,
-    targetNodeIds.length,
-    CARD_CONSTRAINTS
-  );
-  const targetGeometry = Object.fromEntries(
-    targetNodeIds.map((nodeId, index) => [nodeId, cardGeometry(targetDeck.cards[index])])
-  );
-  if (
-    previousNodeIds.length === 0 ||
-    previousNodeIds.length === targetNodeIds.length ||
-    state.stageTransitionProgress >= 1
-  ) {
-    return {
-      nodeIds: targetNodeIds,
-      geometryById: targetGeometry,
-      visibleCount: targetNodeIds.length
-    };
+  if (side === "right") {
+    return `${bounds.x},${bounds.y + bounds.height / 2} ${anchor.right},${anchor.centerY}`;
   }
-  const previousDeck = visualSystemV1AdaptiveCardLayout(
-    width,
-    height,
-    previousNodeIds.length,
-    CARD_CONSTRAINTS
-  );
-  const previousGeometry = Object.fromEntries(
-    previousNodeIds.map((nodeId, index) => [nodeId, cardGeometry(previousDeck.cards[index])])
-  );
-  return {
-    nodeIds: targetNodeIds,
-    geometryById: Object.fromEntries(targetNodeIds.map((nodeId) => [
-      nodeId,
-      previousGeometry[nodeId]
-        ? interpolateGeometry(
-          previousGeometry[nodeId],
-          targetGeometry[nodeId],
-          state.stageTransitionProgress
-        )
-        : targetGeometry[nodeId]
-    ])),
-    visibleCount: targetNodeIds.length
-  };
+  if (side === "top") {
+    return `${bounds.x + bounds.width / 2},${bounds.y + bounds.height} ${anchor.centerX},${anchor.y}`;
+  }
+  return `${bounds.x + bounds.width / 2},${bounds.y} ${anchor.centerX},${anchor.bottom}`;
 }
 
-function firstRevealFrame(spec, nodeId) {
-  return spec.stages.find((stage) => stage.nodeIds.includes(nodeId))?.startFrame ?? spec.startFrame;
-}
-
-function connectorEndpoints(from, to) {
-  const fromCenter = { x: from.left + from.width / 2, y: from.top + from.height / 2 };
-  const toCenter = { x: to.left + to.width / 2, y: to.top + to.height / 2 };
-  const dx = toCenter.x - fromCenter.x;
-  const dy = toCenter.y - fromCenter.y;
-  if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) return null;
-  const fromScale = Math.min(
-    from.width / (2 * Math.max(Math.abs(dx), 0.001)),
-    from.height / (2 * Math.max(Math.abs(dy), 0.001))
-  );
-  const toScale = Math.min(
-    to.width / (2 * Math.max(Math.abs(dx), 0.001)),
-    to.height / (2 * Math.max(Math.abs(dy), 0.001))
-  );
-  return {
-    from: {
-      x: fromCenter.x + dx * fromScale,
-      y: fromCenter.y + dy * fromScale
-    },
-    to: {
-      x: toCenter.x - dx * toScale,
-      y: toCenter.y - dy * toScale
-    }
-  };
+function AdaptiveSemanticGroups({ spec, layout }) {
+  const labelledGroups = (spec.groups ?? []).filter((group) => group.label);
+  if (labelledGroups.length === 0) return null;
+  return labelledGroups.map((group) => {
+    const isCompleteBoundary = group.visualForm === "full-outline";
+    const groupProgress = longReviewSemanticGroupProgress(layout.state, group.nodeIds);
+    if (groupProgress <= 0) return null;
+    const bounds = longReviewResolvedSemanticGroupBounds(group, layout);
+    if (!bounds) return null;
+    const { left, right, top, bottom } = bounds;
+    return (
+      <div
+        key={group.id}
+        data-semantic-group-id={group.id}
+        data-semantic-group-role={isCompleteBoundary ? "complete-boundary" : "open-swimlane"}
+        data-shape-grammar-role={isCompleteBoundary ? "complete-object" : "open-canvas-group"}
+        data-shape-grammar-form={isCompleteBoundary ? "full-outline" : "open-node"}
+        data-shape-grammar-meaning={
+          group.semanticMeaning ?? (isCompleteBoundary
+            ? "complete-object-or-boundary"
+            : "process-or-relationship-anchor")
+        }
+        style={{
+          position: "absolute",
+          left,
+          top,
+          width: right - left,
+          height: bottom - top,
+          boxSizing: "border-box",
+          border: isCompleteBoundary ? `2px solid ${palette.lineStrong}` : "none",
+          borderTop: isCompleteBoundary ? undefined : `2px solid ${palette.lineStrong}`,
+          background: "linear-gradient(180deg, rgba(216, 243, 232, 0.28) 0%, rgba(216, 243, 232, 0) 42%)",
+          borderRadius: 18,
+          opacity: groupProgress,
+          zIndex: 0
+        }}
+      >
+        <span
+          style={{
+            position: "absolute",
+            left: 16,
+            top: 7,
+            color: palette.mintDeep,
+            fontSize: 15,
+            fontWeight: 820,
+            letterSpacing: ".06em",
+            lineHeight: 1
+          }}
+        >
+          {group.label}
+        </span>
+      </div>
+    );
+  });
 }
 
 function AdaptiveConnectors({ spec, state, layout, width, height }) {
+  const connectorTone = AGENT_SKILL_LONG_REVIEW_CONNECTOR_TONES[spec.connectorTone];
+  if (!connectorTone) throw new Error(`${spec.id} 使用了未知连接线 tone：${spec.connectorTone}`);
+  const semanticRelations = new Map(
+    spec.visualPlan.semanticRelations.map((relation) => [relation.id, relation])
+  );
   return (
     <svg
-      data-visual-system-connectors="adaptive-flat-graph"
+      data-visual-system-connectors="orthogonal-semantic-graph"
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       style={{ position: "absolute", inset: 0, overflow: "visible", zIndex: 1 }}
     >
       <defs>
-        {spec.edges.map((edge) => (
+        {layout.connectors.filter((connector) => semanticRelations.get(connector.relationId)?.directed).map((connector) => (
           <marker
-            key={edge.id}
-            id={`long-review-arrow-${spec.id}-${edge.id}`}
+            key={connector.relationId}
+            id={`long-review-arrow-${spec.id}-${connector.relationId}`}
             viewBox="0 0 10 10"
             refX="8"
             refY="5"
-            markerWidth="5.5"
-            markerHeight="5.5"
+            markerWidth={connectorTone.markerSizePx}
+            markerHeight={connectorTone.markerSizePx}
             orient="auto"
           >
             <path
               d="M 0 0 L 10 5 L 0 10 z"
               fill={palette.mintDeep}
-              opacity={state.edgeArrowProgress[edge.id] ?? 0}
+              opacity={state.edgeArrowProgress[connector.relationId] ?? 0}
             />
           </marker>
         ))}
       </defs>
-      {spec.edges.map((edge) => {
-        const from = layout.geometryById[edge.from];
-        const to = layout.geometryById[edge.to];
-        const endpoints = from && to ? connectorEndpoints(from, to) : null;
-        const progress = state.edgeProgress[edge.id] ?? 0;
-        const focus = state.edgeHighlightProgress[edge.id] ?? 0;
-        if (!endpoints || progress <= 0) return null;
+      {layout.connectors.map((connector) => {
+        const semanticRelation = semanticRelations.get(connector.relationId);
+        const progress = state.edgeProgress[connector.relationId] ?? 0;
+        const focus = state.edgeHighlightProgress[connector.relationId] ?? 0;
+        if (connector.route.length < 2 || progress <= 0) return null;
+        const boundaryContrastRoute = semanticRelation == null
+          ? null
+          : longReviewBoundaryContrastRoute(spec, semanticRelation, layout);
+        const boundaryContrast = boundaryContrastRoute != null;
+        const renderedRoute = boundaryContrastRoute ?? connector.route;
+        const connectorProps = {
+          "data-semantic-relation-id": semanticRelation?.id,
+          "data-semantic-directed": String(Boolean(semanticRelation?.directed)),
+          "data-connector-presentation": connector.presentationKind,
+          "data-connector-semantic-style": boundaryContrast ? "contrast-dashed" : "structural-solid",
+          pathLength: boundaryContrast ? undefined : 1,
+          fill: "none",
+          stroke: boundaryContrast ? palette.purpleDeep : palette.mintDeep,
+          strokeWidth: connectorTone.strokeWidthPx + focus * 0.5,
+          strokeLinecap: "round",
+          strokeDasharray: boundaryContrast ? "7 6" : 1,
+          strokeDashoffset: boundaryContrast ? 0 : 1 - progress,
+          markerEnd: semanticRelation?.directed
+            ? `url(#long-review-arrow-${spec.id}-${connector.relationId})`
+            : undefined,
+          opacity: progress * (state.edgeVisibilityProgress[connector.relationId] ?? 0) * (
+            connectorTone.restingOpacity +
+            focus * (connectorTone.focusedOpacity - connectorTone.restingOpacity)
+          ),
+          vectorEffect: "non-scaling-stroke"
+        };
         return (
-          <line
-            key={edge.id}
-            x1={endpoints.from.x}
-            y1={endpoints.from.y}
-            x2={endpoints.to.x}
-            y2={endpoints.to.y}
-            pathLength={1}
-            stroke={palette.mintDeep}
-            strokeWidth={2 + focus}
-            strokeLinecap="round"
-            strokeDasharray={1}
-            strokeDashoffset={1 - progress}
-            markerEnd={`url(#long-review-arrow-${spec.id}-${edge.id})`}
-            opacity={progress * (0.42 + focus * 0.42)}
-            vectorEffect="non-scaling-stroke"
+          <polyline
+            key={connector.relationId}
+            {...connectorProps}
+            points={renderedRoute.map((point) => `${point.x},${point.y}`).join(" ")}
           />
         );
       })}
@@ -307,10 +319,7 @@ function AdaptiveConnectors({ spec, state, layout, width, height }) {
   );
 }
 
-function StageCaption({ state }) {
-  const progress = state.previousStageLabel == null
-    ? 1
-    : state.stageTransitionProgress ?? 1;
+function StageCaption({ caption, copyOpacity = 1 }) {
   const captionStyle = {
     position: "absolute",
     inset: 0,
@@ -322,7 +331,7 @@ function StageCaption({ state }) {
       <div
         style={{
           color: palette.mintDeep,
-          fontSize: 24,
+          fontSize: 28,
           fontWeight: 760,
           lineHeight: 1.25,
           letterSpacing: "-.015em"
@@ -332,68 +341,342 @@ function StageCaption({ state }) {
       </div>
     </div>
   );
+  const previous = caption.previous?.render === false ? null : caption.previous;
+  const current = caption.current?.render === false ? null : caption.current;
+  if (previous == null && current == null) return null;
   return (
-    <div style={{ position: "relative", width: "100%", height: 34 }}>
-      {state.previousStageLabel != null
-        ? renderText(state.previousStageLabel, Math.max(0, state.stageIndex - 1), 1 - progress)
+    <div style={{ position: "relative", width: "100%", height: 34, opacity: copyOpacity }}>
+      {previous != null
+        ? renderText(previous.label, caption.stageIndex - 1, previous.opacity)
         : null}
-      {renderText(state.stageLabel, state.stageIndex, progress)}
+      {current != null
+        ? renderText(current.label, caption.stageIndex, current.opacity)
+        : null}
     </div>
   );
 }
 
-function TechnicalDiagram({ spec, globalFrame }) {
-  const state = longReviewDiagramStateAtFrame(spec.id, globalFrame);
-  const { width, height } = useVideoConfig();
-  const adaptiveLayout = adaptiveNodeLayout(spec, state, width, height);
+function ShapeGrammarGlyph({ visualForm }) {
+  if (visualForm === "open-node") {
+    return (
+      <span
+        aria-hidden="true"
+        style={{ position: "relative", width: 34, height: 18, flex: "0 0 34px" }}
+      >
+        <span
+          style={{
+            position: "absolute",
+            left: 2,
+            right: 2,
+            top: 8,
+            height: 2,
+            backgroundColor: palette.mintDeep
+          }}
+        />
+        <span
+          style={{
+            position: "absolute",
+            left: 12,
+            top: 3,
+            width: 10,
+            height: 10,
+            boxSizing: "border-box",
+            border: `2px solid ${palette.mintDeep}`,
+            borderRadius: "50%",
+            backgroundColor: palette.paper
+          }}
+        />
+      </span>
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        width: 30,
+        height: 17,
+        flex: "0 0 30px",
+        boxSizing: "border-box",
+        border: `2px ${visualForm === "dashed-outline" ? "dashed" : "solid"} ${palette.mintDeep}`,
+        borderRadius: 5
+      }}
+    />
+  );
+}
+
+function ShapeGrammarLegend({ cue, globalFrame, copyOpacity = 1 }) {
+  if (cue == null || globalFrame < cue.startFrame || globalFrame >= cue.endFrame) return null;
+  const enterProgress = visualSystemV1ProgressAtFrame(globalFrame, cue.startFrame, 10);
+  const exitProgress = visualSystemV1ProgressAtFrame(globalFrame, cue.endFrame - 10, 10);
+  const opacity = copyOpacity * enterProgress * (1 - exitProgress);
   return (
     <div
-      style={{ position: "absolute", inset: 0 }}
+      data-shape-grammar-legend={cue.mode}
+      data-shape-grammar-persistent={cue.persistent ? "true" : "false"}
+      data-shape-grammar-window={`${cue.startFrame}:${cue.endFrame}`}
+      data-shape-grammar-font-size={SHAPE_GRAMMAR_LEGEND_FONT_SIZE_PX}
+      style={{
+        position: "absolute",
+        left: 700,
+        right: 240,
+        top: 298,
+        minHeight: SHAPE_GRAMMAR_LEGEND_MIN_HEIGHT_PX,
+        zIndex: 4,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        gap: 18,
+        color: palette.muted,
+        fontSize: SHAPE_GRAMMAR_LEGEND_FONT_SIZE_PX,
+        fontWeight: 720,
+        letterSpacing: ".01em",
+        opacity,
+        pointerEvents: "none"
+      }}
+    >
+      {cue.items.map((item) => (
+        <span
+          key={item.id}
+          data-shape-grammar-form={item.visualForm}
+          data-shape-grammar-meaning={item.meaning}
+          style={{ display: "flex", alignItems: "center", gap: 10, whiteSpace: "nowrap" }}
+        >
+          <ShapeGrammarGlyph visualForm={item.visualForm} />
+          <span>{item.meaning}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function TechnicalDiagram({
+  spec,
+  globalFrame,
+  copyOpacity = 1,
+  diagramOpacity = 1,
+  subtitlePresentationMode = null
+}) {
+  const detailOpacity = visualSystemV1ProgressAtFrame(
+    globalFrame,
+    spec.startFrame + spec.visualPlan.timing.detailCopyStartFrame,
+    12
+  );
+  const { width, height } = useVideoConfig();
+  const semanticLayout = longReviewLayoutAtFrame(spec.id, globalFrame, { width, height });
+  const { state } = semanticLayout;
+  const graphIconByAnchorId = new Map(
+    spec.standaloneIcons
+      .filter((icon) => icon.participation === "graph-node")
+      .map((icon) => [icon.anchorId, icon])
+  );
+  const stageCaptionLayout = longReviewStageCaptionLayout(width, height);
+  const stageCaption = longReviewStageCaptionStateAtFrame(spec.id, globalFrame);
+  const shapeGrammarCueActive = spec.shapeGrammarCue != null &&
+    globalFrame >= spec.shapeGrammarCue.startFrame &&
+    globalFrame < spec.shapeGrammarCue.endFrame;
+  const suppressStageCaption = ["semantic-cue", "hidden"].includes(subtitlePresentationMode) ||
+    shapeGrammarCueActive;
+  return (
+    <div
+      data-layout-stability={spec.layoutStability}
+      style={{ position: "absolute", inset: 0, opacity: diagramOpacity }}
       data-scene-id={spec.id}
       data-stage-id={state.stageId ?? "none"}
       data-final-hold={state.finalHold ? "true" : "false"}
-      data-scene-adaptive-layout="visible-node-count"
-      data-visible-card-count={adaptiveLayout.visibleCount}
+      data-convergence-progress={state.convergenceProgress ?? undefined}
+      data-scene-layout={`${spec.layoutStability}-visual-grammar`}
+      data-visual-grammar={spec.visualPlan.structure}
+      data-editorial-visual-mode={spec.visualMode}
+      data-narrative-treatment={spec.narrativeTreatment}
+      data-narrative-treatment-rationale={spec.narrativeTreatmentRationale}
+      data-shape-grammar-version={spec.shapeGrammarVersion}
+      data-visible-semantic-count={semanticLayout.visibleCount}
       data-surface-mode="flat-only"
     >
+      <AdaptiveSemanticGroups spec={spec} layout={semanticLayout} />
       <AdaptiveConnectors
         spec={spec}
         state={state}
-        layout={adaptiveLayout}
+        layout={semanticLayout}
         width={width}
         height={height}
       />
-      {adaptiveLayout.nodeIds.map((nodeId) => {
+      {semanticLayout.nodeIds.map((nodeId) => {
         const node = spec.nodes.find((candidate) => candidate.id === nodeId);
-        const geometry = adaptiveLayout.geometryById[nodeId];
+        if (graphIconByAnchorId.has(nodeId)) return null;
+        const semanticElement = spec.visualPlan.semanticElements.find(
+          (candidate) => candidate.id === nodeId
+        );
+        const geometry = semanticLayout.geometryById[nodeId];
+        const surfacePlan = spec.surfacePlanById[nodeId];
         if (!node || !geometry) return null;
+        const revealFrame = longReviewSemanticNodeRevealFrame(spec.id, node.id);
         return (
-          <VisualSystemV1FlatNode
+          <div
             key={node.id}
-            nodeId={node.id}
-            marker={nodeMarker(node, spec)}
-            label={normalizeNodeCopy(node.label)}
-            detail={normalizeNodeCopy(node.detail)}
-            startFrame={firstRevealFrame(spec, node.id)}
-            accent={isHumanNode(node) ? "purple" : "mint"}
-            focusProgress={state.nodeHighlightProgress[node.id] ?? 0}
-            layoutMode="fill-safe-viewport"
-            style={{ ...geometry, zIndex: 2 }}
-          />
+            data-shape-grammar-node-id={node.id}
+            data-shape-grammar-role={surfacePlan?.shapeGrammarRole}
+            data-shape-grammar-form={surfacePlan?.shapeGrammarVisualForm}
+            data-shape-grammar-meaning={surfacePlan?.shapeGrammarMeaning}
+            style={{ display: "contents" }}
+          >
+            {surfacePlan?.shapeGrammarRole === "semantic-boundary" ? (
+              <div
+                aria-hidden="true"
+                data-shape-grammar-boundary-wrapper={surfacePlan.shapeGrammarMeaning}
+                style={{
+                  position: "absolute",
+                  left: geometry.left - 8,
+                  top: geometry.top - 8,
+                  width: geometry.width + 16,
+                  height: geometry.height + 16,
+                  boxSizing: "border-box",
+                  border: `2px dashed ${longReviewIsBoundaryContrastTarget(spec, node.id)
+                    ? palette.purpleDeep
+                    : palette.mintDeep}`,
+                  borderRadius: 18,
+                  opacity: (state.nodeProgress[node.id] ?? 0) *
+                    (state.nodeVisibilityProgress[node.id] ?? 0),
+                  zIndex: 1,
+                  pointerEvents: "none"
+                }}
+              />
+            ) : null}
+            <VisualSystemV1SemanticNode
+              nodeId={node.id}
+              marker={nodeMarker(node)}
+              label={normalizeNodeCopy(node.label)}
+              detail={normalizeNodeCopy(node.detail)}
+              startFrame={revealFrame}
+              detailStartFrame={Math.max(
+                revealFrame,
+                spec.startFrame + spec.visualPlan.timing.detailCopyStartFrame
+              )}
+              primitive={semanticLayout.primitiveById[node.id]}
+              accent={isHumanNode(node) ? "purple" : "mint"}
+              focusProgress={state.nodeHighlightProgress[node.id] ?? 0}
+              visibilityProgress={state.nodeVisibilityProgress[node.id] ?? 0}
+              contentOpacity={copyOpacity}
+              semanticRole={semanticElement?.semanticRole}
+              semanticGroupId={surfacePlan?.semanticGroupId}
+              surfaceRole={surfacePlan?.surfaceRole}
+              surfacePurpose={surfacePlan?.surfacePurpose}
+              visualHierarchyLevel={surfacePlan?.visualHierarchyLevel}
+              semanticClaimIds={semanticElement?.claimIds ?? []}
+              conceptKind="none"
+              textWrapMode={node.textWrapMode ?? "break-word"}
+              typographyProfile={spec.typographyProfile === "longform-emphasis"
+                ? "longformEmphasis"
+                : "standard"}
+              style={{
+                ...geometry,
+                zIndex: 2,
+                textAlign: spec.narrativeTreatment === "package-anatomy" && node.semanticGroupId != null
+                  ? "center"
+                  : undefined
+              }}
+            />
+          </div>
+        );
+      })}
+      {spec.standaloneIcons.map((icon) => {
+        const anchor = semanticLayout.geometryById[icon.anchorId];
+        if (!anchor) return null;
+        const progress = icon.delayUntilFinalHold
+          ? visualSystemV1ProgressAtFrame(globalFrame, spec.holdStartFrame, 18)
+          : (state.nodeProgress[icon.anchorId] ?? 0) * (state.nodeVisibilityProgress[icon.anchorId] ?? 0);
+        if (progress <= 0) return null;
+        const graphNode = icon.participation === "graph-node";
+        const graphNodeBounds = graphNode
+          ? semanticLayout.iconGeometryById[icon.anchorId]
+          : null;
+        if (graphNode && !graphNodeBounds) {
+          throw new Error(`${spec.id}/${icon.id} 缺少与连线同源的图标可见几何`);
+        }
+        const slot = graphNode
+          ? { render: true, reason: "semantic-icon-render-bounds", side: null, bounds: graphNodeBounds }
+          : visualSystemV1StandaloneOverlaySlot({
+              anchorGeometry: anchor,
+              overlaySize: standaloneIconSize(icon),
+              safeArea: semanticLayout.safeArea,
+              geometryById: semanticLayout.fullGeometryById,
+              connectors: semanticLayout.allConnectors,
+              minimumGapPx: icon.maximumGapPx,
+              preferredSides: preferredOverlaySides(icon.placement)
+            });
+        if (!slot.render) return null;
+        const anchorNode = spec.nodes.find((node) => node.id === icon.anchorId);
+        return (
+          <React.Fragment key={icon.id}>
+            {icon.participation === "owned-callout" ? (
+              <svg
+                data-ai-tech-icon-owner-link={icon.id}
+                width={width}
+                height={height}
+                viewBox={`0 0 ${width} ${height}`}
+                style={{ position: "absolute", inset: 0, overflow: "visible", zIndex: 2 }}
+              >
+                <polyline
+                  points={ownedCalloutLeaderPoints(slot.bounds, anchor, slot.side)}
+                  fill="none"
+                  stroke={palette.mintDeep}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  opacity={progress * 0.58}
+                />
+              </svg>
+            ) : null}
+            <VisualSystemV1StandaloneIcon
+              conceptKind={icon.conceptKind}
+              presentation={icon.presentation}
+              sizeRole={icon.sizeRole}
+              progress={progress}
+              statusMarkVariant={icon.statusMarkVariant}
+              caption={graphNode ? normalizeNodeCopy(anchorNode?.label) : icon.caption}
+              detail={graphNode ? normalizeNodeCopy(anchorNode?.detail) : null}
+              layoutRole={icon.layoutRole}
+              placement={icon.placement}
+              participation={icon.participation}
+              semanticObjectId={icon.semanticObjectId}
+              ownerId={icon.ownerId}
+              label={`${anchorNode?.label ?? icon.anchorId} 独立状态图标`}
+              style={{
+                left: slot.bounds.x,
+                top: slot.bounds.y,
+                width: slot.bounds.width,
+                height: slot.bounds.height,
+                zIndex: 3
+              }}
+            />
+          </React.Fragment>
         );
       })}
       <div
+        data-stage-caption-reading-anchor={
+          subtitlePresentationMode === "semantic-cue"
+            ? "suppressed-for-subtitle-cue"
+            : shapeGrammarCueActive
+              ? "suppressed-for-shape-legend"
+              : "visible"
+        }
         style={{
           position: "absolute",
-          left: 120,
-          right: 280,
-          top: 298,
-          height: 34,
+          left: stageCaptionLayout.left,
+          right: stageCaptionLayout.right,
+          top: stageCaptionLayout.top,
+          height: stageCaptionLayout.height,
           zIndex: 3
         }}
       >
-        <StageCaption state={state} />
+        {suppressStageCaption ? null : (
+          <StageCaption caption={stageCaption} copyOpacity={copyOpacity * detailOpacity} />
+        )}
       </div>
+      <ShapeGrammarLegend
+        cue={spec.shapeGrammarCue}
+        globalFrame={globalFrame}
+        copyOpacity={copyOpacity * detailOpacity}
+      />
     </div>
   );
 }
@@ -405,19 +688,25 @@ function titleFontSize(title) {
   return typography.headlineWidePx;
 }
 
-function SceneLayer({ episode, layer, globalFrame }) {
+function SceneLayer({ episode, layer, globalFrame, subtitlePresentationMode }) {
   const spec = AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.find((item) => item.id === layer.sceneId);
   if (!spec) return null;
   const scene = episode?.scenes?.find((item) => item.id === layer.sceneId) ?? spec;
-  const title = scene.title ?? spec.title;
+  const visualSceneCopy = longReviewVisualSceneCopy(spec.id, scene);
+  const title = visualSceneCopy.title;
+  const titleStartFrame = spec.startFrame === 0
+    ? 0
+    : spec.startFrame - AGENT_SKILL_LONG_REVIEW_TITLE_PREROLL_FRAMES;
   return (
     <div
       style={{ position: "absolute", inset: 0, opacity: layer.opacity }}
       data-layer-scene-id={layer.sceneId}
       data-scene-kind={spec.kind}
+      data-scene-title-source={visualSceneCopy.titleSource}
+      data-episode-title-mismatch={visualSceneCopy.episodeTitleMismatch ? "true" : "false"}
     >
       <VisualSystemV1PopText
-        startFrame={spec.startFrame}
+        startFrame={titleStartFrame}
         style={{
           position: "absolute",
           left: 120,
@@ -429,13 +718,14 @@ function SceneLayer({ episode, layer, globalFrame }) {
           fontWeight: 900,
           lineHeight: 1.08,
           letterSpacing: "-.045em",
-          whiteSpace: "nowrap"
+          whiteSpace: "nowrap",
+          opacity: layer.copyOpacity
         }}
       >
         {title}
       </VisualSystemV1PopText>
       <VisualSystemV1PopText
-        startFrame={spec.startFrame + 4}
+        startFrame={spec.startFrame + spec.visualPlan.timing.supportingCopyStartFrame}
         style={{
           position: "absolute",
           left: 122,
@@ -447,19 +737,29 @@ function SceneLayer({ episode, layer, globalFrame }) {
           fontWeight: 650,
           lineHeight: 1.34,
           letterSpacing: "-.02em",
-          whiteSpace: "nowrap"
+          whiteSpace: "nowrap",
+          opacity: layer.copyOpacity
         }}
       >
-        {spec.deck ?? scene.statement ?? ""}
+        {visualSceneCopy.deck}
       </VisualSystemV1PopText>
-      <TechnicalDiagram spec={spec} globalFrame={globalFrame} />
+      <TechnicalDiagram
+        spec={spec}
+        globalFrame={globalFrame}
+        copyOpacity={layer.copyOpacity}
+        diagramOpacity={layer.diagramOpacity}
+        subtitlePresentationMode={subtitlePresentationMode}
+      />
     </div>
   );
 }
 
-function subtitleCaptions(episode) {
-  return (episode?.subtitles ?? []).map((subtitle) => ({
-    text: subtitle.text,
+function subtitleCaptions(episode, activeSubtitle = null) {
+  return longReviewDisplaySubtitles(episode?.subtitles ?? []).map((subtitle) => ({
+    text: activeSubtitle != null &&
+      activeSubtitle.start === subtitle.start && activeSubtitle.end === subtitle.end
+      ? activeSubtitle.text
+      : subtitle.text,
     startMs: subtitle.start * 1000,
     endMs: subtitle.end * 1000,
     timestampMs: null,
@@ -470,7 +770,17 @@ function subtitleCaptions(episode) {
 export function AgentSkillLongReview({ episode }) {
   const frame = useCurrentFrame();
   const layers = longReviewSceneLayersAtFrame(frame);
-  const captions = subtitleCaptions(episode);
+  const subtitleGate = longReviewSubtitleGateAtFrame(episode?.subtitles ?? [], frame);
+  const captions = subtitleCaptions(episode, subtitleGate.activeSubtitle);
+  const shapeGrammarLegendActive = AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.some((spec) =>
+    spec.shapeGrammarCue != null &&
+    frame >= spec.shapeGrammarCue.startFrame &&
+    frame < spec.shapeGrammarCue.endFrame
+  );
+  const finalScene = AGENT_SKILL_LONG_REVIEW_SCENE_SPECS.at(-1);
+  const backdropFrame = frame >= finalScene.holdStartFrame
+    ? finalScene.holdStartFrame
+    : frame;
   return (
     <AbsoluteFill
       lang="zh-CN"
@@ -481,13 +791,13 @@ export function AgentSkillLongReview({ episode }) {
         overflow: "hidden"
       }}
     >
-      <WideMovingBackdrop />
+      <WideMovingBackdrop frameOverride={backdropFrame} />
       {episode?.voice?.publicPath ? <Audio src={staticFile(episode.voice.publicPath)} /> : null}
       <div
         data-visual-system="visual-system-v1"
         data-visual-system-content="open-canvas"
         data-output-format="wide-only"
-        data-same-level-surfaces="flat"
+        data-same-level-surfaces="semantic-hierarchy-consistent"
         style={{ position: "absolute", inset: 0 }}
       >
         {layers.map((layer) => (
@@ -496,11 +806,33 @@ export function AgentSkillLongReview({ episode }) {
             episode={episode}
             layer={layer}
             globalFrame={frame}
+            subtitlePresentationMode={subtitleGate.presentationMode}
           />
         ))}
       </div>
-      <VisualSystemV1AiWatermark size={40} top={18} right={18} />
-      <VisualSystemV1PlainSubtitle captions={captions} />
+      <VisualSystemV1WideBrandLayer
+        tone="quiet"
+        transitionFrames={AGENT_SKILL_LONG_REVIEW_SCENE_START_FRAMES}
+      />
+      <div
+        data-subtitle-title-gate={subtitleGate.mode}
+        data-subtitle-shape-legend-gate={shapeGrammarLegendActive ? "hidden" : "visible"}
+        data-subtitle-presentation={subtitleGate.presentationMode ?? "none"}
+        data-subtitle-phase={subtitleGate.phase}
+        data-subtitle-visual-weight={subtitleGate.visualWeight ?? "none"}
+        style={{
+          opacity: shapeGrammarLegendActive
+            ? 0
+            : subtitleGate.opacity * subtitleGate.presentationOpacity
+        }}
+      >
+        {subtitleGate.renderSubtitle ? (
+          <VisualSystemV1PlainSubtitle
+            captions={captions}
+            visualWeight={subtitleGate.visualWeight ?? "primary"}
+          />
+        ) : null}
+      </div>
       <VisualSystemV1ChapterProgress chapters={AGENT_SKILL_LONG_REVIEW_CHAPTERS} />
     </AbsoluteFill>
   );

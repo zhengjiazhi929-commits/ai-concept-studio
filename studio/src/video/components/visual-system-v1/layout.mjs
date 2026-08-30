@@ -1,5 +1,10 @@
 import { VISUAL_SYSTEM_V1 } from "./tokens.mjs";
 
+export const VISUAL_SYSTEM_V1_SUBTITLE_VISUAL_WEIGHTS = Object.freeze([
+  "primary",
+  "supporting"
+]);
+
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
 }
@@ -58,6 +63,24 @@ export function visualSystemV1Layout(width, height) {
       ? VISUAL_SYSTEM_V1.typography.subtitleVerticalPx
       : VISUAL_SYSTEM_V1.typography.subtitleWidePx
   });
+}
+
+export function visualSystemV1SubtitleFontSize(layout, visualWeight = "primary") {
+  if (!VISUAL_SYSTEM_V1_SUBTITLE_VISUAL_WEIGHTS.includes(visualWeight)) {
+    throw new TypeError(`字幕视觉权重只允许 primary/supporting，收到 ${visualWeight}`);
+  }
+  if (
+    layout === null ||
+    typeof layout !== "object" ||
+    typeof layout.vertical !== "boolean" ||
+    !Number.isFinite(layout.subtitleFontSize)
+  ) {
+    throw new TypeError("字幕字号需要有效的 visual-system-v1 布局");
+  }
+  if (visualWeight === "primary") return layout.subtitleFontSize;
+  return layout.vertical
+    ? VISUAL_SYSTEM_V1.typography.subtitleSupportingVerticalPx
+    : VISUAL_SYSTEM_V1.typography.subtitleSupportingWidePx;
 }
 
 export function visualSystemV1AdaptiveCardTypography(cardWidth, cardHeight) {

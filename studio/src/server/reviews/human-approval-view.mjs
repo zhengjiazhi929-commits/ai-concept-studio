@@ -214,6 +214,8 @@ function currentDraft(draft = {}) {
     sourceScriptArtifactHash: draft.sourceScriptArtifactHash ?? null,
     sourceScriptReviewReportId: draft.sourceScriptReviewReportId ?? null,
     sourceSnapshotHash: draft.sourceSnapshotHash ?? null,
+    visualContractVersion: draft.visualContractVersion ?? null,
+    visualStyleProfileId: draft.visualStyleProfileId ?? null,
     visualRules: clone(draft.visualRules ?? []),
     assetChecklist: clone(draft.assetChecklist ?? [])
   };
@@ -365,6 +367,8 @@ function assetPlanContentView(content) {
   if (!content || typeof content !== "object") return null;
   return {
     visualSystem: content.visualSystem ?? null,
+    visualContractVersion: content.visualContractVersion ?? null,
+    visualStyleProfileId: content.visualStyleProfileId ?? null,
     visualRules: safeNestedValue(content.visualRules ?? []),
     sourceStoryboard: safeNestedValue(content.sourceStoryboard ?? null),
     generationProfile: content.generationProfile ?? null,

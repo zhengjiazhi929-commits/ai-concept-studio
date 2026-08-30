@@ -10,8 +10,10 @@ const PROFILES = Object.freeze({
     scriptSections: Object.freeze({ minimum: 6, maximum: 12 }),
     storyboardScenes: Object.freeze({ minimum: 12, maximum: 24 }),
     sceneDurationSeconds: Object.freeze({ minimum: 12, maximum: 60 }),
-    scriptInstruction: "写成 8 到 12 分钟、适合竖屏视频的结构化脚本草稿",
-    storyboardInstruction: "转换成连续的 8 到 12 分钟分镜",
+    scriptInstruction:
+      "写成 8 到 12 分钟、以 16:9 母版为主并可重构为 9:16 的结构化脚本草稿",
+    storyboardInstruction:
+      "转换成连续的 8 到 12 分钟 16:9 母版分镜；每个场景必须保留可独立重排为 9:16 的语义对象与关系，禁止依赖中央裁切",
     maximumScriptTokens: 6000,
     maximumStoryboardTokens: 6000
   }),

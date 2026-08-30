@@ -20,6 +20,8 @@ import {
 import { AgentSkillFullVideo } from "./agent-skill-full-video.jsx";
 import { AgentSkillShortExplainer } from "./agent-skill-short.jsx";
 import { AGENT_SKILL_SHORT_EPISODE_ID } from "./agent-skill-short-plan.mjs";
+import { ProductionSemanticPreview } from "./production-semantic-preview.jsx";
+import { isProductionSemanticScene } from "./production-semantic-preview.mjs";
 
 function activeItem(items, currentTime) {
   return items.find((item) => currentTime >= item.start && currentTime < item.end);
@@ -235,6 +237,7 @@ export function GenericEpisodePreview({ episode }) {
     extrapolateRight: "clamp"
   });
   const subtitle = activeItem(episode.subtitles ?? [], currentTime)?.text ?? scene.subtitle;
+  const semanticScene = isProductionSemanticScene(scene);
 
   return (
     <AbsoluteFill
@@ -246,41 +249,63 @@ export function GenericEpisodePreview({ episode }) {
       }}
     >
       {episode.voice?.publicPath ? <Audio src={staticFile(episode.voice.publicPath)} /> : null}
-      <div style={{ position: "absolute", top: 28, left: 34, right: 34 }}>
-        <ProgressStrip sceneIndex={sceneIndex} sceneCount={episode.scenes.length} />
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          inset: "54px 34px 140px",
-          opacity: fade,
-          transform: `translateY(${rise}px)`
-        }}
-      >
-        {scene.type === "title" ? <TitleScene scene={scene} /> : null}
-        {scene.type === "evidence" ? (
-          <EvidenceScene scene={scene} localFrame={localFrame} fps={fps} />
-        ) : null}
-        {scene.type === "statement" ? <StatementScene scene={scene} /> : null}
-        {scene.type === "summary" ? <SummaryScene scene={scene} /> : null}
-      </div>
-      <Subtitle text={subtitle} />
-      <Footer scene={scene} sceneIndex={sceneIndex} />
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: `${(frame / Math.max(1, durationInFrames - 1)) * 100}%`,
-          height: 4,
-          backgroundColor: colors.orange
-        }}
-      />
+      {semanticScene ? (
+        <ProductionSemanticPreview
+          scene={scene}
+          subtitle={subtitle}
+          localFrame={localFrame}
+          sceneIndex={sceneIndex}
+          sceneWeights={episode.scenes.map((item) => Math.max(0.001, item.end - item.start))}
+        />
+      ) : null}
+      {!semanticScene ? (
+        <div style={{ position: "absolute", top: 28, left: 34, right: 34 }}>
+          <ProgressStrip sceneIndex={sceneIndex} sceneCount={episode.scenes.length} />
+        </div>
+      ) : null}
+      {!semanticScene ? (
+        <>
+          <div
+            style={{
+              position: "absolute",
+              inset: "54px 34px 140px",
+              opacity: fade,
+              transform: `translateY(${rise}px)`
+            }}
+          >
+            {scene.type === "title" ? <TitleScene scene={scene} /> : null}
+            {scene.type === "evidence" ? (
+              <EvidenceScene scene={scene} localFrame={localFrame} fps={fps} />
+            ) : null}
+            {scene.type === "statement" ? <StatementScene scene={scene} /> : null}
+            {scene.type === "summary" ? <SummaryScene scene={scene} /> : null}
+          </div>
+          <Subtitle text={subtitle} />
+        </>
+      ) : null}
+      {!semanticScene ? (
+        <>
+          <Footer scene={scene} sceneIndex={sceneIndex} />
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: `${(frame / Math.max(1, durationInFrames - 1)) * 100}%`,
+              height: 4,
+              backgroundColor: colors.orange
+            }}
+          />
+        </>
+      ) : null}
     </AbsoluteFill>
   );
 }
 
 export function EpisodePreview({ episode }) {
+  if (episode.scenes?.some((scene) => isProductionSemanticScene(scene))) {
+    return <GenericEpisodePreview episode={episode} />;
+  }
   if (episode.id === "agent-skill-20260806") return <AgentSkillFullVideo episode={episode} />;
   if (episode.id === AGENT_SKILL_SHORT_EPISODE_ID) {
     return <AgentSkillShortExplainer episode={episode} />;
