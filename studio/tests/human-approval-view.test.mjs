@@ -17,11 +17,15 @@ import {
   buildHumanApprovalView,
   getHumanApprovalView
 } from "../src/server/reviews/human-approval-view.mjs";
+import { assertCurrentApprovalArtifactIntegrity } from
+  "../src/server/reviews/approval-artifact-integrity.mjs";
 import {
   approveGate,
   exactApprovalBinding,
   rejectGate
 } from "../src/server/orchestrator.mjs";
+import { acquireEpisodeOperation } from
+  "../src/server/control/episode-operation-lock.mjs";
 import { createStudioServer } from "../src/server/app.mjs";
 
 const REPORT_AT = "2026-08-17T08:00:00.000Z";
@@ -170,8 +174,10 @@ function fixtureEpisode() {
       id: "S01",
       start: 0,
       end: 10,
+      index: "01",
       title: "三层架构",
       subtitle: "Skill、Tool 与 MCP 分属不同层",
+      evidenceRef: "diagram-1",
       asset: "diagram.png",
       audio: "voice.wav"
     }],
@@ -390,6 +396,10 @@ test("七类待审批对象都输出白名单完整审批单、精确绑定和�
   const storyboard = buildHumanApprovalView(episode, "storyboard");
   assert.equal(storyboard.evidence.playablePreview, null);
   assert.equal(storyboard.changes.currentContentSummary.sceneCount, 1);
+  assert.equal(storyboard.content.scenes[0].index, "01");
+  assert.equal(storyboard.content.scenes[0].evidenceRef, "diagram-1");
+  assert.equal(Object.hasOwn(storyboard.content.scenes[0], "asset"), false);
+  assert.equal(Object.hasOwn(storyboard.content.scenes[0], "audio"), false);
   const assets = buildHumanApprovalView(episode, "assets");
   assert.equal(assets.content.apiCost.maximumPaidCostUsd, 0.3);
   assert.equal(assets.content.voiceIntegrity.sha256, "6".repeat(64));
@@ -435,6 +445,44 @@ test("读取研究审批单可完全注入内存，不接触 live Episode 或文
   assert.equal(view.content.conclusions.length, 1);
   assert.equal(view.content.boundaries[0].boundary, "不等于业务流程本身");
   assert.equal(view.status.completeForHumanReview, true);
+});
+
+test("内嵌研究正文无需独立 pack 文件也能形成完整人工审批单", async () => {
+  const episode = fixtureEpisode();
+  episode.research.packPath = null;
+  episode.research.content = researchPack();
+  episode.research.content.sources.push({
+    id: "source-secondary",
+    label: "第二份官方规范",
+    url: "https://example.test/secondary",
+    publisher: "Example",
+    sourceType: "official-doc"
+  });
+  episode.sourceDocs.push({
+    path: "research-source-register.json",
+    bytes: 64,
+    sha256: "a".repeat(64)
+  });
+  episode.research.readiness.verifiedSourceCount = 2;
+  episode.research.readiness.supportedClaimCount = 1;
+  const artifactHash = currentGateArtifactHash(episode, "research");
+  episode.reviews.research.artifactHash = artifactHash;
+  episode.reviews.research.reports.find(
+    (item) => item.id === episode.reviews.research.latestReportId
+  ).artifactHash = artifactHash;
+  const reads = [];
+  const view = await getHumanApprovalView(episode.id, "research", {
+    readEpisode: async () => structuredClone(episode),
+    readApprovalArtifact: async (path) => {
+      reads.push(path);
+      throw new Error("内嵌研究正文不应读取独立 pack 文件");
+    }
+  });
+  assert.deepEqual(reads, []);
+  assert.equal(view.content.conclusions.length, 1);
+  assert.equal(view.content.artifactReadable, true);
+  assert.equal(view.status.completeForHumanReview, true);
+  assert.equal(view.status.readyForHumanApproval, true);
 });
 
 test("完整待审批产物读取失败时只禁止批准，仍允许精确绑定退回", async () => {
@@ -741,10 +789,165 @@ test("普通 Gate 批准和驳回都只接受当前版本、哈希与机器报�
   assert.equal(store.episode.approvals.script.status, "rejected");
 });
 
+test("人工 Gate 在正文完整性重读失败时零写入", async () => {
+  const source = fixtureEpisode();
+  source.control.reviewEnabled = false;
+  const store = memoryStore(source);
+  const binding = exactApprovalBinding(store.episode, "script");
+  await assert.rejects(
+    approveGate(source.id, "script", { ...binding, note: "批准当前脚本" }, {
+      ...store,
+      assertCurrentApprovalArtifactIntegrity: async () => {
+        const error = new Error("正文漂移");
+        error.code = "script_approval_artifact_integrity_mismatch";
+        error.statusCode = 409;
+        throw error;
+      }
+    }),
+    (error) => error.code === "script_approval_artifact_integrity_mismatch"
+  );
+  assert.equal(store.episode.approvals.script.status, "pending");
+  assert.equal(store.events.length, 0);
+});
+
+test("研究来源被清空后即使报告哈希同步也不能人工批准", async () => {
+  const source = fixtureEpisode();
+  source.control.reviewEnabled = false;
+  source.research.packPath = null;
+  source.research.content = researchPack();
+  source.sourceDocs = [];
+  source.research.readiness.verifiedSourceCount = 0;
+  source.research.readiness.supportedClaimCount = 1;
+  const artifactHash = currentGateArtifactHash(source, "research");
+  source.reviews.research.artifactHash = artifactHash;
+  source.reviews.research.reports.find(
+    (item) => item.id === source.reviews.research.latestReportId
+  ).artifactHash = artifactHash;
+  const store = memoryStore(source);
+  await assert.rejects(
+    approveGate(source.id, "research", exactApprovalBinding(source, "research"), store),
+    (error) => error.code === "research_approval_evidence_registry_invalid"
+  );
+  assert.equal(store.episode.approvals.research.status, "pending");
+  assert.equal(store.events.length, 0);
+});
+
+test("研究来源与结论只有 ID、正文为空时人工批准零写入", async () => {
+  const source = fixtureEpisode();
+  source.control.reviewEnabled = false;
+  source.research.packPath = null;
+  source.research.content = {
+    sources: [{ id: "SRC-A" }, { id: "SRC-B" }],
+    claims: [{ id: "C-EMPTY", sourceIds: ["SRC-A", "SRC-B"] }]
+  };
+  source.sourceDocs.push({
+    path: "research-second-source.json",
+    bytes: 64,
+    sha256: "a".repeat(64)
+  });
+  source.research.readiness.verifiedSourceCount = 2;
+  source.research.readiness.supportedClaimCount = 1;
+  const artifactHash = currentGateArtifactHash(source, "research");
+  source.reviews.research.artifactHash = artifactHash;
+  source.reviews.research.reports.find(
+    (item) => item.id === source.reviews.research.latestReportId
+  ).artifactHash = artifactHash;
+  const view = buildHumanApprovalView(source, "research");
+  assert.equal(view.content.artifactReadable, false);
+  assert.equal(view.status.readyForHumanApproval, false);
+  const store = memoryStore(source);
+  await assert.rejects(
+    approveGate(source.id, "research", exactApprovalBinding(source, "research"), store),
+    (error) => error.code === "research_approval_evidence_registry_invalid"
+  );
+  assert.equal(store.episode.approvals.research.status, "pending");
+  assert.equal(store.events.length, 0);
+});
+
+test("人工 Gate 首次正文校验后文件被替换时零批准、零写入、零事件", async () => {
+  const temporaryRoot = await mkdtemp(resolve(tmpdir(), "approval-artifact-race-"));
+  const artifactPath = resolve(temporaryRoot, "script-v3.json");
+  const approvedBody = JSON.stringify({ sections: [{ narration: "当前人工看到的脚本" }] });
+  const approvedBytes = Buffer.byteLength(approvedBody);
+  const approvedSha256 = createHash("sha256").update(approvedBody).digest("hex");
+  const source = fixtureEpisode();
+  source.control.reviewEnabled = false;
+  source.production.scriptDraft = {
+    version: 3,
+    artifactPath,
+    bytes: approvedBytes,
+    sha256: approvedSha256
+  };
+  source.approvals.script.status = "pending";
+  source.approvals.script.currentVersion = 3;
+  source.reviews.script.latestReportId = "review-script-current";
+  const before = structuredClone(source);
+  let integrityAttempts = 0;
+  let writes = 0;
+  const events = [];
+
+  try {
+    await writeFile(artifactPath, approvedBody);
+    await assert.rejects(
+      approveGate(source.id, "script", {
+        ...exactApprovalBinding(source, "script"),
+        note: "批准当前脚本"
+      }, {
+        actor: "human:approval-race-test",
+        readEpisode: async () => structuredClone(source),
+        writeEpisode: async () => {
+          writes += 1;
+        },
+        appendEvent: async (event) => events.push(structuredClone(event)),
+        resolveExistingPathInside: async (_root, target) => target,
+        assertCurrentApprovalArtifactIntegrity: async (episode, gate, options) => {
+          integrityAttempts += 1;
+          const result = await assertCurrentApprovalArtifactIntegrity(episode, gate, options);
+          if (integrityAttempts === 1) {
+            await writeFile(artifactPath, "首次校验后被替换的正文");
+          }
+          return result;
+        }
+      }),
+      (error) => error.code === "script_approval_artifact_integrity_mismatch"
+        && error.statusCode === 409
+    );
+    assert.equal(integrityAttempts, 2);
+    assert.equal(writes, 0);
+    assert.equal(events.length, 0);
+    assert.deepEqual(source, before);
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test("Agent 状态变更锁持有期间人工批准 fail closed 且零副作用", async () => {
+  const source = fixtureEpisode();
+  source.control.reviewEnabled = false;
+  const store = memoryStore(source);
+  const releaseOperation = acquireEpisodeOperation(source.id, "worker:script-agent");
+  try {
+    await assert.rejects(
+      approveGate(source.id, "script", exactApprovalBinding(source, "script"), store),
+      (error) => error.code === "episode_operation_active"
+        && error.activeKind === "worker:script-agent"
+    );
+    assert.equal(store.episode.approvals.script.status, source.approvals.script.status);
+    assert.equal(store.events.length, 0);
+  } finally {
+    releaseOperation();
+  }
+});
+
 test("HTTP 审批单 GET 可读，所有正式缺绑定批准和驳回均返回 409", async () => {
   const episode = fixtureEpisode();
+  const operatorToken = "human-approval-http-test-operator-token-20260824";
   const { server } = await createStudioServer({
     recoverOnStart: false,
+    operatorActor: "human:approval-http-test",
+    operatorToken,
+    allowServiceTokenMutations: true,
+    capabilitySecret: "human-approval-http-test-capability-secret-20260824",
     readEpisode: async () => structuredClone(episode),
     writeEpisode: async () => {
       throw new Error("409 路径不应写状态");
@@ -780,7 +983,10 @@ test("HTTP 审批单 GET 可读，所有正式缺绑定批准和驳回均返回 
     for (const [path, body, code] of cases) {
       const response = await fetch(`${base}${path}`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "x-operator-token": operatorToken
+        },
         body: JSON.stringify(body)
       });
       assert.equal(response.status, 409, path);

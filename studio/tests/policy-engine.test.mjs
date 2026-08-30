@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readEpisode } from "../src/shared/store.mjs";
+import { readFixtureEpisode } from "./episode-fixture.mjs";
 import {
   approvalValidForGate,
   legalWorkerActions,
@@ -25,14 +25,14 @@ function plan(overrides = {}) {
 }
 
 test("Policy 只暴露当前可运行 Worker，不重复调度已完成步骤", async () => {
-  const episode = await readEpisode("golden-001");
+  const episode = await readFixtureEpisode();
   for (const step of episode.pipeline) step.status = "complete";
   episode.pipeline.find((step) => step.agent === "script-agent").status = "ready";
   assert.deepEqual(legalWorkerActions(episode).map((item) => item.workerId), ["script-agent"]);
 });
 
 test("Policy 同时执行调用、费用和工具权限边界", async () => {
-  const episode = await readEpisode("golden-001");
+  const episode = await readFixtureEpisode();
   episode.pipeline.find((step) => step.agent === "script-agent").status = "ready";
   episode.control.allowedTools = ["artifact.read"];
   episode.control.budget = {
@@ -52,7 +52,7 @@ test("Policy 同时执行调用、费用和工具权限边界", async () => {
 });
 
 test("停止请求和不存在的人工审批都会被拒绝", async () => {
-  const episode = await readEpisode("golden-001");
+  const episode = await readFixtureEpisode();
   episode.control.stopRequested = true;
   assert.equal(validatePlanAgainstPolicy(episode, plan()).valid, false);
   episode.control.stopRequested = false;
@@ -66,7 +66,7 @@ test("停止请求和不存在的人工审批都会被拒绝", async () => {
 });
 
 test("人工批准只接受与当前审批版本严格绑定的通过报告", async () => {
-  const episode = await readEpisode("golden-001");
+  const episode = await readFixtureEpisode();
   episode.id = "review-binding-case";
   episode.system.trustedFixture = false;
   const artifactVersion = episode.production.scriptDraft.version;
@@ -101,7 +101,7 @@ test("人工批准只接受与当前审批版本严格绑定的通过报告", as
 });
 
 test("旧式 approved 状态没有审核证据时不能解锁下游 Worker", async () => {
-  const episode = await readEpisode("golden-001");
+  const episode = await readFixtureEpisode();
   episode.id = "legacy-approval-case";
   episode.system.trustedFixture = false;
   for (const step of episode.pipeline) step.status = "pending";
@@ -120,4 +120,19 @@ test("旧式 approved 状态没有审核证据时不能解锁下游 Worker", asy
     ),
     false
   );
+});
+
+test("golden v0.1 trusted-fixture 白名单不再绕过真实机器审核与人审证据", async () => {
+  const episode = await readFixtureEpisode();
+  episode.system = {
+    ...episode.system,
+    importedBy: "golden-sample-importer-v0.1",
+    trustedFixture: true
+  };
+  episode.approvals.research = {
+    ...episode.approvals.research,
+    provenance: "trusted-fixture",
+    reviewReportId: null
+  };
+  assert.equal(approvalValidForGate(episode, "research"), false);
 });

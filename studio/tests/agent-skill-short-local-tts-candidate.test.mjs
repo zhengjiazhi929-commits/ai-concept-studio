@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
 
-import { studioRoot, workspaceRoot } from "../src/shared/paths.mjs";
+import { studioRoot } from "../src/shared/paths.mjs";
 import { LOCAL_OFFLINE_TTS_V002_REGISTRATION } from
   "../src/server/production/local-offline-voice.mjs";
 import {
@@ -20,166 +20,24 @@ import {
   nextShortLocalTtsCandidateVersion
 } from "../src/video/agent-skill-short-local-tts-candidate.mjs";
 import { assertShortLocalTtsCandidateApprovals } from "../scripts/build-agent-skill-short-local-tts-candidate.mjs";
-import { currentGateArtifactHash } from "../src/shared/workflow.mjs";
+import { createLocalOfflineVoiceFixture } from "./local-offline-voice.fixture.mjs";
 
 const execute = promisify(execFile);
 const episodeId = "agent-skill-tool-mcp-60s-20260813";
-const HISTORICAL_STORYBOARD_V3_HASH =
-  "29f0914a188c5d17d7bf9e4f0adafb0fdbb1ce7b0665498e5d390c9e9e4bf182";
-
-async function withApprovedHistoricalStoryboardV3(source) {
-  const episode = structuredClone(source);
-  const artifact = JSON.parse(await readFile(resolve(
-    studioRoot,
-    "data",
-    "production",
-    "episodes",
-    episodeId,
-    "storyboard-draft-v003.json"
-  ), "utf8"));
-  const versions = episode.production.storyboardDraft.versions
-    .filter(({ version }) => version <= 3)
-    .map((entry) => structuredClone(entry));
-  const version = versions.find((entry) => entry.version === 3);
-  assert.ok(version, "测试夹具必须保留历史 Storyboard v3 元数据");
-  episode.production.storyboardDraft = {
-    ...version,
-    needsRevision: false,
-    versions
-  };
-  episode.scenes = structuredClone(artifact.timeline.scenes);
-  episode.subtitles = structuredClone(artifact.timeline.subtitles);
-  episode.render.durationSeconds = artifact.timeline.durationSeconds;
-  const artifactHash = currentGateArtifactHash(episode, "storyboard");
-  assert.equal(artifactHash, HISTORICAL_STORYBOARD_V3_HASH);
-  const reportId = "test-storyboard-v3-machine-pass";
-  episode.control.reviewEnabled = true;
-  episode.reviews.storyboard = {
-    status: "passed",
-    artifactVersion: 3,
-    artifactHash,
-    rubricVersion: "storyboard-v3",
-    revisionRounds: 0,
-    latestReportId: reportId,
-    reports: [{
-      id: reportId,
-      stage: "storyboard",
-      decision: "pass",
-      artifactVersion: 3,
-      artifactHash
-    }]
-  };
-  episode.approvals.storyboard = {
-    ...episode.approvals.storyboard,
-    status: "approved",
-    currentVersion: 3,
-    provenance: "reviewed-v2",
-    reviewReportId: reportId,
-    artifactHash
-  };
-  const storyboardStep = episode.pipeline.find((step) => step.gate === "storyboard");
-  storyboardStep.status = "complete";
-  storyboardStep.requiresHuman = false;
-  return episode;
-}
+const candidateFixture = createLocalOfflineVoiceFixture(
+  LOCAL_OFFLINE_TTS_V002_REGISTRATION
+);
 
 async function loadCurrentInputs() {
-  const historicAssetPlanPath =
-    `studio/data/production/episodes/${episodeId}/asset-plan-v009.json`;
-  const [episode, voicePlan, historicAssetPlan, candidateManifest] = await Promise.all([
-    readFile(resolve(studioRoot, "data", "episodes", episodeId, "episode.json"), "utf8")
-      .then(JSON.parse),
-    readFile(
-      resolve(
-        studioRoot,
-        "data",
-        "production",
-        "episodes",
-        episodeId,
-        "voice-plan-v001.json"
-      ),
-      "utf8"
-    ).then(JSON.parse),
-    readFile(resolve(workspaceRoot, historicAssetPlanPath), "utf8").then(JSON.parse),
-    readFile(
-      resolve(
-        workspaceRoot,
-        "outputs",
-        "studio",
-        episodeId,
-        LOCAL_OFFLINE_TTS_V002_REGISTRATION.manifestFileName
-      ),
-      "utf8"
-    ).then(JSON.parse)
-  ]);
-  const binding = candidateManifest.source.assetExecution;
-  const history = episode.reviewCheckpoints.assetExecution.history ?? [];
-  const machine = history.find((entry) =>
-    entry.type === "machine-review"
-      && entry.version === binding.version
-      && entry.candidateHash === binding.candidateHash
-      && entry.status === "passed"
+  const episode = structuredClone(candidateFixture.episode);
+  const voicePlanData = candidateFixture.files.get(
+    episode.production.voicePlan.artifactPath
   );
-  episode.production.assetPlanDirection = {
-    strategy: "local-only",
-    selectedBy: "human"
+  assert.ok(voicePlanData, "tracked fixture must include voice plan JSON");
+  return {
+    episode,
+    voicePlan: JSON.parse(voicePlanData.toString("utf8"))
   };
-  episode.production.assetPlan = {
-    version: binding.version,
-    artifactPath: historicAssetPlanPath,
-    content: historicAssetPlan.plan,
-    needsRevision: false
-  };
-  episode.reviewCheckpoints.assetExecution = {
-    schemaVersion: 1,
-    status: "approved",
-    currentCandidate: {
-      episodeId,
-      version: binding.version,
-      artifact: {
-        path: historicAssetPlanPath,
-        bytes: 1,
-        sha256: "9".repeat(64)
-      },
-      planHash: binding.planHash,
-      candidateHash: binding.candidateHash,
-      summary: {
-        itemCount: historicAssetPlan.plan.items.length,
-        requiredVisualItemCount: historicAssetPlan.plan.items.filter(
-          (item) => item.required && item.assetType !== "voice"
-        ).length,
-        productionMethods: ["local-code-animation", "deferred-voice-agent"],
-        externalApiCallCount: 0,
-        externalApiCalls: [],
-        maximumPaidCostUsd: 0,
-        currency: "USD",
-        billingCurrencies: [],
-        nativeCurrencyCaps: [],
-        budgetNormalization: null,
-        costScope: "external-api-only",
-        pricingConfirmed: true
-      }
-    },
-    machineReview: {
-      id: machine.reviewId,
-      status: "passed",
-      candidateHash: binding.candidateHash,
-      checks: []
-    },
-    humanApproval: {
-      decision: "approved",
-      at: binding.approvedAt,
-      note: "历史 v9 本地零调用测试夹具",
-      version: binding.version,
-      candidateHash: binding.candidateHash,
-      machineReviewId: machine.reviewId,
-      maximumPaidCostUsd: 0,
-      externalApiCallCount: 0,
-      authorizedToolIds: []
-    },
-    history
-  };
-  return { episode, voicePlan };
 }
 
 function episodeWaitingForAuthorizedVoice(sourceEpisode) {
@@ -331,9 +189,7 @@ test("试听分段对字幕改字、时间轴缺口和跨镜字幕失败关闭",
 
 test("构建器只接受当前 script、storyboard 和本地零调用素材方案的精确批准", async () => {
   const loaded = await loadCurrentInputs();
-  const episode = episodeWaitingForAuthorizedVoice(
-    await withApprovedHistoricalStoryboardV3(loaded.episode)
-  );
+  const episode = episodeWaitingForAuthorizedVoice(loaded.episode);
   const approvals = assertShortLocalTtsCandidateApprovals(episode, {
     validateAssetExecutionApproval: () => true
   });

@@ -1,19 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readEpisode } from "../src/shared/store.mjs";
+import { readFixtureEpisode } from "./episode-fixture.mjs";
 import {
   confirmAssistedDispatch,
   controlStopReason,
   prepareAssistedDispatch,
   recoverInterruptedDispatch,
   runActiveCycle,
+  setControlMode,
   transitionControlMode
 } from "../src/server/control/controlled-dispatch.mjs";
-import {
-  contentHash,
-  createEvaluationEvidence,
-  DEFAULT_EVALUATION_SUITE
-} from "../src/server/control/evaluation-suite.mjs";
 
 function validPlan(overrides = {}) {
   return {
@@ -47,20 +43,8 @@ function passingShadowRecords() {
   }));
 }
 
-function passingReleaseEvidence() {
-  return DEFAULT_EVALUATION_SUITE.cases.map((definition, index) => createEvaluationEvidence({
-    caseId: definition.caseId,
-    runId: `test-run-${index + 1}`,
-    contextHash: contentHash({ caseId: definition.caseId, context: "fixture" }),
-    expectedActionHash: contentHash({ action: "expected", caseId: definition.caseId }),
-    actualActionHash: contentHash({ action: "expected", caseId: definition.caseId }),
-    passed: true,
-    completedAt: `2026-08-06T02:0${index}:00.000Z`
-  }));
-}
-
-async function schedulableEpisode(mode = "assisted") {
-  const episode = structuredClone(await readEpisode("golden-001"));
+async function schedulableEpisode(mode = "assisted", options = {}) {
+  const episode = structuredClone(await readFixtureEpisode());
   for (const step of episode.pipeline) {
     step.status = "pending";
     step.requiresApproval = null;
@@ -88,22 +72,27 @@ async function schedulableEpisode(mode = "assisted") {
     usedCostUsd: 0
   };
   episode.planHistory = passingShadowRecords();
-  episode.evaluationHistory = passingReleaseEvidence();
+  episode.evaluationHistory = [];
   episode.dispatchHistory = [];
   return episode;
 }
 
 function memoryStore(initialEpisode) {
   let stored = structuredClone(initialEpisode);
+  let writes = 0;
   const events = [];
   return {
     readEpisode: async () => structuredClone(stored),
     writeEpisode: async (episode) => {
+      writes += 1;
       stored = structuredClone(episode);
     },
     appendEvent: async (event) => events.push(structuredClone(event)),
     get episode() {
       return structuredClone(stored);
+    },
+    get writeCount() {
+      return writes;
     },
     mutate(mutator) {
       mutator(stored);
@@ -112,136 +101,310 @@ function memoryStore(initialEpisode) {
   };
 }
 
-test("模式只能 shadow -> assisted -> active，且升级依赖影子评测和固定回退", async () => {
+function rejectsUnavailableAdmission(error, operation) {
+  assert.equal(error.code, "control_mode_admission_unavailable");
+  assert.equal(error.statusCode, 409);
+  assert.equal(error.operation, operation);
+  assert.equal(error.safeFallbackMode, "shadow");
+  assert.match(error.message, /显式切换到 shadow/u);
+  return true;
+}
+
+test("缺少可信 Runner attestation 时模式升级始终关闭，调用方不能伪造准入", async () => {
+  const referenceSuite = {
+    runtimeVerified: true,
+    admission: { eligible: false, evidenceClass: "offline-reference-only" }
+  };
+  const callerForgedSuite = {
+    ...referenceSuite,
+    admission: {
+      eligible: true,
+      evidenceClass: "trusted-runner-attested",
+      attestationVerified: true
+    }
+  };
   const source = await schedulableEpisode("shadow");
   assert.throws(
     () => transitionControlMode(source, "active"),
     /不允许从 shadow 直接切换到 active/u
   );
-
-  const notReady = structuredClone(source);
-  notReady.planHistory[1].evaluation.duplicateRun = true;
   assert.throws(
-    () => transitionControlMode(notReady, "assisted"),
-    /影子评测尚未达到/u
+    () => transitionControlMode(source, "assisted", {
+      evaluationSuite: referenceSuite
+    }),
+    (error) => error.code === "control_mode_admission_unavailable"
   );
-
-  const missingFormalEvidence = structuredClone(source);
-  missingFormalEvidence.evaluationHistory = [];
   assert.throws(
-    () => transitionControlMode(missingFormalEvidence, "assisted"),
-    /独立正式评测集尚未达到/u
+    () => transitionControlMode(source, "assisted", {
+      evaluationSuite: callerForgedSuite,
+      verifyActiveAuthorization: () => true
+    }),
+    (error) => error.code === "control_mode_admission_unavailable"
   );
+  assert.equal(source.control.mode, "shadow");
+  assert.equal(source.control.mainAgentEnabled, true);
 
-  const assisted = transitionControlMode(source, "assisted", {
-    now: new Date("2026-08-06T03:00:00.000Z")
-  });
-  assert.equal(assisted.changed, true);
-  assert.equal(assisted.evaluation.passed, true);
-  assert.equal(assisted.evaluation.release.passedCases, DEFAULT_EVALUATION_SUITE.cases.length);
-  assert.equal(assisted.episode.control.fixedFallbackEnabled, true);
-  assert.equal(assisted.episode.control.mode, "assisted");
-
-  const active = transitionControlMode(assisted.episode, "active", {
-    now: new Date("2026-08-06T03:01:00.000Z")
-  });
-  assert.equal(active.episode.control.mode, "active");
-  assert.equal(active.evaluation.passed, true);
-});
-
-test("assisted 只生成待确认调度，人工确认后才运行一次 Worker", async () => {
-  const store = memoryStore(await schedulableEpisode("assisted"));
-  let workerCalls = 0;
-  const prepared = await prepareAssistedDispatch("golden-001", {
-    ...store,
-    planner: async () => validPlan(),
-    runWorker: async () => {
-      workerCalls += 1;
-    },
-    now: new Date("2026-08-06T03:10:00.000Z")
-  });
-  assert.equal(prepared.status, "waiting_confirmation");
-  assert.equal(workerCalls, 0);
-  assert.equal(store.episode.control.pendingDispatch.status, "waiting_confirmation");
-
-  const confirmed = await confirmAssistedDispatch(
-    "golden-001",
-    prepared.pending.id,
-    {
-      ...store,
-      runWorker: async (episodeId, workerId, runOptions) => {
-        workerCalls += 1;
-        assert.equal(episodeId, "golden-001");
-        assert.equal(workerId, "script-agent");
-        assert.equal(runOptions.initiator, "main-agent");
-        assert.equal(runOptions.taskProfile, "creative-structured");
-        assert.equal(runOptions.reviewProfile, "script-v2");
-        assert.deepEqual(runOptions.toolIds, []);
-        assert.deepEqual(runOptions.limits, { maxAttempts: 1, maxRevisionRounds: 2 });
-        assert.match(runOptions.idempotencyKey, /^golden-001:\d+:script-agent:1$/u);
-        store.mutate((episode) => {
-          episode.pipeline.find((step) => step.agent === workerId).status = "complete";
-        });
+  const assistedSource = await schedulableEpisode("assisted");
+  assert.throws(
+    () => transitionControlMode(assistedSource, "active", {
+      evaluationSuite: callerForgedSuite,
+      activeAuthorization: {
+        decision: "authorize_active",
+        actorId: "human:release-owner"
       },
-      now: new Date("2026-08-06T03:11:00.000Z")
-    }
+      verifyActiveAuthorization: () => true
+    }),
+    (error) => error.code === "control_mode_admission_unavailable"
   );
-  assert.equal(confirmed.status, "completed");
-  assert.equal(workerCalls, 1);
-  assert.equal(store.episode.control.pendingDispatch, null);
-  assert.equal(store.episode.dispatchHistory.at(-1).humanConfirmed, true);
-  assert.equal(store.episode.dispatchHistory.at(-1).status, "completed");
-  assert.equal(store.episode.dispatchHistory.at(-1).reviewProfile, "script-v2");
+  assert.equal(assistedSource.control.mode, "assisted");
 });
 
-test("assisted 确认前会重新经 Kernel 校验，过期动作不会执行", async () => {
-  const store = memoryStore(await schedulableEpisode("assisted"));
-  const prepared = await prepareAssistedDispatch("golden-001", {
-    ...store,
-    planner: async () => validPlan(),
-    now: new Date("2026-08-06T03:20:00.000Z")
-  });
-  let workerCalls = 0;
-  store.mutate((episode) => {
-    episode.pipeline.find((step) => step.agent === "script-agent").status = "pending";
-  });
-  await assert.rejects(
-    confirmAssistedDispatch("golden-001", prepared.pending.id, {
+test("没有评测对象、陈旧证据或调用方注入对象都不能绕过模式锁", async () => {
+  const source = await schedulableEpisode("shadow");
+  assert.throws(
+    () => transitionControlMode(source, "assisted"),
+    (error) => error.code === "control_mode_admission_unavailable"
+  );
+
+  const stale = structuredClone(source);
+  stale.evaluationHistory = [];
+  assert.throws(
+    () => transitionControlMode(stale, "assisted", {
+      evaluationSuite: { runtimeVerified: true, admission: { eligible: true } }
+    }),
+    (error) => error.code === "control_mode_admission_unavailable"
+  );
+});
+
+test("评测绑定漂移不阻塞 shadow 同模式请求与高模式紧急降级", async () => {
+  let evaluationReads = 0;
+  const rejectDriftedSuite = async () => {
+    evaluationReads += 1;
+    throw new Error("agent-evaluation-suite 运行时绑定不匹配");
+  };
+  for (const [currentMode, requestedMode] of [
+    ["active", "shadow"],
+    ["assisted", "shadow"],
+    ["shadow", "shadow"]
+  ]) {
+    const store = memoryStore(await schedulableEpisode(currentMode, {
+      skipReleaseEvaluation: true
+    }));
+    const result = await setControlMode("golden-001", requestedMode, {
       ...store,
+      readEvaluationSuite: rejectDriftedSuite,
+      now: new Date("2026-08-06T03:05:00.000Z")
+    });
+    const normalizesLegacyShadow = currentMode === "shadow" && requestedMode === "shadow";
+    assert.equal(result.episode.control.mode, requestedMode);
+    assert.equal(result.changed, currentMode !== requestedMode || normalizesLegacyShadow);
+    assert.equal(
+      store.writeCount,
+      currentMode !== requestedMode || normalizesLegacyShadow ? 1 : 0
+    );
+    if (requestedMode === "shadow") {
+      assert.equal(result.episode.control.mainAgentEnabled, false);
+      assert.equal(result.episode.control.modelRouterEnabled, false);
+    }
+  }
+
+  for (const [currentMode, requestedMode] of [
+    ["active", "active"],
+    ["active", "assisted"],
+    ["assisted", "assisted"]
+  ]) {
+    const store = memoryStore(await schedulableEpisode(currentMode));
+    await assert.rejects(
+      setControlMode("golden-001", requestedMode, {
+        ...store,
+        readEvaluationSuite: rejectDriftedSuite
+      }),
+      (error) => rejectsUnavailableAdmission(error, "control mode transition")
+    );
+    assert.equal(store.writeCount, 0);
+    assert.equal(store.episode.control.mode, currentMode);
+  }
+  assert.equal(evaluationReads, 0);
+
+  const upgradeStore = memoryStore(await schedulableEpisode("shadow", {
+    skipReleaseEvaluation: true
+  }));
+  await assert.rejects(
+    setControlMode("golden-001", "assisted", {
+      ...upgradeStore,
+      readEvaluationSuite: rejectDriftedSuite
+    }),
+    (error) => error.code === "control_mode_admission_unavailable"
+  );
+  assert.equal(evaluationReads, 0);
+  assert.equal(upgradeStore.writeCount, 0);
+  assert.equal(upgradeStore.episode.control.mode, "shadow");
+});
+
+test("旧持久化 assisted 即使伪造 admission 且执行开关开启，也不能 prepare", async () => {
+  const store = memoryStore(await schedulableEpisode("assisted"));
+  store.mutate((episode) => {
+    episode.evaluationHistory = [{
+      id: "forged-release-attestation",
+      admissionEligible: true,
+      attestationVerified: true,
+      completedAt: "2026-08-01T00:00:00.000Z"
+    }];
+  });
+  let plannerCalls = 0;
+  let workerCalls = 0;
+  await assert.rejects(
+    prepareAssistedDispatch("golden-001", {
+      ...store,
+      evaluationSuite: {
+        admission: {
+          eligible: true,
+          evidenceClass: "trusted-runner-attested",
+          attestationVerified: true
+        }
+      },
+      verifyControlModeAdmission: () => true,
+      planner: async () => {
+        plannerCalls += 1;
+        return validPlan();
+      },
       runWorker: async () => {
         workerCalls += 1;
-      }
+      },
+      now: new Date("2026-08-06T03:10:00.000Z")
     }),
-    /Workflow Kernel 拒绝计划/u
+    (error) => rejectsUnavailableAdmission(error, "assisted prepare")
   );
+  assert.equal(plannerCalls, 0);
   assert.equal(workerCalls, 0);
+  assert.equal(store.writeCount, 0);
+  assert.equal(store.episode.control.mode, "assisted");
+  assert.equal(store.episode.control.mainAgentEnabled, true);
+  assert.equal(store.episode.control.modelRouterEnabled, true);
+  assert.equal(store.episode.control.pendingDispatch, null);
 });
 
-test("active 仅运行闸门之间的合法动作，到人工审批立即暂停", async () => {
-  const store = memoryStore(await schedulableEpisode("active"));
+test("旧持久化 assisted pending 即使人工确认也不会执行 Worker", async () => {
+  const episode = await schedulableEpisode("assisted");
+  const planRecord = {
+    id: "plan-stale-assisted-v7",
+    version: 7,
+    mode: "assisted",
+    status: "proposed",
+    plan: validPlan()
+  };
+  episode.control.currentPlan = structuredClone(planRecord);
+  episode.control.pendingDispatch = {
+    id: "dispatch-plan-stale-assisted-v7",
+    planId: planRecord.id,
+    planVersion: planRecord.version,
+    plan: structuredClone(planRecord.plan),
+    status: "waiting_confirmation",
+    createdAt: "2026-08-01T00:01:00.000Z"
+  };
+  const store = memoryStore(episode);
   let workerCalls = 0;
-  const result = await runActiveCycle("golden-001", {
+  await assert.rejects(
+    confirmAssistedDispatch(
+      "golden-001",
+      episode.control.pendingDispatch.id,
+      {
+        ...store,
+        activeAuthorization: { decision: "authorize_active" },
+        verifyControlModeAdmission: () => true,
+        runWorker: async () => {
+          workerCalls += 1;
+        },
+        now: new Date("2026-08-06T03:11:00.000Z")
+      }
+    ),
+    (error) => rejectsUnavailableAdmission(error, "assisted confirm")
+  );
+  assert.equal(workerCalls, 0);
+  assert.equal(store.writeCount, 0);
+  assert.equal(store.episode.control.pendingDispatch.status, "waiting_confirmation");
+  assert.equal(store.episode.dispatchHistory.length, 0);
+});
+
+test("高模式被锁定后可显式降级到 shadow，pending 取消且证据历史保留", async () => {
+  const episode = await schedulableEpisode("assisted");
+  const planRecord = {
+    id: "plan-stale-assisted-v8",
+    version: 8,
+    mode: "assisted",
+    status: "proposed",
+    plan: validPlan()
+  };
+  episode.control.currentPlan = structuredClone(planRecord);
+  episode.control.pendingDispatch = {
+    id: "dispatch-plan-stale-assisted-v8",
+    planId: planRecord.id,
+    planVersion: planRecord.version,
+    plan: structuredClone(planRecord.plan),
+    status: "waiting_confirmation",
+    createdAt: "2026-08-01T00:02:00.000Z"
+  };
+  episode.evaluationHistory = [{ id: "old-evidence-must-remain" }];
+  const originalPlanHistory = structuredClone(episode.planHistory);
+  const originalEvaluationHistory = structuredClone(episode.evaluationHistory);
+  const store = memoryStore(episode);
+
+  const downgraded = await setControlMode("golden-001", "shadow", {
     ...store,
-    planner: async () => validPlan(),
-    runWorker: async (_episodeId, workerId, runOptions) => {
-      workerCalls += 1;
-      assert.equal(runOptions.initiator, "main-agent");
-      assert.equal(runOptions.taskProfile, "creative-structured");
-      assert.equal(runOptions.reviewProfile, "script-v2");
-      assert.deepEqual(runOptions.toolIds, []);
-      store.mutate((episode) => {
-        const step = episode.pipeline.find((item) => item.agent === workerId);
-        step.status = "waiting_approval";
-        step.requiresApproval = "script";
-      });
-    },
-    now: new Date("2026-08-06T03:30:00.000Z")
+    now: new Date("2026-08-06T03:12:00.000Z")
   });
-  assert.equal(workerCalls, 1);
-  assert.equal(result.status, "paused");
-  assert.equal(result.stop.code, "human_approval");
-  assert.equal(result.dispatches.length, 1);
-  assert.equal(store.episode.dispatchHistory.at(-1).status, "completed");
+
+  assert.equal(downgraded.changed, true);
+  assert.equal(downgraded.episode.control.mode, "shadow");
+  assert.equal(downgraded.episode.control.mainAgentEnabled, false);
+  assert.equal(downgraded.episode.control.modelRouterEnabled, false);
+  assert.equal(downgraded.episode.control.pendingDispatch, null);
+  assert.deepEqual(downgraded.episode.planHistory, originalPlanHistory);
+  assert.deepEqual(downgraded.episode.evaluationHistory, originalEvaluationHistory);
+  assert.equal(downgraded.episode.dispatchHistory.at(-1).status, "cancelled");
+  assert.equal(downgraded.episode.dispatchHistory.at(-1).reasonCode, "mode_changed");
+  assert.equal(store.writeCount, 1);
+  assert.equal(store.events.at(-1).type, "control.mode_changed");
+  assert.equal(store.events.at(-1).mode, "shadow");
+});
+
+test("旧持久化 active 即使伪造 admission 且执行开关开启，也不会规划或执行", async () => {
+  const store = memoryStore(await schedulableEpisode("active"));
+  let plannerCalls = 0;
+  let workerCalls = 0;
+  await assert.rejects(
+    runActiveCycle("golden-001", {
+      ...store,
+      evaluationSuite: {
+        admission: {
+          eligible: true,
+          evidenceClass: "trusted-runner-attested",
+          attestationVerified: true
+        }
+      },
+      activeAuthorization: {
+        decision: "authorize_active",
+        actorId: "human:release-owner"
+      },
+      verifyControlModeAdmission: () => true,
+      planner: async () => {
+        plannerCalls += 1;
+        return validPlan();
+      },
+      runWorker: async () => {
+        workerCalls += 1;
+      },
+      now: new Date("2026-08-06T03:30:00.000Z")
+    }),
+    (error) => rejectsUnavailableAdmission(error, "active run")
+  );
+  assert.equal(plannerCalls, 0);
+  assert.equal(workerCalls, 0);
+  assert.equal(store.writeCount, 0);
+  assert.equal(store.episode.control.mode, "active");
+  assert.equal(store.episode.control.mainAgentEnabled, true);
+  assert.equal(store.episode.control.modelRouterEnabled, true);
+  assert.equal(store.episode.dispatchHistory.length, 0);
 });
 
 test("停止、证据冲突、预算、Provider 与连续审核失败都会形成明确暂停原因", async () => {
@@ -259,6 +422,31 @@ test("停止、证据冲突、预算、Provider 与连续审核失败都会形�
     warnings: []
   }];
   assert.equal(controlStopReason(conflict).code, "evidence_conflict");
+
+  const ambiguousBudget = structuredClone(base);
+  ambiguousBudget.control.budget.reservations = [{
+    id: "route-ambiguous:attempt:1",
+    decisionId: "route-ambiguous",
+    calls: 1,
+    costUsd: 0.2,
+    costKnown: true,
+    reservedAt: "2026-08-06T03:29:00.000Z"
+  }];
+  ambiguousBudget.control.budget.reservedCalls = 1;
+  ambiguousBudget.control.budget.reservedCostUsd = 0.2;
+  ambiguousBudget.control.budget.overrun = true;
+  ambiguousBudget.pipeline.find((step) => step.agent === "script-agent").requiresHuman = true;
+  ambiguousBudget.history.push({
+    type: "budget-reservation-ambiguous",
+    status: "ambiguous",
+    reservationIds: ["route-ambiguous:attempt:1"]
+  });
+  const reconciliation = controlStopReason(ambiguousBudget);
+  assert.equal(reconciliation.code, "budget_reconciliation_required");
+  assert.deepEqual(
+    reconciliation.ambiguousReservationIds,
+    ["route-ambiguous:attempt:1"]
+  );
 
   const budget = structuredClone(base);
   budget.control.budget.maxCalls = 0;

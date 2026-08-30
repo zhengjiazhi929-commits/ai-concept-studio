@@ -12,6 +12,7 @@ import { validateResearchEvidenceBatch } from "../src/server/research/schema.mjs
 import { readResearchConfig } from "../src/server/research/store.mjs";
 
 const selectedAt = "2026-08-03T10:00:00.000Z";
+const publicLookup = async () => [{ address: "93.184.216.34", family: 4 }];
 
 function selectionFixture() {
   return {
@@ -157,6 +158,7 @@ test("直接读取官方页面只记录可达性和哈希，不伪造事实主�
   const inspection = await inspectPrimarySource(pack.sources[0], {
     config,
     now: new Date(selectedAt),
+    lookupImpl: publicLookup,
     fetchImpl: async () =>
       new Response("<html><head><title>Agent Skills Specification</title></head></html>", {
         status: 200,
@@ -167,6 +169,59 @@ test("直接读取官方页面只记录可达性和哈希，不伪造事实主�
   assert.equal(inspection.access.title, "Agent Skills Specification");
   assert.match(inspection.access.sha256, /^[a-f0-9]{64}$/u);
   assert.equal(pack.claims.length, 0);
+});
+
+test("研究抓取在请求前拒绝私网 IP 与解析到私网的域名", async () => {
+  const config = await readResearchConfig();
+  let requests = 0;
+  const fetchImpl = async () => {
+    requests += 1;
+    throw new Error("unsafe request should not execute");
+  };
+  const direct = await inspectPrimarySource(
+    { id: "direct-private", url: "https://127.0.0.1/admin" },
+    { config, now: new Date(selectedAt), fetchImpl, lookupImpl: publicLookup }
+  );
+  const resolved = await inspectPrimarySource(
+    { id: "dns-private", url: "https://research.example.org/spec" },
+    {
+      config,
+      now: new Date(selectedAt),
+      fetchImpl,
+      lookupImpl: async () => [{ address: "10.10.0.8", family: 4 }]
+    }
+  );
+
+  assert.equal(direct.access.status, "needs_assist");
+  assert.equal(direct.access.reason, "unsafe-network-target");
+  assert.equal(resolved.access.status, "needs_assist");
+  assert.equal(resolved.access.reason, "unsafe-network-target");
+  assert.equal(requests, 0);
+});
+
+test("研究抓取逐跳校验重定向，不能跳到云元数据地址", async () => {
+  const config = await readResearchConfig();
+  let requests = 0;
+  const inspection = await inspectPrimarySource(
+    { id: "redirect-private", url: "https://research.example.org/spec" },
+    {
+      config,
+      now: new Date(selectedAt),
+      lookupImpl: publicLookup,
+      fetchImpl: async (_url, init) => {
+        requests += 1;
+        assert.equal(init.redirect, "manual");
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://169.254.169.254/latest/meta-data" }
+        });
+      }
+    }
+  );
+
+  assert.equal(inspection.access.status, "needs_assist");
+  assert.equal(inspection.access.reason, "unsafe-network-target");
+  assert.equal(requests, 1);
 });
 
 test("证据包只有达到来源、主张、交叉核验和关键类别门槛才可审批", async () => {

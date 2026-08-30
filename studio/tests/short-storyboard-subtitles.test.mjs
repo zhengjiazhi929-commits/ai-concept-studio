@@ -1,14 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readEpisode } from "../src/shared/store.mjs";
 import { generateStoryboardDraft } from "../src/server/production/generator.mjs";
 import {
   APPROVED_SCRIPT_SHORT_STORYBOARD_ADAPTER_VERSION,
   approvedScriptNarrationText,
   SHORT_STORYBOARD_VISUAL_RULES
 } from "../src/server/production/short-storyboard-adapter.mjs";
+import { currentGateArtifactHash } from "../src/shared/workflow.mjs";
+import { historicalApprovedStoryboardV3Episode } from
+  "./historical-approved-storyboard-v3.fixture.mjs";
 
-const EPISODE_ID = "agent-skill-tool-mcp-60s-20260813";
 const EXPECTED_SCENE_TIMES = [
   [0, 4.782],
   [4.782, 8.708],
@@ -27,8 +28,71 @@ function compactLength(value) {
     .length;
 }
 
+function approvedShortScriptEpisode() {
+  const episode = historicalApprovedStoryboardV3Episode();
+  const source = episode.derivation.sourceSections[0];
+  episode.production.scriptDraft = {
+    version: 2,
+    artifactPath: "test-fixtures/short-script-v002.json",
+    provider: "deterministic-local",
+    model: "approved-source-short-script-adapter-v1",
+    usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+    generatedAt: "2026-08-13T05:42:41.323Z",
+    generationKind: "deterministic-approved-source-adapter",
+    sourceSnapshotHash: episode.derivation.sourceSnapshotHash,
+    needsRevision: false,
+    content: {
+      title: source.heading,
+      thesis: source.purpose,
+      targetDurationSeconds: 60,
+      hook: "",
+      sections: [{
+        id: source.id,
+        heading: source.heading,
+        purpose: source.purpose,
+        narration: source.narration,
+        evidenceRefs: structuredClone(source.evidenceRefs),
+        visualDirection: source.visualDirection
+      }],
+      closing: "",
+      factCheckNotes: []
+    },
+    versions: [
+      { version: 1, artifactPath: "test-fixtures/short-script-v001.json" },
+      { version: 2, artifactPath: "test-fixtures/short-script-v002.json" }
+    ]
+  };
+  const artifactHash = currentGateArtifactHash(episode, "script");
+  const reportId = "test-script-v2-machine-pass";
+  episode.control.reviewEnabled = true;
+  episode.reviews.script = {
+    status: "passed",
+    artifactVersion: 2,
+    artifactHash,
+    rubricVersion: "script-v2",
+    revisionRounds: 0,
+    latestReportId: reportId,
+    reports: [{
+      id: reportId,
+      stage: "script",
+      decision: "pass",
+      artifactVersion: 2,
+      artifactHash
+    }]
+  };
+  episode.approvals.script = {
+    ...episode.approvals.script,
+    status: "approved",
+    currentVersion: 2,
+    provenance: "reviewed-v2",
+    reviewReportId: reportId,
+    artifactHash
+  };
+  return episode;
+}
+
 test("确定性短分镜保留关键语义单元并满足单行字幕合同", async () => {
-  const episode = structuredClone(await readEpisode(EPISODE_ID));
+  const episode = approvedShortScriptEpisode();
   let providerCalls = 0;
   const generated = await generateStoryboardDraft(episode, {
     client: {

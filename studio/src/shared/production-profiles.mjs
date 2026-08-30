@@ -1,5 +1,6 @@
 export const DEFAULT_PRODUCTION_PROFILE_ID = "long-form-explainer-v1";
 export const SHORT_EXPLAINER_PROFILE_ID = "short-explainer-60s-v1";
+export const GOLDEN_M1_PROFILE_ID = "m1-golden-36s-v1";
 
 const PROFILES = Object.freeze({
   [DEFAULT_PRODUCTION_PROFILE_ID]: Object.freeze({
@@ -9,8 +10,10 @@ const PROFILES = Object.freeze({
     scriptSections: Object.freeze({ minimum: 6, maximum: 12 }),
     storyboardScenes: Object.freeze({ minimum: 12, maximum: 24 }),
     sceneDurationSeconds: Object.freeze({ minimum: 12, maximum: 60 }),
-    scriptInstruction: "写成 8 到 12 分钟、适合竖屏视频的结构化脚本草稿",
-    storyboardInstruction: "转换成连续的 8 到 12 分钟分镜",
+    scriptInstruction:
+      "写成 8 到 12 分钟、以 16:9 母版为主并可重构为 9:16 的结构化脚本草稿",
+    storyboardInstruction:
+      "转换成连续的 8 到 12 分钟 16:9 母版分镜；每个场景必须保留可独立重排为 9:16 的语义对象与关系，禁止依赖中央裁切",
     maximumScriptTokens: 6000,
     maximumStoryboardTokens: 6000
   }),
@@ -27,6 +30,20 @@ const PROFILES = Object.freeze({
       "把已批准的 60 秒脚本转换为 6 到 10 个连续竖屏分镜；优先使用结构图、关系动画和过程演示，不得用未经脚本批准的比喻改变原意",
     maximumScriptTokens: 2400,
     maximumStoryboardTokens: 3600
+  }),
+  [GOLDEN_M1_PROFILE_ID]: Object.freeze({
+    id: GOLDEN_M1_PROFILE_ID,
+    label: "36 秒 M1 技术闭环样片",
+    targetDurationSeconds: Object.freeze({ minimum: 36, maximum: 36 }),
+    scriptSections: Object.freeze({ minimum: 6, maximum: 6 }),
+    storyboardScenes: Object.freeze({ minimum: 6, maximum: 6 }),
+    sceneDurationSeconds: Object.freeze({ minimum: 4, maximum: 7 }),
+    scriptInstruction:
+      "把固定 Agentic Coding 证据压缩为 36 秒、六段、逐段绑定证据的本地 M1 旁白，不新增事实",
+    storyboardInstruction:
+      "把获批的 36 秒六段旁白绑定到六个连续竖屏场景，物理素材文件留到素材 Gate 审批",
+    maximumScriptTokens: 1800,
+    maximumStoryboardTokens: 2400
   })
 });
 

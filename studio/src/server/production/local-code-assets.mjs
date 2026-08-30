@@ -170,6 +170,19 @@ export async function buildLocalCodeAssets(episode, options = {}) {
       createdAt: renderedAt,
       privacy: "project-original",
       verified: true,
+      rights: {
+        schemaVersion: 1,
+        authorOrSource: "AI Concept Studio local code renderer",
+        sourceUrl: null,
+        acquiredAt: renderedAt,
+        license: "project-original-private-use",
+        allowedUse: "private-internal-review",
+        attributionRequirements: "none",
+        privacyPortraitStatus: "project-original",
+        verifiedBy:
+          episode.reviewCheckpoints?.assetExecution?.humanApproval?.actor
+          ?? "machine:local-code-assets-v1"
+      },
       externalApiCalls: 0,
       maximumPaidCostUsd: 0
     });

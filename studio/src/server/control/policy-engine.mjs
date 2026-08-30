@@ -52,17 +52,6 @@ export function reviewPassedForGate(episode, gate) {
   );
 }
 
-function trustedFixtureApproval(episode, gate, approval) {
-  return Boolean(
-    episode.id === "golden-001" &&
-      episode.system?.trustedFixture === true &&
-      episode.system?.importedBy === "golden-sample-importer-v0.1" &&
-      approval?.provenance === "trusted-fixture" &&
-      approval.currentVersion === currentGateVersion(episode, gate) &&
-      approval.artifactHash === currentGateArtifactHash(episode, gate)
-  );
-}
-
 export function approvalValidForGate(episode, gate) {
   const approval = episode.approvals?.[gate];
   if (approval?.status !== "approved") return false;
@@ -72,7 +61,6 @@ export function approvalValidForGate(episode, gate) {
         approval.artifactHash === currentGateArtifactHash(episode, gate)
     );
   }
-  if (trustedFixtureApproval(episode, gate, approval)) return true;
   if (approval.provenance !== "reviewed-v2" || !approval.reviewReportId) return false;
   if (approval.reviewReportId !== episode.reviews?.[gate]?.latestReportId) return false;
   return Boolean(

@@ -1,0 +1,718 @@
+{
+  "schemaVersion": 1,
+  "id": "golden-001",
+  "title": "Agentic Coding 到底是什么？",
+  "concept": "Agentic Coding",
+  "conceptId": "agentic-coding",
+  "audience": "理解 AI 基础概念、关注产品落地的 AI 产品经理及技术邻近人群",
+  "thesis": "AI 编程的工作单位正在从代码片段转向可验证的任务。",
+  "productionProfile": {
+    "id": "m1-golden-36s-v1",
+    "targetDurationSeconds": 36
+  },
+  "status": "in_production",
+  "createdAt": "2026-07-31T00:00:00.000Z",
+  "updatedAt": "2026-08-03T07:46:01.752Z",
+  "previewMode": "visual-proof",
+  "approvals": {
+    "research": {
+      "status": "approved",
+      "at": "2026-07-31",
+      "note": "",
+      "feedback": "",
+      "currentVersion": 1,
+      "history": [],
+      "provenance": "reviewed-v2",
+      "reviewReportId": "fixture-review-research-v1",
+      "artifactHash": "529027d2fc7abb782a2c7096a72cd02f29cb4bfe583cfbec388c9544aa0b03a9"
+    },
+    "script": {
+      "status": "approved",
+      "at": "2026-08-03",
+      "note": "",
+      "feedback": "",
+      "currentVersion": 1,
+      "history": [],
+      "provenance": "reviewed-v2",
+      "reviewReportId": "fixture-review-script-v1",
+      "artifactHash": "617d2ce72762a333f90a326c645da9e6d55edb25d25d371e93ea9e50a9c9ab8c"
+    },
+    "storyboard": {
+      "status": "approved",
+      "at": "2026-08-03",
+      "note": "B-real-product-documentary",
+      "feedback": "",
+      "currentVersion": 1,
+      "history": [],
+      "provenance": "reviewed-v2",
+      "reviewReportId": "fixture-review-storyboard-v1",
+      "artifactHash": "9d672404833d2e0831f656ce9fee5681591d8b9cc23af99a24ab6fb585a19d53"
+    },
+    "assets": {
+      "status": "pending",
+      "at": null,
+      "note": "",
+      "feedback": "",
+      "currentVersion": 1,
+      "history": []
+    },
+    "final": {
+      "status": "pending",
+      "at": null,
+      "note": "",
+      "feedback": "",
+      "currentVersion": null,
+      "history": []
+    }
+  },
+  "approvalHistory": [
+    {
+      "at": "2026-07-31",
+      "gate": "research",
+      "decision": "approved",
+      "note": "",
+      "version": 1
+    },
+    {
+      "at": "2026-08-03",
+      "gate": "script",
+      "decision": "approved",
+      "note": "",
+      "version": 1
+    },
+    {
+      "at": "2026-08-03",
+      "gate": "storyboard",
+      "decision": "approved",
+      "note": "B-real-product-documentary",
+      "version": 1
+    }
+  ],
+  "trendSelection": {
+    "runId": "golden-import",
+    "candidateId": "agentic-coding",
+    "selectedAt": "2026-07-31T00:00:00.000Z",
+    "note": "黄金样例人工选题",
+    "productDecisions": [
+      "任务授权范围",
+      "完成定义与验收",
+      "人工接管和可逆性"
+    ],
+    "primarySources": [
+      {
+        "label": "OpenAI Codex",
+        "url": "https://developers.openai.com/codex/"
+      },
+      {
+        "label": "Anthropic Claude Code",
+        "url": "https://docs.anthropic.com/en/docs/claude-code/overview"
+      }
+    ],
+    "creatorEvidence": [],
+    "evidenceSignals": []
+  },
+  "research": {
+    "status": "ready_for_fact_approval",
+    "version": 1,
+    "versions": [],
+    "packPath": null,
+    "assistTaskPath": null,
+    "generationKind": "deterministic-golden-m1-fixed-evidence",
+    "evidenceSource": "episodes/golden-001/03-claim-ledger.md",
+    "readiness": {
+      "readyForFactApproval": true,
+      "verifiedSourceCount": 7,
+      "supportedClaimCount": 6,
+      "reasons": []
+    },
+    "content": {
+      "schemaVersion": 1,
+      "kind": "golden-m1-fixed-research-v1",
+      "evidenceCutoff": "2026-07-31",
+      "claims": [
+        {
+          "id": "C01",
+          "text": "Agentic Coding 不只返回代码文本，而是围绕目标在开发环境中读取、行动、验证并依据反馈修正。",
+          "category": "cross-source-definition",
+          "support": "high",
+          "sourceIds": ["S03", "S04", "S05", "S06"],
+          "boundary": "作为本片工作定义，不宣称是行业唯一标准。"
+        },
+        {
+          "id": "C03",
+          "text": "Agent loop 可概括为理解当前状态、采取行动、获取环境反馈、验证并继续迭代。",
+          "category": "mechanism",
+          "support": "high",
+          "sourceIds": ["S04", "S06"],
+          "boundary": "不声称所有产品使用同一固定步骤。"
+        },
+        {
+          "id": "C05",
+          "text": "部分主流 Coding Agent 能把多文件改动、测试结果、日志或 PR 作为交付证据。",
+          "category": "product-fact",
+          "support": "high",
+          "sourceIds": ["S03", "S05", "S07"],
+          "boundary": "只表述为部分产品能力。"
+        },
+        {
+          "id": "C06",
+          "text": "更高自治需要与沙箱、权限、日志、审批和回滚等控制机制配套。",
+          "category": "product-safety-synthesis",
+          "support": "high",
+          "sourceIds": ["S07", "S08", "S09"],
+          "boundary": "控制机制降低风险，但不能保证绝对安全。"
+        },
+        {
+          "id": "C09",
+          "text": "测试通过是重要反馈，但不等于需求正确、测试覆盖充分或可以安全上线。",
+          "category": "engineering-boundary",
+          "support": "high",
+          "sourceIds": ["S10", "S14", "S15"],
+          "boundary": "测试结果必须与需求、覆盖和发布判断分开。"
+        },
+        {
+          "id": "C10",
+          "text": "Agent 能力应按模型、harness、工具和环境的组合评估，不能只看底层模型榜单。",
+          "category": "evaluation-synthesis",
+          "support": "high",
+          "sourceIds": ["S10", "S12", "S13", "S15"],
+          "boundary": "不同 harness 与任务环境的结果不能直接互换。"
+        }
+      ],
+      "sources": [
+        {"id": "S03", "label": "Introducing Codex", "url": "https://openai.com/index/introducing-codex/", "publisher": "OpenAI", "sourceType": "official-product"},
+        {"id": "S04", "label": "Agents — Visual Studio Code", "url": "https://code.visualstudio.com/docs/agents/concepts/agents", "publisher": "Microsoft", "sourceType": "official-documentation"},
+        {"id": "S05", "label": "Jules 官方文档", "url": "https://jules.google/docs/", "publisher": "Google", "sourceType": "official-documentation"},
+        {"id": "S06", "label": "Tools — Visual Studio Code", "url": "https://code.visualstudio.com/docs/copilot/concepts/tools", "publisher": "Microsoft", "sourceType": "official-documentation"},
+        {"id": "S07", "label": "管理 Copilot coding agent sessions", "url": "https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/manage-and-track-agents", "publisher": "GitHub", "sourceType": "official-documentation"},
+        {"id": "S08", "label": "Claude Code sandboxing", "url": "https://www.anthropic.com/engineering/claude-code-sandboxing", "publisher": "Anthropic", "sourceType": "official-engineering"},
+        {"id": "S09", "label": "VS Code Checkpoints", "url": "https://code.visualstudio.com/docs/chat/chat-checkpoints", "publisher": "Microsoft", "sourceType": "official-documentation"},
+        {"id": "S10", "label": "SWE-bench", "url": "https://github.com/SWE-bench/SWE-bench", "publisher": "SWE-bench", "sourceType": "official-benchmark"},
+        {"id": "S12", "label": "Terminal-Bench", "url": "https://www.tbench.ai/news/announcement", "publisher": "Terminal-Bench", "sourceType": "official-benchmark"},
+        {"id": "S13", "label": "Demystifying evals for AI agents", "url": "https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents", "publisher": "Anthropic", "sourceType": "official-engineering"},
+        {"id": "S14", "label": "Separating signal from noise in coding evaluations", "url": "https://openai.com/index/separating-signal-from-noise-coding-evaluations/", "publisher": "OpenAI", "sourceType": "official-research"},
+        {"id": "S15", "label": "Harness engineering", "url": "https://openai.com/index/harness-engineering/", "publisher": "OpenAI", "sourceType": "official-engineering"}
+      ],
+      "claimRequirements": [
+        "具体产品能力只用于对应产品，不外推到全部 Coding Agent",
+        "测试通过不等于业务正确、安全或允许发布",
+        "沙箱和人工 Gate 降低风险，但不构成绝对安全保证"
+      ],
+      "productDecisions": ["任务授权范围", "完成定义与验收", "人工接管和可逆性"]
+    },
+    "needsRevision": false
+  },
+  "pipeline": [
+    {
+      "id": "trend",
+      "label": "热点发现",
+      "agent": "trend-agent",
+      "gate": null,
+      "status": "complete",
+      "mode": "imported-approved-artifact",
+      "lastRunAt": "2026-08-03T07:45:00.110Z",
+      "message": null
+    },
+    {
+      "id": "research",
+      "label": "研究与事实",
+      "agent": "research-agent",
+      "gate": "research",
+      "status": "complete",
+      "mode": "imported-approved-artifact",
+      "lastRunAt": "2026-08-03T07:45:00.110Z",
+      "message": null
+    },
+    {
+      "id": "script",
+      "label": "脚本",
+      "agent": "script-agent",
+      "gate": "script",
+      "status": "complete",
+      "mode": "imported-approved-artifact",
+      "lastRunAt": "2026-08-03T07:45:00.110Z",
+      "message": null
+    },
+    {
+      "id": "storyboard",
+      "label": "分镜",
+      "agent": "storyboard-agent",
+      "gate": "storyboard",
+      "status": "complete",
+      "mode": "imported-approved-artifact",
+      "lastRunAt": "2026-08-03T07:45:00.110Z",
+      "message": null
+    },
+    {
+      "id": "assets",
+      "label": "素材",
+      "agent": "asset-agent",
+      "gate": null,
+      "status": "complete",
+      "mode": "imported-approved-artifact",
+      "lastRunAt": "2026-08-03T07:45:00.110Z",
+      "message": null
+    },
+    {
+      "id": "voice",
+      "label": "旁白与素材确认",
+      "agent": "voice-agent",
+      "gate": "assets",
+      "status": "ready",
+      "mode": null,
+      "lastRunAt": null,
+      "message": "素材已导入，可以进行旁白与素材总审"
+    },
+    {
+      "id": "render",
+      "label": "视频渲染",
+      "agent": "render-agent",
+      "gate": null,
+      "status": "pending",
+      "mode": null,
+      "lastRunAt": null,
+      "message": "等待素材与旁白审批",
+      "progress": 0,
+      "artifacts": [],
+      "findings": [],
+      "requiresApproval": null
+    },
+    {
+      "id": "qa",
+      "label": "质量检查",
+      "agent": "qa-agent",
+      "gate": "final",
+      "status": "pending",
+      "mode": null,
+      "lastRunAt": null,
+      "message": "等待渲染完成",
+      "progress": 0,
+      "artifacts": [],
+      "findings": [],
+      "requiresApproval": null
+    }
+  ],
+  "sourceDocs": [
+    {
+      "path": "docs/05-visual-system.md",
+      "bytes": 21419,
+      "sha256": "9c582e2b25432023fa4efe253a081f7afe9616d39dcd7dc93dfd468058de3f58"
+    },
+    {
+      "path": "episodes/golden-001/01-topic-card.md",
+      "bytes": 3925,
+      "sha256": "0ec9a6058dd204558108ebb2befcad6caf6c1f60f6b434df42e1a1357c7e8b1e"
+    },
+    {
+      "path": "episodes/golden-001/02-source-register.md",
+      "bytes": 4718,
+      "sha256": "bd5443866cd0bde0a861cf5c2d676171030626c7bf23d3e67d0a292e5cc1a36b"
+    },
+    {
+      "path": "episodes/golden-001/03-claim-ledger.md",
+      "bytes": 4170,
+      "sha256": "2b4408c974da11392e92170a9373551f79660b9ba3f58634fd4ea724c0406b96"
+    },
+    {
+      "path": "episodes/golden-001/07-script.md",
+      "bytes": 12493,
+      "sha256": "730aa3916485ad50334a8735327bd6ddf6d51ba598d166652f6ac60a540cef9e"
+    },
+    {
+      "path": "episodes/golden-001/08-storyboard.md",
+      "bytes": 34996,
+      "sha256": "9af156a15003bc866acb6ecbad2f94d74176ff1f7ff83a1a6a04d570f2d72ea7"
+    },
+    {
+      "path": "episodes/golden-001/09-production-manifest.md",
+      "bytes": 28352,
+      "sha256": "a4efb1dcb830a79494ccdf6008986fb0b7fe28ef5eef1a7aef91ea0420d3466e"
+    }
+  ],
+  "assets": [
+    {
+      "id": "demo-baseline-export-failed",
+      "type": "image",
+      "path": "episodes/golden-001/demo-baseline-export-failed.png",
+      "source": "episodes/golden-001/production/captures/screen-selects/demo-baseline-export-failed.png",
+      "bytes": 175975,
+      "sha256": "04171997bf445942c69788b66e9e9e1c507b475228c7f9e529d6a4d341919b8e",
+      "privacy": "fictional-data",
+      "verified": true,
+      "rights": {
+        "schemaVersion": 1,
+        "authorOrSource": "AI Concept Studio synthetic fixture generator",
+        "sourceUrl": null,
+        "acquiredAt": "2026-07-31T00:00:00.000Z",
+        "license": "project-original-private-use",
+        "allowedUse": "private-internal-review",
+        "attributionRequirements": "none",
+        "privacyPortraitStatus": "fictional-data",
+        "verifiedBy": "machine:golden-fixture-v1"
+      }
+    },
+    {
+      "id": "demo-viewer-denied",
+      "type": "image",
+      "path": "episodes/golden-001/demo-viewer-denied.png",
+      "source": "episodes/golden-001/production/captures/screen-selects/demo-viewer-denied.png",
+      "bytes": 175267,
+      "sha256": "2cc926451b33f9a3040c293e1479f042776d8fd3fc20b89c30b8fc13911cd157",
+      "privacy": "fictional-data",
+      "verified": true,
+      "rights": {
+        "schemaVersion": 1,
+        "authorOrSource": "AI Concept Studio synthetic fixture generator",
+        "sourceUrl": null,
+        "acquiredAt": "2026-07-31T00:00:00.000Z",
+        "license": "project-original-private-use",
+        "allowedUse": "private-internal-review",
+        "attributionRequirements": "none",
+        "privacyPortraitStatus": "fictional-data",
+        "verifiedBy": "machine:golden-fixture-v1"
+      }
+    },
+    {
+      "id": "demo-admin-export-complete",
+      "type": "image",
+      "path": "episodes/golden-001/demo-admin-export-complete.png",
+      "source": "episodes/golden-001/production/captures/screen-selects/demo-admin-export-complete.png",
+      "bytes": 182123,
+      "sha256": "e548604e98466cb34b6f85390c8293ec6aec9081245f2a370862e75da9b4f297",
+      "privacy": "fictional-data",
+      "verified": true,
+      "rights": {
+        "schemaVersion": 1,
+        "authorOrSource": "AI Concept Studio synthetic fixture generator",
+        "sourceUrl": null,
+        "acquiredAt": "2026-07-31T00:00:00.000Z",
+        "license": "project-original-private-use",
+        "allowedUse": "private-internal-review",
+        "attributionRequirements": "none",
+        "privacyPortraitStatus": "fictional-data",
+        "verifiedBy": "machine:golden-fixture-v1"
+      }
+    },
+    {
+      "id": "demo-final-before-export",
+      "type": "image",
+      "path": "episodes/golden-001/demo-final-before-export.png",
+      "source": "episodes/golden-001/production/captures/screen-selects/demo-final-before-export.png",
+      "bytes": 172619,
+      "sha256": "26f9b5398e9b0f1327b4bd5b7b1ea601b3a2b57b1ca343947f5c047931509313",
+      "privacy": "fictional-data",
+      "verified": true,
+      "rights": {
+        "schemaVersion": 1,
+        "authorOrSource": "AI Concept Studio synthetic fixture generator",
+        "sourceUrl": null,
+        "acquiredAt": "2026-07-31T00:00:00.000Z",
+        "license": "project-original-private-use",
+        "allowedUse": "private-internal-review",
+        "attributionRequirements": "none",
+        "privacyPortraitStatus": "fictional-data",
+        "verifiedBy": "machine:golden-fixture-v1"
+      }
+    }
+  ],
+  "reviews": {
+    "research": {
+      "status": "passed",
+      "artifactVersion": 1,
+      "artifactHash": "529027d2fc7abb782a2c7096a72cd02f29cb4bfe583cfbec388c9544aa0b03a9",
+      "rubricVersion": "fixture-research-v1",
+      "revisionRounds": 0,
+      "latestReportId": "fixture-review-research-v1",
+      "reports": [
+        {
+          "id": "fixture-review-research-v1",
+          "stage": "research",
+          "decision": "pass",
+          "artifactVersion": 1,
+          "artifactHash": "529027d2fc7abb782a2c7096a72cd02f29cb4bfe583cfbec388c9544aa0b03a9",
+          "rubricVersion": "fixture-research-v1",
+          "confidence": 1,
+          "blockingIssues": [],
+          "warnings": [],
+          "passedChecks": ["fixture-reviewed"]
+        }
+      ]
+    },
+    "script": {
+      "status": "passed",
+      "artifactVersion": 1,
+      "artifactHash": "617d2ce72762a333f90a326c645da9e6d55edb25d25d371e93ea9e50a9c9ab8c",
+      "rubricVersion": "fixture-script-v1",
+      "revisionRounds": 0,
+      "latestReportId": "fixture-review-script-v1",
+      "reports": [
+        {
+          "id": "fixture-review-script-v1",
+          "stage": "script",
+          "decision": "pass",
+          "artifactVersion": 1,
+          "artifactHash": "617d2ce72762a333f90a326c645da9e6d55edb25d25d371e93ea9e50a9c9ab8c",
+          "rubricVersion": "fixture-script-v1",
+          "confidence": 1,
+          "blockingIssues": [],
+          "warnings": [],
+          "passedChecks": ["fixture-reviewed"]
+        }
+      ]
+    },
+    "storyboard": {
+      "status": "passed",
+      "artifactVersion": 1,
+      "artifactHash": "9d672404833d2e0831f656ce9fee5681591d8b9cc23af99a24ab6fb585a19d53",
+      "rubricVersion": "fixture-storyboard-v1",
+      "revisionRounds": 0,
+      "latestReportId": "fixture-review-storyboard-v1",
+      "reports": [
+        {
+          "id": "fixture-review-storyboard-v1",
+          "stage": "storyboard",
+          "decision": "pass",
+          "artifactVersion": 1,
+          "artifactHash": "9d672404833d2e0831f656ce9fee5681591d8b9cc23af99a24ab6fb585a19d53",
+          "rubricVersion": "fixture-storyboard-v1",
+          "confidence": 1,
+          "blockingIssues": [],
+          "warnings": [],
+          "passedChecks": ["fixture-reviewed"]
+        }
+      ]
+    }
+  },
+  "production": {
+    "ai": {
+      "requestCount": 0,
+      "attempts": []
+    },
+    "feedback": {},
+    "quality": {},
+    "materialsVersion": 1,
+    "assetBundleRevision": 1,
+    "scriptDraft": {
+      "version": 1,
+      "generationKind": "deterministic-golden-m1-short-script",
+      "referenceSource": "episodes/golden-001/07-script.md",
+      "content": {
+        "schemaVersion": 1,
+        "kind": "golden-m1-short-script-v1",
+        "targetDurationSeconds": 36,
+        "sections": [
+          {
+            "id": "S01",
+            "start": 0,
+            "end": 5,
+            "narration": "Agentic Coding 到底是什么？",
+            "evidenceRefs": [
+              "C01"
+            ]
+          },
+          {
+            "id": "S02",
+            "start": 5,
+            "end": 11,
+            "narration": "同样是写代码，为什么一种方式还没有完成任务？",
+            "evidenceRefs": [
+              "C09"
+            ]
+          },
+          {
+            "id": "S03",
+            "start": 11,
+            "end": 17,
+            "narration": "关键变化，是 AI 承担的工作单位变大了。",
+            "evidenceRefs": [
+              "C01",
+              "C03"
+            ]
+          },
+          {
+            "id": "S04",
+            "start": 17,
+            "end": 23,
+            "narration": "它不仅修改文件，还要验证权限和业务规则。",
+            "evidenceRefs": [
+              "C06"
+            ]
+          },
+          {
+            "id": "S05",
+            "start": 23,
+            "end": 30,
+            "narration": "测试、状态和最终结果共同构成完成证据。",
+            "evidenceRefs": [
+              "C05",
+              "C09"
+            ]
+          },
+          {
+            "id": "S06",
+            "start": 30,
+            "end": 36,
+            "narration": "从生成代码，到持续推进一个可验证任务。",
+            "evidenceRefs": [
+              "C01",
+              "C10"
+            ]
+          }
+        ],
+        "evidenceSource": "episodes/golden-001/03-claim-ledger.md"
+      }
+    },
+    "storyboardDraft": {
+      "version": 1,
+      "generationKind": "deterministic-golden-m1-structure",
+      "sourceKind": "episode-scenes-subtitles-render-v1",
+      "referenceSource": "episodes/golden-001/08-storyboard.md"
+    }
+  },
+  "voice": {
+    "status": "unconfigured",
+    "mode": null,
+    "audioPath": null,
+    "note": "视觉验证版允许无旁白；正式低清样片必须先通过声音审批。"
+  },
+  "render": {
+    "width": 540,
+    "height": 960,
+    "fps": 15,
+    "durationSeconds": 36,
+    "compositionId": "ConceptPreview",
+    "outputPath": null,
+    "status": "pending",
+    "progress": 0,
+    "renderedAt": null,
+    "muted": true
+  },
+  "scenes": [
+    {
+      "id": "S01",
+      "start": 0,
+      "end": 5,
+      "type": "title",
+      "kicker": "AI 概念拆解",
+      "title": "Agentic Coding\n到底是什么？",
+      "subtitle": "不是让 AI 多写几行代码"
+    },
+    {
+      "id": "S02",
+      "start": 5,
+      "end": 11,
+      "type": "evidence",
+      "asset": "episodes/golden-001/demo-baseline-export-failed.png",
+      "evidenceRef": "demo-baseline-export-failed",
+      "label": "BEFORE｜真实失败",
+      "title": "旧接口返回了 CSV\n页面却无法完成任务",
+      "subtitle": "代码存在，不等于任务完成"
+    },
+    {
+      "id": "S03",
+      "start": 11,
+      "end": 17,
+      "type": "statement",
+      "index": "01",
+      "title": "工作单位变了",
+      "statement": "生成代码片段\n↓\n交付可验证任务",
+      "subtitle": "目标、环境、行动、反馈、验收"
+    },
+    {
+      "id": "S04",
+      "start": 17,
+      "end": 23,
+      "type": "evidence",
+      "asset": "episodes/golden-001/demo-viewer-denied.png",
+      "evidenceRef": "demo-viewer-denied",
+      "label": "权限验证｜viewer 403",
+      "title": "普通用户必须被拒绝",
+      "subtitle": "权限结果是完成证据的一部分"
+    },
+    {
+      "id": "S05",
+      "start": 23,
+      "end": 30,
+      "type": "evidence",
+      "asset": "episodes/golden-001/demo-admin-export-complete.png",
+      "evidenceRef": "demo-admin-export-complete",
+      "label": "AFTER｜真实验收",
+      "title": "管理员异步导出完成",
+      "subtitle": "测试、状态、下载与脱敏全部可检查"
+    },
+    {
+      "id": "S06",
+      "start": 30,
+      "end": 36,
+      "type": "summary",
+      "kicker": "一句话记住",
+      "title": "Agentic Coding 的核心",
+      "statement": "AI 开始负责把任务\n持续推进到可验收结果",
+      "subtitle": "模型能力 × 工具 × 环境 × 反馈 × 边界"
+    }
+  ],
+  "subtitles": [
+    {
+      "start": 0,
+      "end": 5,
+      "text": "Agentic Coding 到底是什么？"
+    },
+    {
+      "start": 5,
+      "end": 11,
+      "text": "同样是写代码，为什么一种方式还没有完成任务？"
+    },
+    {
+      "start": 11,
+      "end": 17,
+      "text": "关键变化，是 AI 承担的工作单位变大了。"
+    },
+    {
+      "start": 17,
+      "end": 23,
+      "text": "它不仅修改文件，还要验证权限和业务规则。"
+    },
+    {
+      "start": 23,
+      "end": 30,
+      "text": "测试、状态和最终结果共同构成完成证据。"
+    },
+    {
+      "start": 30,
+      "end": 36,
+      "text": "从生成代码，到持续推进一个可验证任务。"
+    }
+  ],
+  "qa": {
+    "status": "pending",
+    "reportPath": null,
+    "checks": [],
+    "checkedAt": null
+  },
+  "history": [
+    {
+      "at": "2026-08-03T07:45:00.110Z",
+      "type": "import",
+      "message": "从黄金样例文档和真实浏览器素材导入"
+    },
+    {
+      "at": "2026-08-03T07:45:44.115Z",
+      "type": "agent-run",
+      "agentId": "render-agent",
+      "status": "complete",
+      "message": "视觉验证版 MP4 已生成"
+    },
+    {
+      "at": "2026-08-03T07:46:01.752Z",
+      "type": "agent-run",
+      "agentId": "qa-agent",
+      "status": "complete",
+      "message": "预览视频技术 QA 全部通过"
+    }
+  ],
+  "system": {
+    "studioRoot": "studio",
+    "importedBy": "test-reviewed-fixture-v1",
+    "trustedFixture": false
+  }
+}

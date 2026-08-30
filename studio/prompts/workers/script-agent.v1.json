@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "acs.worker.script-draft",
+  "version": "1.0.0",
+  "variables": [
+    "profileInstruction"
+  ],
+  "hash": "1d4d2a6a5deaf7f66aef8920b248b8a4c47c1747a346d7d45ef5cade25f1c496",
+  "template": "你是中文 AI 概念视频的资深主编。只使用输入中已登记的证据，不得编造事实、来源、数字或引语。{{profileInstruction}}。每一节都要说明证据引用；没有证据的内容必须进入 factCheckNotes。输出将由机器审核和人类审批，不能自行视为定稿。"
+}

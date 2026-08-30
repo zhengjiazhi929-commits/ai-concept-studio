@@ -2,11 +2,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import {
   conceptTaxonomyPath,
-  trendLatestRunPath,
   trendRadarConfigPath,
-  trendRunsRoot,
-  trendSelectionPath,
-  trendSignalsPath,
   trendsDataRoot,
   trendSourcesConfigPath
 } from "../../shared/paths.mjs";
@@ -37,6 +33,17 @@ async function writeJsonAtomic(path, value) {
   await rename(temporary, path);
 }
 
+function resolveTrendDataPaths(options = {}) {
+  const root = options.trendsRoot ? resolve(options.trendsRoot) : trendsDataRoot;
+  return {
+    root,
+    latestRun: resolve(root, "latest.json"),
+    runs: resolve(root, "runs"),
+    selection: resolve(root, "selection.json"),
+    signals: resolve(root, "signals.json")
+  };
+}
+
 export async function readTrendRadarConfig() {
   return readJson(trendRadarConfigPath);
 }
@@ -55,8 +62,9 @@ export async function readConceptTaxonomy() {
   return document;
 }
 
-export async function readTrendSignals() {
-  return readJsonOr(trendSignalsPath, {
+export async function readTrendSignals(options = {}) {
+  const paths = resolveTrendDataPaths(options);
+  return readJsonOr(paths.signals, {
     schemaVersion: 1,
     updatedAt: null,
     importedSnapshots: [],
@@ -64,12 +72,13 @@ export async function readTrendSignals() {
   });
 }
 
-export async function importTrendSnapshot(snapshotPath) {
+export async function importTrendSnapshot(snapshotPath, options = {}) {
+  const paths = resolveTrendDataPaths(options);
   const [snapshot, sources, taxonomy, current] = await Promise.all([
     readJson(snapshotPath),
     readTrendSources(),
     readConceptTaxonomy(),
-    readTrendSignals()
+    readTrendSignals(options)
   ]);
   const creatorIds = new Set(sources.creators.map((creator) => creator.id));
   const conceptIds = new Set(taxonomy.concepts.map((concept) => concept.id));
@@ -93,8 +102,8 @@ export async function importTrendSnapshot(snapshotPath) {
       (b.publishedAt || b.observedAt).localeCompare(a.publishedAt || a.observedAt)
     )
   };
-  await mkdir(trendsDataRoot, { recursive: true });
-  await writeJsonAtomic(trendSignalsPath, document);
+  await mkdir(paths.root, { recursive: true });
+  await writeJsonAtomic(paths.signals, document);
   return {
     snapshotId: snapshot.snapshotId,
     imported: snapshot.signals?.length ?? 0,
@@ -103,8 +112,8 @@ export async function importTrendSnapshot(snapshotPath) {
   };
 }
 
-export async function appendTrendSignal(signal) {
-  const result = await upsertTrendSignals([signal]);
+export async function appendTrendSignal(signal, options = {}) {
+  const result = await upsertTrendSignals([signal], options);
   return result.document;
 }
 
@@ -132,10 +141,11 @@ function mergeSignal(existing, incoming) {
 }
 
 export async function upsertTrendSignals(signals, options = {}) {
+  const paths = resolveTrendDataPaths(options);
   const [sources, taxonomy, current] = await Promise.all([
     readTrendSources(),
     readConceptTaxonomy(),
-    readTrendSignals()
+    readTrendSignals(options)
   ]);
   const creatorIds = new Set(sources.creators.map((creator) => creator.id));
   const conceptIds = new Set(taxonomy.concepts.map((concept) => concept.id));
@@ -179,24 +189,27 @@ export async function upsertTrendSignals(signals, options = {}) {
       (b.publishedAt || b.observedAt).localeCompare(a.publishedAt || a.observedAt)
     )
   };
-  await writeJsonAtomic(trendSignalsPath, document);
+  await writeJsonAtomic(paths.signals, document);
   return { document, added, updated, unchanged };
 }
 
-export async function writeTrendRun(run) {
-  await mkdir(trendRunsRoot, { recursive: true });
-  const runPath = resolve(trendRunsRoot, `${run.id}.json`);
+export async function writeTrendRun(run, options = {}) {
+  const paths = resolveTrendDataPaths(options);
+  await mkdir(paths.runs, { recursive: true });
+  const runPath = resolve(paths.runs, `${run.id}.json`);
   await writeJsonAtomic(runPath, run);
-  await writeJsonAtomic(trendLatestRunPath, run);
+  await writeJsonAtomic(paths.latestRun, run);
   return runPath;
 }
 
-export async function readLatestTrendRun() {
-  return readJsonOr(trendLatestRunPath, null);
+export async function readLatestTrendRun(options = {}) {
+  const paths = resolveTrendDataPaths(options);
+  return readJsonOr(paths.latestRun, null);
 }
 
-export async function selectTrendCandidate(candidateId, note = "") {
-  const run = await readLatestTrendRun();
+export async function selectTrendCandidate(candidateId, note = "", options = {}) {
+  const paths = resolveTrendDataPaths(options);
+  const run = await readLatestTrendRun(options);
   if (!run) throw new Error("还没有热点发现运行结果");
   const candidate = run.candidates.find((item) => item.id === candidateId);
   if (!candidate) throw new Error(`找不到候选概念：${candidateId}`);
@@ -211,7 +224,7 @@ export async function selectTrendCandidate(candidateId, note = "") {
   }));
   run.selectedCandidateId = candidateId;
   run.selectedAt = selectedAt;
-  await writeTrendRun(run);
+  await writeTrendRun(run, options);
 
   const selection = {
     schemaVersion: 1,
@@ -228,6 +241,6 @@ export async function selectTrendCandidate(candidateId, note = "") {
     note,
     nextStep: "research-agent"
   };
-  await writeJsonAtomic(trendSelectionPath, selection);
+  await writeJsonAtomic(paths.selection, selection);
   return { run, selection };
 }

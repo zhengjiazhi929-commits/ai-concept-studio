@@ -12,7 +12,7 @@ if not exist "%STUDIO_PNPM%" (
   where pnpm.cmd >nul 2>nul
   if errorlevel 1 (
     echo 没有找到可用的运行环境。
-    echo 请先在新电脑安装并打开 Codex，或安装 Node.js 20 和 pnpm，然后重试。
+    echo 请先在新电脑安装并打开 Codex，或安装项目锁定的 Node.js 和 pnpm，然后重试。
     pause
     exit /b 1
   )
@@ -21,7 +21,23 @@ if not exist "%STUDIO_PNPM%" (
 
 where node.exe >nul 2>nul
 if errorlevel 1 (
-  echo 没有找到 Node.js 20 或更高版本，请先安装并重试。
+  echo 没有找到项目锁定的 Node.js，请先安装并重试。
+  pause
+  exit /b 1
+)
+
+set /p STUDIO_EXPECTED_NODE=<"..\.node-version"
+for /f "delims=" %%V in ('node -p "process.versions.node"') do set "STUDIO_ACTUAL_NODE=%%V"
+if not "%STUDIO_ACTUAL_NODE%"=="%STUDIO_EXPECTED_NODE%" (
+  echo Node.js 版本不匹配：需要 %STUDIO_EXPECTED_NODE%，当前为 %STUDIO_ACTUAL_NODE%。
+  pause
+  exit /b 1
+)
+
+for /f "delims=" %%V in ('node -p "JSON.parse(require('node:fs').readFileSync('package.json','utf8')).engines.pnpm"') do set "STUDIO_EXPECTED_PNPM=%%V"
+for /f "delims=" %%V in ('call "%STUDIO_PNPM%" --version') do set "STUDIO_ACTUAL_PNPM=%%V"
+if not "%STUDIO_ACTUAL_PNPM%"=="%STUDIO_EXPECTED_PNPM%" (
+  echo pnpm 版本不匹配：需要 %STUDIO_EXPECTED_PNPM%，当前为 %STUDIO_ACTUAL_PNPM%。
   pause
   exit /b 1
 )

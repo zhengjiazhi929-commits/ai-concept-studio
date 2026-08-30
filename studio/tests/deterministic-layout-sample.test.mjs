@@ -191,6 +191,32 @@ test("历史无视觉合同 Episode 不伪造或强制 deterministic-layout-samp
   );
 });
 
+test("当前 Worker 或确定性适配器生成的分镜缺少视觉合同必须 fail closed", () => {
+  for (const currentGeneratorBinding of [
+    {
+      promptBinding: {
+        id: "acs.worker.storyboard-draft",
+        version: "1.1.0",
+        hash: "a".repeat(64),
+        renderedHash: "b".repeat(64)
+      }
+    },
+    { generationKind: "deterministic-approved-script-storyboard-adapter" }
+  ]) {
+    const episode = contractEpisode();
+    delete episode.production.storyboardDraft.visualContractVersion;
+    delete episode.production.storyboardDraft.visualStyleProfileId;
+    delete episode.scenes[0].visualIntent;
+    delete episode.scenes[0].visualPlan;
+    Object.assign(episode.production.storyboardDraft, currentGeneratorBinding);
+
+    const quality = evaluateProductionQuality(episode, { stage: "storyboard" });
+    const check = quality.checks.find((item) => item.id === "visual-expression-contract");
+    assert.equal(check?.passed, false);
+    assert.notEqual(check?.actual, "legacy-storyboard");
+  }
+});
+
 test("样本验证拒绝缺失、旧版本、错误 renderer/style 与旧成片绑定", () => {
   const episode = contractEpisode();
   const valid = finalizedSampleSet(episode);

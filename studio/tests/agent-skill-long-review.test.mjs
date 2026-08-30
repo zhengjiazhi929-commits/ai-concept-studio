@@ -66,6 +66,8 @@ import {
   longReviewSemanticRelationType
 } from "../src/video/agent-skill-long-review-contrast.mjs";
 import { visualSystemV1TextMotionAtFrame } from "../src/video/components/visual-system-v1/motion.mjs";
+import { agentSkillLongReviewEpisodeFixture } from
+  "./agent-skill-long-review.fixture.mjs";
 
 const PLAN_PATH = resolve(studioRoot, "src", "video", "agent-skill-long-review-plan.mjs");
 const COMPONENT_PATH = resolve(studioRoot, "src", "video", "agent-skill-long-review.jsx");
@@ -189,7 +191,7 @@ test("十分钟审阅版固定为 600 秒、30fps、18000 帧，并兼容 18 场
     AGENT_SKILL_LONG_REVIEW_FRAME_COUNT
   );
 
-  const episode = await readFixtureEpisode();
+  const episode = agentSkillLongReviewEpisodeFixture();
   assert.equal(episode.id, "agent-skill-20260806");
   assert.equal(episode.scenes.length, 18);
   assert.equal(episode.subtitles.length, 107);

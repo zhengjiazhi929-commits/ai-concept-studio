@@ -19,13 +19,20 @@ if [[ -x "$bundled_node" && -x "$bundled_pnpm" ]]; then
   export PATH="$runtime_root/node/bin:$PATH"
   studio_pnpm="$bundled_pnpm"
 else
-  command -v node >/dev/null 2>&1 || fail_startup "没有找到 Node.js 20 或更高版本。请先安装并重试。"
+  command -v node >/dev/null 2>&1 || fail_startup "没有找到项目锁定的 Node.js 24.19.0。请先安装并重试。"
   command -v pnpm >/dev/null 2>&1 || fail_startup "没有找到 pnpm。请先安装并重试。"
   studio_pnpm="$(command -v pnpm)"
 fi
 
-node_major="$(node -p 'Number(process.versions.node.split(".")[0])')"
-(( node_major >= 20 )) || fail_startup "Node.js 版本过低，需要 20 或更高版本。"
+expected_node_version="$(<../.node-version)"
+actual_node_version="$(node -p 'process.versions.node')"
+[[ "$actual_node_version" == "$expected_node_version" ]] || fail_startup \
+  "Node.js 版本不匹配：需要 ${expected_node_version}，当前为 ${actual_node_version}。"
+
+expected_pnpm_version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).engines.pnpm')"
+actual_pnpm_version="$("$studio_pnpm" --version)"
+[[ "$actual_pnpm_version" == "$expected_pnpm_version" ]] || fail_startup \
+  "pnpm 版本不匹配：需要 ${expected_pnpm_version}，当前为 ${actual_pnpm_version}。"
 
 if [[ ! -d node_modules ]]; then
   print -- "首次启动：正在按锁文件安装本地依赖，请稍候……"

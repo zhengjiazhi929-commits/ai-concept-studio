@@ -1,6 +1,6 @@
 # AI Concept Studio
 
-面向 AI 产品经理的长视频 Agent 制作系统。目标是把近期正在形成共识的 AI 技术概念，转化为有证据、可审批、能持续维护的 8～12 分钟竖屏视频。
+面向 AI 产品经理的长视频 Agent 制作系统。目标是把近期正在形成共识的 AI 技术概念，转化为有证据、可审批、能持续维护的 8～12 分钟视频；长期母版为 16:9，并可重构为 9:16。
 
 当前版本不是自动发布工具。它会完成发现、整理、生成、渲染和检查，但选题仍由人决定，并固定保留研究、脚本、分镜、素材、最终成片五个人工审批闸门。
 
@@ -10,7 +10,7 @@
 - 创作者信号采集 Agent v0.1 已可运行：B站公开页程序直读，抖音等客户端渲染页面生成 Codex 辅助任务，统一去重后再刷新热点雷达。
 - Research Agent v0.1 已可运行：人工选题会创建一期草稿，系统检查一手资料可达性、建立 8 类事实问题、生成 Codex 辅助任务，并在证据达到硬门槛前阻止研究审批。
 - 已配置 18 个观察源，首份公开信号快照包含 51 条内容信号；缺失播放量和评论数据时不会猜测。
-- Agentic Coding 黄金样例已贯通结构化数据、真实产品画面、Remotion 竖屏 MP4 和自动 QA。
+- 系统代码具备把结构化数据与已批准素材合成为 Remotion MP4 并执行技术 QA 的能力；当前 `golden-001` 的 Research v1、Script v1 已批准，Storyboard v1 待人工决定，尚无当前有效旁白、MP4 或 QA 结论。
 - 脚本、分镜和素材清单 Agent 已接入 Responses API 结构化生成：AiHubMix 默认为主通道，OpenAI 官方为备用通道，也可在控制台即时互换；每版产物、人工决定和驳回意见都会保留。
 - 素材 Agent 只登记真实截图、录屏、概念图和授权素材，真实产品界面不得由生成式 UI 冒充；旁白和素材在同一道闸门总审。
 - 内容 QA 已覆盖事实来源、场景结构、证据素材、字幕连续性/阅读速度与旁白对齐，不再只检查视频编码。
@@ -36,6 +36,9 @@ flowchart LR
 
 ## 打开系统
 
+项目锁定 Node.js `24.19.0` 与 pnpm `11.19.0`。首次在终端运行时，先在本目录执行
+`pnpm install --frozen-lockfile`；双击启动器也会检查这两个精确版本，版本不匹配时会停止并说明原因。
+
 - Windows：双击 `启动AI视频系统.cmd`；
 - macOS：双击 `启动AI视频系统.command`。如果系统阻止首次打开，请右键该文件并选择“打开”；也可以在终端运行 `./启动AI视频系统.command`；
 - Linux：在本目录运行 `pnpm start:open`。
@@ -58,14 +61,15 @@ pnpm trends          重新计算热点候选
 pnpm research        为已选概念建立一手资料与事实证据任务
 pnpm import:research -- <文件名>  导入 Codex 辅助研究证据批次
 pnpm test            运行回归测试
-pnpm check           检查主要模块语法
-pnpm render:preview  重新生成黄金样例视频
-pnpm qa              检查黄金样例视频
+pnpm check           检查 JS、JSX、TS、TSX 源码语法
+pnpm verify          运行秘密、源码、动效、测试和固定渲染门禁
+pnpm render:preview  仅在当前上游和素材/声音 Gate 已批准后生成预览
+pnpm qa              仅检查当前 Episode 已登记的有效视频
 ```
 
 ## AI 通道与本地密钥
 
-模型与限额写在 `config/ai.json`，密钥只放在不会进入 Git 的 `.env.local`：
+模型与限额写在 `config/ai.json`，密钥只放在不会进入 Git 的 `.env.local`。配置密钥不等于授权调用；每次真实模型或付费 Provider 调用仍需要服务端 Capability 和 Zhengjiazhi 对该调用及费用的明确授权：
 
 ```text
 AIHUBMIX_API_KEY=你的 AiHubMix Key

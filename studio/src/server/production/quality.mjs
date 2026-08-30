@@ -285,13 +285,25 @@ export function evaluateProductionQuality(episode, options = {}) {
   }
 
   if (hasStage(stage, "storyboard", "voice", "qa")) {
-    const generatedStoryboard = Boolean(episode.production?.storyboardDraft?.artifactPath);
+    const generatedStoryboard = Boolean(
+      episode.productionProfile
+      || episode.production?.storyboardDraft?.artifactPath
+      || episode.production?.storyboardDraft?.content
+      || episode.production?.storyboardDraft?.generationKind
+    );
     const storyboardVisualContractVersion =
       episode.production?.storyboardDraft?.visualContractVersion ?? null;
     const storyboardVisualStyleProfileId =
       episode.production?.storyboardDraft?.visualStyleProfileId ?? null;
+    const currentStoryboardGenerator = Boolean(
+      episode.production?.storyboardDraft?.promptBinding?.id === "acs.worker.storyboard-draft" ||
+      episode.production?.storyboardDraft?.generationKind ===
+        "deterministic-approved-script-storyboard-adapter"
+    );
     const visualExpressionRequired =
-      storyboardVisualContractVersion != null || scenes.some((scene) => scene.visualIntent != null);
+      currentStoryboardGenerator ||
+      storyboardVisualContractVersion != null ||
+      scenes.some((scene) => scene.visualIntent != null);
     const deterministicLayoutSampleReview = stage === "qa" && visualExpressionRequired
       ? validateDeterministicLayoutSampleSet(
           episode.render?.deterministicLayoutSampleSet,

@@ -1,6 +1,7 @@
 # AI Concept Studio Agent 架构 v2
 
-状态：设计已确认，尚未实施
+状态：安全骨架已实现；真实 Agent 运行、评测与准入整改中。当前完成度以
+[`STATUS.md`](STATUS.md) 为唯一来源。
 
 更新时间：2026-08-06
 

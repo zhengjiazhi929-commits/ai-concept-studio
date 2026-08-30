@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readEpisode } from "../src/shared/store.mjs";
+import { readFixtureEpisode } from "./episode-fixture.mjs";
+import { workspaceRelativePath } from "../src/shared/paths.mjs";
 import {
   approveVisualProofCandidate,
   reviewVisualProofCandidate,
@@ -66,20 +67,18 @@ function evidenceHarness() {
     [QA_PATH, { bytes: 714, sha256: "c".repeat(64) }],
     [COMPARISON_PATH, { bytes: 80_014, sha256: "d".repeat(64) }]
   ]);
-  function relativeFromAbsolute(path) {
-    const marker = "/ai-concept-studio/";
-    return String(path).split(marker).at(-1);
-  }
   return {
     text,
     integrity,
-    readFile: async (path) => text.get(relativeFromAbsolute(path)),
-    inspectFileIntegrity: async (path) => structuredClone(integrity.get(relativeFromAbsolute(path)))
+    readFile: async (path) => text.get(workspaceRelativePath(path)),
+    inspectFileIntegrity: async (path) => structuredClone(
+      integrity.get(workspaceRelativePath(path))
+    )
   };
 }
 
 test("视觉样片先机器检查再人工审批，并且不篡改完整成片终审", async () => {
-  const source = structuredClone(await readEpisode(EPISODE_ID));
+  const source = structuredClone(await readFixtureEpisode(EPISODE_ID));
   const originalFinalApproval = structuredClone(source.approvals.final);
   const originalRender = structuredClone(source.render);
   const store = memoryStore(source);
@@ -155,7 +154,7 @@ test("视觉样片先机器检查再人工审批，并且不篡改完整成片�
 });
 
 test("机器检查未通过的视觉样片不能进入人工审批", async () => {
-  const source = structuredClone(await readEpisode(EPISODE_ID));
+  const source = structuredClone(await readFixtureEpisode(EPISODE_ID));
   const store = memoryStore(source);
   const evidence = evidenceHarness();
   evidence.text.set(QA_PATH, `${VIDEO_PATH}\n${COMPARISON_PATH}\nfinal result: blocked\n`);

@@ -8,9 +8,10 @@ import {
   applyApprovalDecision,
   createApprovalMap,
   latestReviewFeedback,
+  prepareGateForHumanReview,
   resetApprovalForVersion
 } from "../src/shared/workflow.mjs";
-import { readEpisode } from "../src/shared/store.mjs";
+import { readFixtureEpisode } from "./episode-fixture.mjs";
 
 test("生产流程只有五个人工审批闸门", () => {
   assert.deepEqual(
@@ -27,7 +28,7 @@ test("生产流程只有五个人工审批闸门", () => {
 });
 
 test("驳回脚本保留旧版本和意见，并只从脚本阶段重新开始", async () => {
-  const source = await readEpisode("golden-001");
+  const source = await readFixtureEpisode();
   source.production.scriptDraft = {
     ...(source.production.scriptDraft ?? {}),
     version: 3,
@@ -135,16 +136,58 @@ test("素材 Bundle 修订号独立递增，不会因素材与旁白子版本相
   assert.equal(currentGateVersion(episode, "assets"), 9);
 });
 
-test("下游素材绑定不会篡改已批准分镜的内容哈希", async () => {
-  const episode = structuredClone(await readEpisode("golden-001"));
+test("分镜 Gate 绑定可见编号和逻辑证据，但物理素材由素材 Gate 负责", async () => {
+  const episode = structuredClone(await readFixtureEpisode());
+  episode.scenes[0].index = "01";
+  episode.scenes[0].evidenceRef = "approved-evidence";
   const before = currentGateArtifactHash(episode, "storyboard");
   episode.scenes[0].asset = "episodes/golden-001/materials/new.png";
   episode.scenes[0].audio = "episodes/golden-001/new.wav";
   assert.equal(currentGateArtifactHash(episode, "storyboard"), before);
+
+  const changedIndex = structuredClone(episode);
+  changedIndex.scenes[0].index = "02";
+  assert.notEqual(currentGateArtifactHash(changedIndex, "storyboard"), before);
+
+  const changedEvidence = structuredClone(episode);
+  changedEvidence.scenes[0].evidenceRef = "different-evidence";
+  assert.notEqual(currentGateArtifactHash(changedEvidence, "storyboard"), before);
+});
+
+test("绑定规则升级只让当前 Gate 等待重审，不伪造人工驳回或删除历史", async () => {
+  const source = structuredClone(await readFixtureEpisode());
+  source.production.scriptDraft = {
+    ...source.production.scriptDraft,
+    bytes: 1234,
+    sha256: "a".repeat(64)
+  };
+  const approvalHistoryBefore = structuredClone(source.approvalHistory);
+  const result = prepareGateForHumanReview(source, {
+    gate: "script",
+    reason: "脚本审批新增正文 bytes 与 SHA-256 绑定",
+    now: new Date("2026-08-25T12:00:00.000Z")
+  });
+
+  assert.equal(result.changed, true);
+  assert.equal(result.episode.approvals.script.status, "pending");
+  assert.equal(result.episode.approvals.script.artifactHash, null);
+  assert.equal(result.episode.pipeline.find((step) => step.id === "script").status, "waiting_approval");
+  assert.equal(result.episode.pipeline.find((step) => step.id === "storyboard").status, "pending");
+  assert.equal(result.episode.approvals.storyboard.status, "pending");
+  assert.deepEqual(result.episode.approvalHistory, approvalHistoryBefore);
+  assert.equal(result.episode.history.at(-1).type, "approval-binding-invalidated");
+  assert.equal(result.episode.history.at(-1).artifactHash, result.artifactHash);
+
+  const repeated = prepareGateForHumanReview(result.episode, {
+    gate: "script",
+    reason: "脚本审批新增正文 bytes 与 SHA-256 绑定"
+  });
+  assert.equal(repeated.changed, false);
+  assert.equal(repeated.episode.history.length, result.episode.history.length);
 });
 
 test("结构化视觉意图和解析计划进入 Storyboard Gate 哈希", async () => {
-  const episode = structuredClone(await readEpisode("golden-001"));
+  const episode = structuredClone(await readFixtureEpisode());
   episode.scenes[0].visualIntent = { schemaVersion: "visual-expression-contract-v1", takeaway: "原结论" };
   episode.scenes[0].visualPlan = { structure: "none", styleProfileId: "visual-system-v1" };
   const before = currentGateArtifactHash(episode, "storyboard");
@@ -153,7 +196,7 @@ test("结构化视觉意图和解析计划进入 Storyboard Gate 哈希", async 
 });
 
 test("最终成片批准后整期进入 approved 状态", async () => {
-  const source = await readEpisode("golden-001");
+  const source = await readFixtureEpisode();
   source.qa.status = "passed";
   const qaStep = source.pipeline.find((step) => step.id === "qa");
   qaStep.status = "waiting_approval";
