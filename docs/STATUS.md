@@ -1,8 +1,8 @@
 # AI Concept Studio 当前状态
 
-更新时间：2026-08-31 20:15（Asia/Shanghai）
+更新时间：2026-08-31 20:30（Asia/Shanghai）
 
-状态真源版本：16
+状态真源版本：17
 
 远端 `main` 当前提交：`23990937411710e394cde0be5253b02841d42d11`，来自已合并的
 PR #6。对应 hosted `Verify` run `33298465095` 已成功，历史证据为 `749/749`、
@@ -20,12 +20,19 @@ GitHub hosted `Verify` run `33386899516` 已对该代码提交成功完成，耗
 生产依赖审计，以及完整源码、测试、回滚与 Remotion 像素门禁。
 PR merge-ref `Verify` run `33390178020` 也已成功。
 
-完整候选使用新的显式 job `a3d8b4b` / `full-video-current-visual-upgrade-v008`：
-1920×1080、30fps、18000 帧、20×900 帧分段、`concurrency=1`、片间暂停 5000ms。它固定
-`AgentSkillLongReview`、Episode 和临时 `voice-v001`，且不覆盖已被视觉拒绝的历史 v007。
-任何渲染都必须等该 job 所在的 PR 最新 HEAD 再次通过 hosted `Verify`，并在 clean HEAD 上启动。
+首次使用显式 job `a3d8b4b` / `full-video-current-visual-upgrade-v008` 启动时，
+chunk 0 在发布任何 part、稳定 chunk 或最终目录前因 Remotion 默认 30000ms 浏览器初始化预算
+退出。同环境只读计时在约 91.8 秒后成功载入相同 Composition，证明是启动预算缺口，不是画面
+源码崩溃。失败的 v008 work directory、manifest 和日志原样保留，禁止清理、覆盖或伪装成成片。
 
-最终差异上的本地完整 `CI=true pnpm verify` 已通过：`892/892` 测试、287 个源码文件、
+后续完整候选使用新的显式 job `full-video-current-visual-upgrade-v009`：1920×1080、30fps、
+18000 帧、20×900 帧分段、`concurrency=1`、片间暂停 5000ms。分段核心对
+`selectComposition` 与 `renderMedia` 统一使用 180000ms 显式 Remotion 超时预算，并将该值纳入不可变
+合同和来源指纹。v009 固定 `AgentSkillLongReview`、Episode 和临时 `voice-v001`，使用全新
+final/work 目录，不覆盖 v008 失败现场或已被视觉拒绝的历史 v007。必须等本状态所在 PR 最新
+HEAD 通过 hosted `Verify`，并在 clean HEAD 上启动。
+
+浏览器预算修复后的本地完整 `CI=true pnpm verify` 已通过：`893/893` 测试、287 个源码文件、
 35/35 动效检查、7/7 回滚演练，以及 4 个实际解码且像素哈希互异的 Remotion 代表帧。
 另有针对 durable JSON、分段渲染、通用长片 QA、版本化 JSON 锁、Episode 提交、
 Research/Trend、审计 outbox、预算恢复和生产入口隔离的跨模块扩大专项测试 `224/224` 通过。
@@ -53,6 +60,8 @@ Research/Trend、审计 outbox、预算恢复和生产入口隔离的跨模块�
    同一 workDirectory 使用跨进程 SQLite 独占锁，所有临时文件按 attempt token 隔离，
    不覆盖旧候选。chunk worker 只写 attempt 临时文件；只有仍持同一 owner lock 的 parent
    能发布稳定 chunk/metadata。真实 `SIGKILL` 回归证明旧 worker 断连退出且 successor 可接管。
+   两个 Remotion 入口共用 180 秒显式页面/渲染超时预算；专项测试固定两处必须绑定同一值，避免
+   8GB 机器在低优先级冷启动下反复撞默认 30 秒超时。
 
 ### P2
 
@@ -91,8 +100,9 @@ Research/Trend、审计 outbox、预算恢复和生产入口隔离的跨模块�
 
 ## 视频与视觉验收状态
 
-- 本轮没有启动完整 10 分钟渲染，也没有调用付费 Provider 或写入生产 Episode。
-- 没有新的完整 MP4、逐段 ffprobe、无损拼接、音频 mux、联系表或连续 1× 人工观看结果。
+- v008 曾启动完整 10 分钟分段任务，但在 chunk 0 的浏览器初始化阶段失败；没有发布任何有效
+  分段、part 或最终目录。没有调用付费 Provider，也没有写入生产 Episode。
+- 当前仍没有新的完整 MP4、逐段 ffprobe、无损拼接、音频 mux、联系表或连续 1× 人工观看结果。
 - 机器测试、静态检查和多帧 smoke 不能替代实际成片视觉检查。
 - `voice-v001` 或系统合成旁白仍是临时声音，不是最终真人录音。
 - Research v1、Script v1、Storyboard v1 的历史批准不等于 Assets/Voice 或 Final Gate 已批准。
@@ -113,8 +123,8 @@ Dependabot security updates、secret scanning 和 push protection 均关闭。�
 - PR #7 已进入审阅但必须保持未合并。最终 merge 仍以
   完整十分钟候选、机器 QA、视觉 Skill 检查、连续 1× 人工观看和 Zhengjiazhi 视觉认可全部通过为前提。
 
-- `machine_status`: local_892_of_892_push_verify_and_pr_merge_ref_verify_passed
-- `technical_status`: pr_7_open_v008_job_committed_latest_head_must_verify_before_render
+- `machine_status`: local_893_of_893_timeout_fix_pending_latest_hosted_verify
+- `technical_status`: pr_7_open_v008_preserved_v009_job_latest_head_must_verify_before_render
 - `business_acceptance_status`: full_video_and_visual_acceptance_not_run
 - `git_status`: pr_7_open_no_auto_merge_no_merge
 - `release_status`: not_released

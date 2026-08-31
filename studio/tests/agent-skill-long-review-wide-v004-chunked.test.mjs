@@ -17,6 +17,7 @@ import * as chunkedRenderer from "../scripts/render-agent-skill-long-review-wide
 
 import {
   CHUNKED_LONG_REVIEW_SCHEMAS,
+  CHUNKED_REMOTION_TIMEOUT_MS,
   CHUNKED_V004_CONTRACT,
   attemptScopedPartPath,
   assertResumableRunManifest,
@@ -36,6 +37,30 @@ import {
   stableStringify,
   usageText,
 } from "../scripts/render-agent-skill-long-review-wide-v004-chunked.mjs";
+
+test("分段渲染为 composition 与 media 共用显式 Remotion 超时预算", async () => {
+  assert.equal(CHUNKED_REMOTION_TIMEOUT_MS, 180_000);
+  assert.equal(
+    CHUNKED_V004_CONTRACT.remotionTimeoutMs,
+    CHUNKED_REMOTION_TIMEOUT_MS,
+  );
+  const source = await readFile(
+    resolve(
+      import.meta.dirname,
+      "..",
+      "scripts",
+      "render-agent-skill-long-review-wide-v004-chunked.mjs",
+    ),
+    "utf8",
+  );
+  assert.equal(
+    (source.match(
+      /timeoutInMilliseconds: CHUNKED_REMOTION_TIMEOUT_MS/gu,
+    ) ?? []).length,
+    2,
+    "selectComposition 与 renderMedia 必须使用同一个显式 Remotion 超时预算",
+  );
+});
 
 function publicationManifest(runFingerprint = "a".repeat(64)) {
   return {

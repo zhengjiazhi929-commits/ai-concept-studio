@@ -115,6 +115,7 @@ const BUNDLE_DIRECTORY = resolve(WORK_DIRECTORY, "bundle");
 const RUN_MANIFEST_PATH = resolve(WORK_DIRECTORY, "render-manifest.json");
 const CHROME_EXECUTABLE =
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+export const CHUNKED_REMOTION_TIMEOUT_MS = 180_000;
 
 export const CHUNKED_V004_CONTRACT = Object.freeze({
   schemaVersion: CONFIGURED_RENDER_JOB
@@ -131,6 +132,7 @@ export const CHUNKED_V004_CONTRACT = Object.freeze({
   durationSeconds: 600,
   defaultChunkFrames: 900,
   defaultInterChunkPauseMs: 5_000,
+  remotionTimeoutMs: CHUNKED_REMOTION_TIMEOUT_MS,
   codec: "h264",
   pixelFormat: "yuv420p",
   crf: 22,
@@ -1641,6 +1643,7 @@ async function renderBoundChunkWorker(options, attemptToken, parentBinding) {
     inputProps,
     browserExecutable: CHROME_EXECUTABLE,
     chromeMode: "chrome-for-testing",
+    timeoutInMilliseconds: CHUNKED_REMOTION_TIMEOUT_MS,
     onBrowserDownload: () => {
       throw new Error("Browser download is disabled; local Chrome is required");
     },
@@ -1675,6 +1678,7 @@ async function renderBoundChunkWorker(options, attemptToken, parentBinding) {
       inputProps,
       browserExecutable: CHROME_EXECUTABLE,
       chromeMode: "chrome-for-testing",
+      timeoutInMilliseconds: CHUNKED_REMOTION_TIMEOUT_MS,
       onBrowserDownload: () => {
         throw new Error("Browser download is disabled; local Chrome is required");
       },
