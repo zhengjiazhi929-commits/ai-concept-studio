@@ -249,6 +249,156 @@ test("direct import 不暴露低层发布原语，持锁发布能力绑定真实
   }
 });
 
+test("持锁发布显式绑定 workDirectory 的固定 chunks 子目录", async () => {
+  const workDirectory = await mkdtemp(resolve(tmpdir(), "long-render-nested-publish-"));
+  const chunksDirectory = resolve(workDirectory, "chunks");
+  const siblingDirectory = resolve(workDirectory, "chunks-sibling");
+  const token = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  let lock = null;
+
+  try {
+    lock = await acquireLongReviewRenderJobLock(workDirectory, {
+      jobId: "nested-publication-fixture",
+      token,
+      publicationDirectory: chunksDirectory
+    });
+    assert.equal(lock.publicationDirectory, chunksDirectory);
+    const videoPartPath = resolve(
+      chunksDirectory,
+      `chunk-00.part.attempt-${token}.mp4`
+    );
+    const metadataPartPath = resolve(
+      chunksDirectory,
+      `chunk-00.metadata.part.attempt-${token}.json`
+    );
+    const videoPath = resolve(chunksDirectory, "chunk-00.mp4");
+    const metadataPath = resolve(chunksDirectory, "chunk-00.metadata.json");
+    await Promise.all([
+      writeFile(videoPartPath, "nested-video", {flag: "wx"}),
+      writeFile(metadataPartPath, "nested-metadata", {flag: "wx"})
+    ]);
+    const publication = await lock.publishAttemptPair({
+      attemptToken: token,
+      videoPartPath,
+      videoPath,
+      metadataPartPath,
+      metadataPath
+    });
+    assert.deepEqual(publication.durability, {
+      durable: true,
+      protocol: "file-and-directory-fsync-v1"
+    });
+    assert.equal(await readFile(videoPath, "utf8"), "nested-video");
+    assert.equal(await readFile(metadataPath, "utf8"), "nested-metadata");
+    await assert.rejects(readFile(videoPartPath), {code: "ENOENT"});
+    await assert.rejects(readFile(metadataPartPath), {code: "ENOENT"});
+
+    await mkdir(siblingDirectory);
+    const siblingVideoPartPath = resolve(
+      siblingDirectory,
+      `chunk-01.part.attempt-${token}.mp4`
+    );
+    const siblingMetadataPartPath = resolve(
+      siblingDirectory,
+      `chunk-01.metadata.part.attempt-${token}.json`
+    );
+    await Promise.all([
+      writeFile(siblingVideoPartPath, "sibling-video", {flag: "wx"}),
+      writeFile(siblingMetadataPartPath, "sibling-metadata", {flag: "wx"})
+    ]);
+    await assert.rejects(
+      lock.publishAttemptPair({
+        attemptToken: token,
+        videoPartPath: siblingVideoPartPath,
+        videoPath: resolve(siblingDirectory, "chunk-01.mp4"),
+        metadataPartPath: siblingMetadataPartPath,
+        metadataPath: resolve(siblingDirectory, "chunk-01.metadata.json")
+      }),
+      {code: "long_review_render_publish_path_mismatch"}
+    );
+  } finally {
+    lock?.release();
+    await rm(workDirectory, {recursive: true, force: true});
+  }
+});
+
+test("publicationDirectory 拒绝 symlink 并在目录被替换后使 owner 失效", async () => {
+  const symlinkRoot = await mkdtemp(resolve(tmpdir(), "long-render-publish-symlink-"));
+  const outsideDirectory = await mkdtemp(resolve(tmpdir(), "long-render-publish-outside-"));
+  const replacementRoot = await mkdtemp(resolve(tmpdir(), "long-render-publish-replace-"));
+  const token = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+  let lock = null;
+
+  try {
+    await assert.rejects(
+      acquireLongReviewRenderJobLock(symlinkRoot, {
+        jobId: "nested-publication-fixture",
+        token,
+        publicationDirectory: resolve(symlinkRoot, "chunks", "nested")
+      }),
+      {code: "long_review_render_job_lock_path_unsafe"}
+    );
+    await assert.rejects(
+      acquireLongReviewRenderJobLock(symlinkRoot, {
+        jobId: "prefix-collision-publication-fixture",
+        token,
+        publicationDirectory: resolve(`${symlinkRoot}-escape`, "chunks")
+      }),
+      {code: "long_review_render_job_lock_path_unsafe"}
+    );
+
+    const linkedChunks = resolve(symlinkRoot, "chunks");
+    await symlink(outsideDirectory, linkedChunks, "dir");
+    await assert.rejects(
+      acquireLongReviewRenderJobLock(symlinkRoot, {
+        jobId: "symlink-publication-fixture",
+        token,
+        publicationDirectory: linkedChunks
+      }),
+      {code: "long_review_render_job_lock_path_unsafe"}
+    );
+
+    const chunksDirectory = resolve(replacementRoot, "chunks");
+    const retiredDirectory = resolve(replacementRoot, "retired-chunks");
+    lock = await acquireLongReviewRenderJobLock(replacementRoot, {
+      jobId: "replacement-publication-fixture",
+      token,
+      publicationDirectory: chunksDirectory
+    });
+    await rename(chunksDirectory, retiredDirectory);
+    await mkdir(chunksDirectory);
+    const videoPartPath = resolve(
+      chunksDirectory,
+      `chunk-00.part.attempt-${token}.mp4`
+    );
+    const metadataPartPath = resolve(
+      chunksDirectory,
+      `chunk-00.metadata.part.attempt-${token}.json`
+    );
+    await Promise.all([
+      writeFile(videoPartPath, "replacement-video", {flag: "wx"}),
+      writeFile(metadataPartPath, "replacement-metadata", {flag: "wx"})
+    ]);
+    await assert.rejects(
+      lock.publishAttemptPair({
+        attemptToken: token,
+        videoPartPath,
+        videoPath: resolve(chunksDirectory, "chunk-00.mp4"),
+        metadataPartPath,
+        metadataPath: resolve(chunksDirectory, "chunk-00.metadata.json")
+      }),
+      {code: "long_review_render_job_lock_lost"}
+    );
+  } finally {
+    lock?.release();
+    await Promise.all([
+      rm(symlinkRoot, {recursive: true, force: true}),
+      rm(outsideDirectory, {recursive: true, force: true}),
+      rm(replacementRoot, {recursive: true, force: true})
+    ]);
+  }
+});
+
 test("workDirectory rename/replacement 后旧 capability 失效且不能向新目录发布", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "long-render-lock-replacement-"));
   const workDirectory = resolve(root, "work");
@@ -490,7 +640,8 @@ test("仓库提供的版本化 render-job 示例与当前 schema 一致", async 
     "full-video-current-visual-upgrade-v008.json",
     "full-video-current-visual-upgrade-v009.json",
     "full-video-current-visual-upgrade-v010.json",
-    "full-video-current-visual-upgrade-v011.json"
+    "full-video-current-visual-upgrade-v011.json",
+    "full-video-current-visual-upgrade-v012.json"
   ]);
   const jobs = await Promise.all(configFiles.map(async (name) =>
     validateLongReviewRenderJob(
@@ -498,7 +649,7 @@ test("仓库提供的版本化 render-job 示例与当前 schema 一致", async 
       {workspaceRoot: resolve(process.cwd(), "..")}
     )
   ));
-  assert.deepEqual(jobs.map((job) => job.candidateVersion), [8, 9, 10, 11]);
+  assert.deepEqual(jobs.map((job) => job.candidateVersion), [8, 9, 10, 11, 12]);
   for (const job of jobs) {
     assert.equal(job.schemaVersion, LONG_REVIEW_RENDER_JOB_SCHEMA_VERSION);
     assert.equal(job.temporaryVoice, true);

@@ -2532,6 +2532,7 @@ export async function renderAgentSkillLongReviewWideV004Chunked(options = {}) {
   await mkdir(WORK_DIRECTORY, {recursive: true});
   const jobLock = await acquireLongReviewRenderJobLock(WORK_DIRECTORY, {
     jobId: CHUNKED_V004_CONTRACT.jobId,
+    publicationDirectory: CHUNKS_DIRECTORY,
   });
   const attemptToken = jobLock.token;
   const attemptCapability = activateAttempt(attemptToken);
@@ -2550,7 +2551,6 @@ export async function renderAgentSkillLongReviewWideV004Chunked(options = {}) {
       await assertAbsent(FINAL_DIRECTORY, workspaceRelative(FINAL_DIRECTORY));
     }
     await Promise.all([
-      mkdir(CHUNKS_DIRECTORY, {recursive: true}),
       mkdir(STAGING_DIRECTORY, {recursive: true}),
       mkdir(LOGS_DIRECTORY, {recursive: true}),
     ]);

@@ -234,6 +234,47 @@ export async function acquireLongReviewRenderJobLock(workDirectory, options = {}
     "directory",
     "长片 workDirectory"
   );
+  if (
+    options.publicationDirectory !== undefined &&
+    (typeof options.publicationDirectory !== "string" ||
+      !options.publicationDirectory.trim())
+  ) {
+    throw new TypeError("long-review publicationDirectory must be a non-empty path");
+  }
+  const normalizedPublicationDirectory = resolve(
+    options.publicationDirectory ?? normalizedWorkDirectory
+  );
+  if (
+    normalizedPublicationDirectory !== normalizedWorkDirectory &&
+    dirname(normalizedPublicationDirectory) !== normalizedWorkDirectory
+  ) {
+    throw renderJobLockError(
+      "长片 publicationDirectory 只能是 workDirectory 或其直接子目录",
+      "long_review_render_job_lock_path_unsafe"
+    );
+  }
+  if (normalizedPublicationDirectory !== normalizedWorkDirectory) {
+    try {
+      await mkdir(normalizedPublicationDirectory);
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+    }
+  }
+  const publicationDirectoryStat = await lstat(normalizedPublicationDirectory);
+  if (
+    !publicationDirectoryStat.isDirectory() ||
+    publicationDirectoryStat.isSymbolicLink()
+  ) {
+    throw renderJobLockError(
+      "长片 publicationDirectory 必须是普通目录且不能是符号链接",
+      "long_review_render_job_lock_path_unsafe"
+    );
+  }
+  const publicationDirectoryIdentity = readLongReviewRenderLockPathIdentity(
+    normalizedPublicationDirectory,
+    "directory",
+    "长片 publicationDirectory"
+  );
 
   const token = options.token ?? randomUUID();
   if (typeof token !== "string" || !/^[a-f0-9-]{8,80}$/u.test(token)) {
@@ -304,6 +345,10 @@ export async function acquireLongReviewRenderJobLock(workDirectory, options = {}
         databaseIdentity,
         "长片渲染任务锁数据库"
       );
+      assertLongReviewRenderLockPathIdentity(
+        publicationDirectoryIdentity,
+        "长片 publicationDirectory"
+      );
       return true;
     };
     const assertOwned = () => {
@@ -342,6 +387,7 @@ export async function acquireLongReviewRenderJobLock(workDirectory, options = {}
       token,
       owner: Object.freeze(owner),
       databasePath,
+      publicationDirectory: normalizedPublicationDirectory,
       assertOwned,
       release,
       publishAttemptPair(publication) {
@@ -370,6 +416,8 @@ export async function acquireLongReviewRenderJobLock(workDirectory, options = {}
       jobId,
       workDirectory: normalizedWorkDirectory,
       workDirectoryIdentity,
+      publicationDirectory: normalizedPublicationDirectory,
+      publicationDirectoryIdentity,
       databasePath,
       databaseIdentity,
       assertOwned
@@ -528,13 +576,6 @@ async function publishLongReviewRenderAttemptPair({
     );
   }
 
-  const runWhileOwned = async (operation) => {
-    lockState.assertOwned();
-    const result = await operation();
-    lockState.assertOwned();
-    return result;
-  };
-
   const resolvedVideoPath = resolve(videoPath);
   const resolvedMetadataPath = resolve(metadataPath);
   const resolvedVideoPartPath = await assertRegularAttemptPart(
@@ -549,16 +590,22 @@ async function publishLongReviewRenderAttemptPair({
   );
   const publicationDirectory = dirname(resolvedVideoPath);
   if (
-    publicationDirectory !== lockState.workDirectory ||
+    publicationDirectory !== lockState.publicationDirectory ||
     dirname(resolvedMetadataPath) !== publicationDirectory ||
     dirname(resolvedVideoPartPath) !== publicationDirectory ||
     dirname(resolvedMetadataPartPath) !== publicationDirectory
   ) {
     throw renderJobLockError(
-      "长片 chunk 与 metadata 必须在持锁 workDirectory 内发布",
+      "长片 chunk 与 metadata 必须在持锁 publicationDirectory 内发布",
       "long_review_render_publish_path_mismatch"
     );
   }
+  const runWhileOwned = async (operation) => {
+    lockState.assertOwned();
+    const result = await operation();
+    lockState.assertOwned();
+    return result;
+  };
 
   await runWhileOwned(() => syncLongReviewRenderFile(resolvedVideoPartPath));
   await runWhileOwned(() => syncLongReviewRenderFile(resolvedMetadataPartPath));

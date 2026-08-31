@@ -1,8 +1,8 @@
 # AI Concept Studio 当前状态
 
-更新时间：2026-08-31 21:42（Asia/Shanghai）
+更新时间：2026-08-31 22:13（Asia/Shanghai）
 
-状态真源版本：19
+状态真源版本：20
 
 远端 `main` 当前提交：`23990937411710e394cde0be5253b02841d42d11`，来自已合并的
 PR #6。对应 hosted `Verify` run `33298465095` 已成功，历史证据为 `749/749`、
@@ -13,15 +13,16 @@ PR #6。对应 hosted `Verify` run `33298465095` 已成功，历史证据为 `74
 本轮 P1/P2 可靠性优化位于隔离分支 `codex/reliability-p1-p2-20260831`，以当前
 `origin/main` 为基线。首批 90 个任务相关路径已从
 `eea796e25b45f89ce4811d166be41c695fb625c0` 起选择性提交；后续 render-job、状态证据和
-显式 Remotion 超时/字体内联提交使远端 HEAD 相对 `main` 合计为 94 个路径。当前本地 v011
-草案新增第 95 个路径。PR #7 已创建且保持 OPEN，没有自动合并请求，也没有合并，因此
+显式 Remotion 超时/字体修正提交使远端 HEAD
+`0252032968fda9a1489430cb0707616549a640a7` 相对 `main` 合计为 95 个路径。当前本地 v012
+草案新增第 96 个路径。PR #7 已创建且保持 OPEN，没有自动合并请求，也没有合并，因此
 `main` 仍未改变。
 
-字体内联提交 `b43f7d52591cd68c6157e17cb9b5ffc9b9c178e0` 的 GitHub hosted push
-`Verify` run `33396309165` 和 PR merge-ref `Verify` run `33396315995` 均已成功。
+字体等待修正提交 `0252032968fda9a1489430cb0707616549a640a7` 的 GitHub hosted push
+`Verify` run `33399083724` 和 PR merge-ref `Verify` run `33399090248` 均已成功。
 它们完成了跟踪源码 checkout、精确 Node/Python/pnpm 运行时、秘密扫描、锁定依赖安装、
-生产依赖审计，以及 894/894 测试、287 个源码文件、35/35 动效检查、7/7 回滚演练和
-4 个实际解码的 Remotion 代表帧。这些 run 只证明 `b43f7d5`，不证明其后本地草案或完整成片。
+生产依赖审计，以及 893/893 测试、287 个源码文件、35/35 动效检查、7/7 回滚演练和
+4 个实际解码的 Remotion 代表帧。这些 run 只证明 `0252032`，不证明其后本地草案或完整成片。
 
 首次使用显式 job `a3d8b4b` / `full-video-current-visual-upgrade-v008` 启动时，
 chunk 0 在发布任何 part、稳定 chunk 或最终目录前因 Remotion 默认 30000ms 浏览器初始化预算
@@ -44,7 +45,7 @@ stable chunk、part、metadata 或 final，失败 work directory、manifest、lo
 中直接阻塞点仍是顶层三字重 `document.fonts.load()` 对应的自定义 `delayRender()` handle
 未清除；独立 Composition 选择此前可以成功。
 
-当前本地修正撤销字体内联和该顶层自定义探针，只保留锁定的本地
+提交 `0252032` 撤销字体内联和该顶层自定义探针，只保留锁定的本地
 `@fontsource-variable/noto-sans-sc/wght.css`，并依赖锁定 Remotion renderer 在逐帧
 `seek-to-frame` 中等待 `document.fonts.ready`。默认 bundle 的真实低优先级运行时证明为：
 101 个独立 WOFF2、无 `data:font`，bundle 5.538 秒、Composition 选择 11.133 秒、
@@ -60,7 +61,21 @@ mismatch；没有绕过门禁，而是用评测实现本身重算并只更新闭
 7/7 回滚演练、4 个实际解码且像素哈希互异的 Remotion 代表帧、秘密扫描与 diff 检查。
 测试总数相对 `b43f7d5` 净减 1，是删除已撤销 inline-webpack override 的独立测试，并把当前
 字体交付合同断言并入既有分段超时测试，不是跳过失败项。
-以上是隔离工作树本地证据；当前草案仍须选择性 commit、push 并通过新的 hosted `Verify`。
+以上本地证据及两条 hosted `Verify` 都已绑定 `0252032`。
+
+`full-video-current-visual-upgrade-v011` 随后通过全部预检并按相同低优先级参数启动。chunk 0
+用约 7 分 43 秒完成 900 帧渲染并两次通过 `ffprobe`，随后在持锁发布前被
+`long_review_render_publish_path_mismatch` 拒绝。根因不是字体或编码，而是发布器要求四个文件
+直接位于 workDirectory 根层，真实 renderer 则固定放在受锁的 `workDirectory/chunks/`；
+v008-v010 都在更早阶段失败，所以此前测试没有暴露该 seam。异常清理删除 attempt part，
+当前没有 stable chunk 可续用；v011 bundle、manifest、日志和 lock DB 保留，final 不存在。
+
+当前本地草案让锁显式绑定一个固定 publicationDirectory，只允许 workDirectory 自身或其直接
+子目录，绑定 realpath/device/inode，并在每次 owner 检查中复核；publisher 仍只接受这个精确目录。
+新增 nested success、sibling、symlink、目录替换和真实 renderer wiring 回归，专项 `35/35`
+已通过；完整本地门禁也已通过 `895/895` 测试、287 个源码文件、35/35 动效检查、
+7/7 回滚演练、4 个实际解码且像素哈希互异的 Remotion 代表帧、秘密扫描与 diff 检查。
+该草案及全新 v012 job 尚须选择性 commit、push 和 hosted `Verify`。
 
 ## 本轮任务相关修复
 
@@ -85,8 +100,10 @@ mismatch；没有绕过门禁，而是用评测实现本身重算并只更新闭
    能发布稳定 chunk/metadata。真实 `SIGKILL` 回归证明旧 worker 断连退出且 successor 可接管。
    两个 Remotion 入口共用 180 秒显式页面/渲染超时预算；专项测试固定两处必须绑定同一值，避免
    8GB 机器在低优先级冷启动下反复撞默认 30 秒超时。v010 已证明字体资源内联不能解决
-   顶层自定义字体等待未清除；当前草案恢复 Remotion 默认 `asset/resource`，不再改写 webpack
-   字体规则，也不再增加第二套页面级 `delayRender()` 等待。
+   顶层自定义字体等待未清除；`0252032` 恢复 Remotion 默认 `asset/resource`，不再改写 webpack
+   字体规则，也不再增加第二套页面级 `delayRender()` 等待。v011 又暴露 stable publisher 与
+   真实 `chunks/` 路径的契约错位；当前草案把该直接子目录的真实身份纳入同一 owner lock，
+   继续拒绝根外、sibling、symlink 和换目录发布。
 
 ### P2
 
@@ -137,9 +154,11 @@ mismatch；没有绕过门禁，而是用评测实现本身重算并只更新闭
   失败记录均保留，可用于只读诊断。
 - v010 已启动但 chunk 0 因顶层字体探针超时失败；没有稳定分段、part、metadata 或最终目录，
   失败工作目录完整保留。
-- 新显式 job `full-video-current-visual-upgrade-v011` 是当前本地未提交草案，固定
+- v011 已完成一次 chunk 0 编码和两次 `ffprobe`，随后因 publisher 与 `chunks/` 子目录的
+  确定性路径合同错位而失败；异常清理后没有 stable chunk 可恢复，失败现场保持只读。
+- 新显式 job `full-video-current-visual-upgrade-v012` 是当前本地未提交草案，固定
   1920×1080、30fps、18000 帧、20×900 帧、`concurrency=1`、5000ms 片间暂停以及全新
-  final/work 目录；当前尚未启动。
+  final/work 目录；当前尚未启动，也不会覆盖 v011。
   只有本状态所在草案完成选择性 commit、push、最新 hosted `Verify`，且 clean HEAD、输入哈希、
   全新输出路径、AC 电源、磁盘和无残留进程复核通过后，才可按
   `taskpolicy -b nice -n 20` 自动续跑。
@@ -164,8 +183,8 @@ Dependabot security updates、secret scanning 和 push protection 均关闭。�
 - PR #7 已进入审阅但必须保持未合并。最终 merge 仍以
   完整十分钟候选、机器 QA、视觉 Skill 检查、连续 1× 人工观看和 Zhengjiazhi 视觉认可全部通过为前提。
 
-- `machine_status`: local_893_of_893_font_wait_candidate_latest_hosted_verify_required_before_v011
-- `technical_status`: pr_7_open_v008_v009_v010_failures_preserved_v011_not_started
+- `machine_status`: publication_lock_fix_local_895_of_895_latest_hosted_verify_required_before_v012
+- `technical_status`: pr_7_open_v008_v009_v010_v011_failures_preserved_v012_not_started
 - `business_acceptance_status`: full_video_and_visual_acceptance_not_run
-- `git_status`: pr_7_open_remote_b43f7d5_local_draft_uncommitted_no_auto_merge_no_merge
+- `git_status`: pr_7_open_remote_0252032_local_v012_draft_uncommitted_no_auto_merge_no_merge
 - `release_status`: not_released

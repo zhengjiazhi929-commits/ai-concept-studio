@@ -235,6 +235,10 @@ test("chunk worker 只写 attempt part，稳定 chunk 与 metadata 由持锁 par
   );
   const rendererEnd = source.indexOf("async function main()", rendererStart);
   const rendererSource = source.slice(rendererStart, rendererEnd);
+  assert.match(
+    rendererSource,
+    /publicationDirectory:\s*CHUNKS_DIRECTORY/u,
+  );
   assert.match(rendererSource, /const attemptCapability = activateAttempt\(attemptToken\)/u);
   assert.match(rendererSource, /await cleanupActiveParts\(attemptCapability\)/u);
   assert.match(rendererSource, /deactivateAttempt\(attemptCapability\)/u);
