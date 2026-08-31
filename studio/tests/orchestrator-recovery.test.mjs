@@ -57,7 +57,8 @@ test("进程中断后的 running 步骤会恢复为可重试失败状态", async
     calls: 1,
     costUsd: 0.25,
     costKnown: true,
-    reservedAt: "2026-08-03T23:59:30.000Z"
+    reservedAt: "2026-08-03T23:59:30.000Z",
+    dispatchState: "dispatching"
   }];
   const at = new Date("2026-08-04T00:00:00.000Z");
   const result = recoverInterruptedEpisode(episode, at);
@@ -142,6 +143,45 @@ test("进程中断后的 running 步骤会恢复为可重试失败状态", async
   assert.deepEqual(reconciliation.unfrozenAgentIds, ["voice-agent"]);
 });
 
+test("Provider 尚未派发的 reserved 预算在恢复时按零用量释放", async () => {
+  const episode = structuredClone(await readFixtureEpisode());
+  const voice = episode.pipeline.find((step) => step.agent === "voice-agent");
+  voice.status = "running";
+  voice.startedAt = "2026-08-31T09:00:00.000Z";
+  episode.control.budget.reservedCalls = 1;
+  episode.control.budget.reservedCostUsd = 0.25;
+  episode.control.budget.reservations = [{
+    id: "route-not-dispatched:attempt:1",
+    decisionId: "route-not-dispatched",
+    calls: 1,
+    costUsd: 0.25,
+    costKnown: true,
+    reservedAt: "2026-08-31T09:00:01.000Z",
+    dispatchState: "reserved",
+    dispatchedAt: null,
+    providerId: null,
+    model: null,
+    attempt: null
+  }];
+
+  const result = recoverInterruptedEpisode(
+    episode,
+    new Date("2026-08-31T09:01:00.000Z")
+  );
+  const recoveredVoice = result.episode.pipeline.find(
+    (step) => step.agent === "voice-agent"
+  );
+  assert.deepEqual(result.changedBudgetReservations, ["route-not-dispatched:attempt:1"]);
+  assert.deepEqual(result.releasedBudgetReservations, ["route-not-dispatched:attempt:1"]);
+  assert.deepEqual(result.recoveredBudgetReservations, []);
+  assert.deepEqual(result.ambiguousBudgetReservations, []);
+  assert.equal(result.episode.control.budget.reservedCalls, 0);
+  assert.equal(result.episode.control.budget.reservedCostUsd, 0);
+  assert.equal(result.episode.control.budget.overrun, false);
+  assert.equal(recoveredVoice.lastError, "process_interrupted");
+  assert.equal(recoveredVoice.requiresHuman, false);
+});
+
 test("Provider 已成功结算但产物提交状态不明时，恢复必须冻结而不能称为安全重试", async () => {
   const episode = structuredClone(await readFixtureEpisode());
   const script = episode.pipeline.find((step) => step.agent === "script-agent");
@@ -211,7 +251,8 @@ test("已有 ambiguity 再次恢复仍冻结；部分对账、真实超额和原
       calls: 1,
       costUsd: 0.2,
       costKnown: true,
-      reservedAt: "2026-08-04T01:00:00.000Z"
+      reservedAt: "2026-08-04T01:00:00.000Z",
+      dispatchState: "dispatching"
     },
     {
       id: "route-partial:attempt:2",
@@ -219,7 +260,8 @@ test("已有 ambiguity 再次恢复仍冻结；部分对账、真实超额和原
       calls: 1,
       costUsd: 0.2,
       costKnown: true,
-      reservedAt: "2026-08-04T01:00:01.000Z"
+      reservedAt: "2026-08-04T01:00:01.000Z",
+      dispatchState: "dispatching"
     }
   ];
   source.control.budget.reservedCalls = 2;
@@ -293,7 +335,8 @@ test("已有 ambiguity 再次恢复仍冻结；部分对账、真实超额和原
     calls: 1,
     costUsd: 0.2,
     costKnown: true,
-    reservedAt: "2026-08-04T02:00:00.000Z"
+    reservedAt: "2026-08-04T02:00:00.000Z",
+    dispatchState: "dispatching"
   }];
   originalHuman.control.budget.reservedCalls = 1;
   originalHuman.control.budget.reservedCostUsd = 0.2;

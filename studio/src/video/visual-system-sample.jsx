@@ -39,9 +39,9 @@ import {
   stageWindowMotion,
   visualColors
 } from "./components/visual-system.jsx";
+import { VIDEO_SANS_FONT_FAMILY } from "./font-system.mjs";
 
-const fontFamily =
-  '"PingFang SC", "HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif';
+const fontFamily = VIDEO_SANS_FONT_FAMILY;
 
 const sceneTiming = {
   operation: { start: 0, end: 250, chapter: "01" },

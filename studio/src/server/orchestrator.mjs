@@ -48,6 +48,10 @@ import {
   markInterruptedBudgetReservationsAmbiguous
 } from "./control/budget-ledger.mjs";
 import {
+  deliverWorkerAuditOutbox,
+  enqueueWorkerAuditEvents
+} from "./control/worker-audit-outbox.mjs";
+import {
   acquireEpisodeOperation,
   claimPersistedEpisodeOperation,
   isEpisodeOperationActive,
@@ -448,6 +452,38 @@ export async function recheckGateReview(episodeId, gate, options = {}) {
   }
 }
 
+export async function replayPendingWorkerAuditEvents(episodeId, options = {}) {
+  const readState = options.readEpisode ?? readEpisode;
+  const writeState = options.writeEpisode ?? writeEpisode;
+  const recordEvent = options.appendEvent ?? appendEvent;
+  const releaseOperation = acquireEpisodeOperation(episodeId, "worker-audit-replay", {
+    conflictMessage: "这一期已有 Agent 正在运行，暂时不能补写 Worker 审计事件"
+  });
+  try {
+    const episode = ensureAgentArchitecture(await readState(episodeId));
+    const delivered = await deliverWorkerAuditOutbox(episode, {
+      appendEvent: recordEvent,
+      writeEpisode: writeState,
+      readEpisode: readState,
+      requireReceipt: options.requireAuditReceipt ?? options.appendEvent === undefined,
+      now: options.now
+    });
+    return {
+      episode: delivered.episode,
+      deliveredCount: delivered.deliveredCount,
+      pendingCount: delivered.pendingCount,
+      error: delivered.error
+        ? {
+            code: delivered.error.code ?? "worker_audit_delivery_failed",
+            message: safeErrorMessage(delivered.error, "Worker 审计事件交付失败")
+          }
+        : null
+    };
+  } finally {
+    releaseOperation();
+  }
+}
+
 export async function runAgent(episodeId, agentId, options = {}) {
   const readState = options.readEpisode ?? readEpisode;
   const writeState = options.writeEpisode ?? writeEpisode;
@@ -457,6 +493,50 @@ export async function runAgent(episodeId, agentId, options = {}) {
   });
   const operationId = `operation:worker:${episodeId}:${agentId}:${randomUUID()}`;
   let operationClaimed = false;
+  let auditSequence = 0;
+  let auditDelivery = {
+    deliveredCount: 0,
+    pendingCount: 0,
+    error: null
+  };
+
+  const persistWorkerStateWithAudit = async (
+    sourceEpisode,
+    events = [],
+    afterCommit = () => {}
+  ) => {
+    const identifiedEvents = events.map((event) => {
+      auditSequence += 1;
+      const eventId = `${operationId}:audit:${auditSequence}`;
+      return { ...event, eventId, idempotencyKey: eventId };
+    });
+    const queued = identifiedEvents.length > 0
+      ? enqueueWorkerAuditEvents(sourceEpisode, identifiedEvents, {
+          operationId,
+          now: options.now
+        })
+      : sourceEpisode;
+    await writeState(queued);
+    afterCommit();
+    const delivered = await deliverWorkerAuditOutbox(queued, {
+      appendEvent: recordEvent,
+      writeEpisode: writeState,
+      readEpisode: readState,
+      requireReceipt: options.requireAuditReceipt ?? options.appendEvent === undefined,
+      now: options.now
+    });
+    auditDelivery = {
+      deliveredCount: auditDelivery.deliveredCount + delivered.deliveredCount,
+      pendingCount: delivered.pendingCount,
+      error: delivered.error
+        ? {
+            code: delivered.error.code ?? "worker_audit_delivery_failed",
+            message: safeErrorMessage(delivered.error, "Worker 审计事件交付失败")
+          }
+        : null
+    };
+    return delivered;
+  };
 
   try {
     const initialEpisode = ensureAgentArchitecture(await readState(episodeId));
@@ -675,10 +755,9 @@ export async function runAgent(episodeId, agentId, options = {}) {
         reviewReportId: evaluated.review?.report.id ?? null
       });
       episode.updatedAt = new Date().toISOString();
-      await writeState(episode);
-
+      const reviewAuditEvents = [];
       if (evaluated.review) {
-        await recordEvent({
+        reviewAuditEvents.push({
           type: "review.completed",
           episodeId,
           agentId,
@@ -690,7 +769,7 @@ export async function runAgent(episodeId, agentId, options = {}) {
           (target) => target !== agentId
         );
         if (evaluated.review.report.decision === "revise" && crossAgentTargets.length > 0) {
-          await recordEvent({
+          reviewAuditEvents.push({
             type: "review.revision_routed",
             episodeId,
             agentId,
@@ -700,7 +779,6 @@ export async function runAgent(episodeId, agentId, options = {}) {
           });
         }
       }
-
       const revisionLimit = Math.min(
         episode.control?.revisionLimit ?? 2,
         Number.isInteger(options.limits?.maxRevisionRounds)
@@ -727,28 +805,59 @@ export async function runAgent(episodeId, agentId, options = {}) {
           requiresHuman: false
         };
         episode.updatedAt = new Date().toISOString();
-        await writeState(episode);
-        await recordEvent({
+        reviewAuditEvents.push({
           type: "agent.revision_started",
           episodeId,
           agentId,
           gate: evaluated.review.report.stage,
           message: `开始第 ${automaticRevisionAttempts} 轮自动修改`
         });
+        const persistedRevision = await persistWorkerStateWithAudit(
+          episode,
+          reviewAuditEvents
+        );
+        if (persistedRevision.safeToContinue !== true) {
+          const error = new Error(
+            "Worker 审计确认状态无法刷新，已停止自动修改以避免使用旧 Episode 重跑"
+          );
+          error.code = "worker_audit_continuation_unsafe";
+          throw error;
+        }
+        episode = persistedRevision.episode;
+        const continuedStep = episode.pipeline.find((item) => item.agent === agentId);
+        if (
+          episode.control?.activeOperation?.id !== operationId ||
+          continuedStep?.status !== "running"
+        ) {
+          const error = new Error(
+            "Worker 自动修改已被更新的 Episode 状态取代，禁止从旧操作继续"
+          );
+          error.code = "worker_operation_superseded";
+          error.suppressFailureAudit = true;
+          throw error;
+        }
+        if (episode.control.stopRequested) {
+          const error = new Error("已收到人工停止请求，自动修改已在下一轮前停止");
+          error.code = "worker_stop_requested";
+          error.requiresHuman = true;
+          throw error;
+        }
         continue;
       }
 
       releasePersistedEpisodeOperation(episode, operationId);
-      await writeState(episode);
-      operationClaimed = false;
-      await recordEvent({
+      reviewAuditEvents.push({
         type: "agent.finished",
         episodeId,
         agentId,
         status: output.status,
         message: output.message
       });
-      return { episode, output, review: evaluated.review };
+      const persistedFinal = await persistWorkerStateWithAudit(episode, reviewAuditEvents, () => {
+        operationClaimed = false;
+      });
+      episode = persistedFinal.episode;
+      return { episode, output, review: evaluated.review, auditDelivery };
     }
   } catch (error) {
     const loadedEpisode = await readState(episodeId).catch(() => null);
@@ -778,7 +887,12 @@ export async function runAgent(episodeId, agentId, options = {}) {
       ? "Provider 已成功结算，但产物与 Episode 是否完成提交无法确认；已禁止自动重试，必须人工核对"
       : safeErrorMessage(error, "Agent 运行失败");
     const safeAttempts = sanitizeAttemptRecords(Array.isArray(error?.attempts) ? error.attempts : []);
-    if (episode && operationClaimed) {
+    const persistedOperationSuperseded = Boolean(
+      episode &&
+      operationClaimed &&
+      episode.control?.activeOperation?.id !== operationId
+    );
+    if (episode && operationClaimed && !persistedOperationSuperseded) {
       if (error?.routingDecision) {
         const routingDecision = redactSensitiveValue(error.routingDecision);
         const validation = validateRoutingDecision(routingDecision);
@@ -837,14 +951,16 @@ export async function runAgent(episodeId, agentId, options = {}) {
         operationClaimed = false;
       }
     }
-    await recordEvent({
-      type: pausedForHuman ? "agent.paused" : "agent.failed",
-      episodeId,
-      agentId,
-      failureCode,
-      reservationId: reservationId || null,
-      message: failureMessage
-    });
+    if (!persistedOperationSuperseded && error?.suppressFailureAudit !== true) {
+      await recordEvent({
+        type: pausedForHuman ? "agent.paused" : "agent.failed",
+        episodeId,
+        agentId,
+        failureCode,
+        reservationId: reservationId || null,
+        message: failureMessage
+      });
+    }
     throw error;
   } finally {
     releaseOperation();
@@ -1134,7 +1250,9 @@ export function recoverInterruptedEpisode(sourceEpisode, now = new Date()) {
   const episode = budgetRecovery.episode;
   const at = now.toISOString();
   const recoveredAgents = [];
-  const recoveredBudgetReservations = budgetRecovery.reservationIds;
+  const changedBudgetReservations = budgetRecovery.reservationIds;
+  const releasedBudgetReservations = budgetRecovery.releasedReservationIds;
+  const recoveredBudgetReservations = budgetRecovery.ambiguousReservationIds;
   const ambiguousBudgetReservations = getAmbiguousBudgetReservationIds(episode);
   const hasAmbiguousProviderCalls = ambiguousBudgetReservations.length > 0;
   const recoveredOperation = episode.control.activeOperation
@@ -1223,12 +1341,14 @@ export function recoverInterruptedEpisode(sourceEpisode, now = new Date()) {
   if (recoveredAgents.length > 0) episode.updatedAt = at;
   if (checking.recoveredStages.length > 0) episode.updatedAt = at;
   if (recoveredOperation) episode.updatedAt = at;
-  if (recoveredBudgetReservations.length > 0) episode.updatedAt = at;
+  if (changedBudgetReservations.length > 0) episode.updatedAt = at;
   return {
     episode,
     recoveredAgents,
     recoveredReviewStages: checking.recoveredStages,
     recoveredOperation,
+    changedBudgetReservations,
+    releasedBudgetReservations,
     recoveredBudgetReservations,
     ambiguousBudgetReservations,
     uncommittedProviderResultIds: [
@@ -1242,10 +1362,67 @@ export function recoverInterruptedEpisode(sourceEpisode, now = new Date()) {
 
 export async function recoverInterruptedRuns(options = {}) {
   const now = options.now ?? new Date();
-  const episodes = await listEpisodes();
+  const listState = options.listEpisodes ?? listEpisodes;
+  const writeState = options.writeEpisode ?? writeEpisode;
+  const recordEvent = options.appendEvent ?? appendEvent;
+  const refreshState = options.readEpisode ?? (
+    options.listEpisodes === undefined ? readEpisode : null
+  );
+  const episodes = await listState();
   const recovered = [];
   for (const sourceEpisode of episodes) {
-    const interrupted = recoverInterruptedEpisode(sourceEpisode, now);
+    let replaySource = sourceEpisode;
+    let workerAuditDelivery = {
+      deliveredCount: 0,
+      pendingCount: Array.isArray(sourceEpisode?.system?.workerAuditOutbox)
+        ? sourceEpisode.system.workerAuditOutbox.length
+        : 0,
+      error: null
+    };
+    try {
+      const replayed = await deliverWorkerAuditOutbox(sourceEpisode, {
+        appendEvent: recordEvent,
+        writeEpisode: writeState,
+        ...(refreshState ? { readEpisode: refreshState } : {}),
+        requireReceipt:
+          options.requireAuditReceipt ?? options.appendEvent === undefined,
+        now
+      });
+      replaySource = replayed.episode;
+      workerAuditDelivery = {
+        deliveredCount: replayed.deliveredCount,
+        pendingCount: replayed.pendingCount,
+        error: replayed.error
+          ? {
+              code: replayed.error.code ?? "worker_audit_delivery_failed",
+              message: safeErrorMessage(
+                replayed.error,
+                "Worker 审计事件启动重放失败"
+              )
+            }
+          : null
+      };
+      if (replayed.safeToContinue === false) {
+        recovered.push({
+          episodeId: sourceEpisode.id,
+          recoveredAgents: [],
+          recoveredReviewStages: [],
+          recoveredOperation: false,
+          changedBudgetReservations: [],
+          releasedBudgetReservations: [],
+          recoveredBudgetReservations: [],
+          workerAuditDelivery,
+          recoveryDeferred: true
+        });
+        continue;
+      }
+    } catch (error) {
+      workerAuditDelivery.error = {
+        code: error?.code ?? "worker_audit_delivery_failed",
+        message: safeErrorMessage(error, "Worker 审计事件启动重放失败")
+      };
+    }
+    const interrupted = recoverInterruptedEpisode(replaySource, now);
     const artifacts = await reconcileEpisodeArtifacts(interrupted.episode, {
       now,
       access: options.access
@@ -1254,14 +1431,17 @@ export async function recoverInterruptedRuns(options = {}) {
       interrupted.recoveredAgents.length === 0 &&
       interrupted.recoveredReviewStages.length === 0 &&
       !interrupted.recoveredOperation &&
-      interrupted.recoveredBudgetReservations.length === 0 &&
+      interrupted.changedBudgetReservations.length === 0 &&
       !interrupted.recoveredPlan &&
       !interrupted.recoveredDispatch &&
-      !artifacts.changed
+      !artifacts.changed &&
+      workerAuditDelivery.deliveredCount === 0 &&
+      workerAuditDelivery.pendingCount === 0 &&
+      !workerAuditDelivery.error
     ) continue;
-    await writeEpisode(artifacts.episode);
+    await writeState(artifacts.episode);
     for (const agentId of interrupted.recoveredAgents) {
-      await appendEvent({
+      await recordEvent({
         type: "agent.recovered",
         episodeId: sourceEpisode.id,
         agentId,
@@ -1273,7 +1453,7 @@ export async function recoverInterruptedRuns(options = {}) {
       });
     }
     for (const stage of interrupted.recoveredReviewStages) {
-      await appendEvent({
+      await recordEvent({
         type: "review.recovered",
         episodeId: sourceEpisode.id,
         gate: stage,
@@ -1281,7 +1461,7 @@ export async function recoverInterruptedRuns(options = {}) {
       });
     }
     if (interrupted.recoveredBudgetReservations.length > 0) {
-      await appendEvent({
+      await recordEvent({
         type: "budget.reservations.ambiguous",
         episodeId: sourceEpisode.id,
         status: "ambiguous",
@@ -1289,15 +1469,25 @@ export async function recoverInterruptedRuns(options = {}) {
           `已冻结 ${interrupted.recoveredBudgetReservations.length} 项中断的 Provider 调用预算，等待人工核对后显式结算`
       });
     }
+    if (interrupted.releasedBudgetReservations.length > 0) {
+      await recordEvent({
+        type: "budget.reservations.released",
+        episodeId: sourceEpisode.id,
+        status: "settled",
+        reservationIds: interrupted.releasedBudgetReservations,
+        message:
+          `已按零用量释放 ${interrupted.releasedBudgetReservations.length} 项确认未派发的 Provider 预算预留`
+      });
+    }
     if (interrupted.recoveredOperation) {
-      await appendEvent({
+      await recordEvent({
         type: "operation.recovered",
         episodeId: sourceEpisode.id,
         message: `已释放中断的 ${interrupted.recoveredOperation.kind} 操作锁`
       });
     }
     if (interrupted.uncommittedProviderResultIds.length > 0) {
-      await appendEvent({
+      await recordEvent({
         type: "provider.result_commit_unknown",
         episodeId: sourceEpisode.id,
         status: "blocked",
@@ -1307,7 +1497,7 @@ export async function recoverInterruptedRuns(options = {}) {
       });
     }
     if (interrupted.recoveredPlan) {
-      await appendEvent({
+      await recordEvent({
         type: "main-agent.plan.recovered",
         episodeId: sourceEpisode.id,
         message: interrupted.uncommittedProviderResultIds.length > 0
@@ -1316,14 +1506,14 @@ export async function recoverInterruptedRuns(options = {}) {
       });
     }
     if (interrupted.recoveredDispatch) {
-      await appendEvent({
+      await recordEvent({
         type: "main-agent.dispatch.recovered",
         episodeId: sourceEpisode.id,
         message: "中断的受控调度已恢复为失败记录，不会自动重复执行"
       });
     }
     if (artifacts.missingRender) {
-      await appendEvent({
+      await recordEvent({
         type: "render.missing",
         episodeId: sourceEpisode.id,
         agentId: "render-agent",
@@ -1331,7 +1521,7 @@ export async function recoverInterruptedRuns(options = {}) {
       });
     }
     if (artifacts.invalidRenderIntegrity) {
-      await appendEvent({
+      await recordEvent({
         type: "render.integrity_failed",
         episodeId: sourceEpisode.id,
         agentId: "render-agent",
@@ -1343,10 +1533,13 @@ export async function recoverInterruptedRuns(options = {}) {
       agentIds: interrupted.recoveredAgents,
       reviewStages: interrupted.recoveredReviewStages,
       operation: interrupted.recoveredOperation,
+      changedBudgetReservations: interrupted.changedBudgetReservations,
+      releasedBudgetReservations: interrupted.releasedBudgetReservations,
       budgetReservations: interrupted.recoveredBudgetReservations,
       ambiguousBudgetReservations: interrupted.ambiguousBudgetReservations,
       planRecovered: interrupted.recoveredPlan,
       dispatchRecovered: interrupted.recoveredDispatch,
+      workerAuditDelivery,
       missingRender: artifacts.missingRender,
       invalidRenderIntegrity: artifacts.invalidRenderIntegrity ?? false
     });

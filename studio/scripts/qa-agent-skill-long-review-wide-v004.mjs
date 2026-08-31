@@ -1,34 +1,91 @@
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
 import {
   access,
   lstat,
   mkdir,
+  open,
+  realpath,
   readdir,
   readFile,
   rename,
+  rmdir,
   rm,
   writeFile
 } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { RenderInternals } from "@remotion/renderer";
+
+import {
+  inspectRenderedMedia,
+  renderedMediaTechnicalChecks
+} from "../src/server/qa.mjs";
+import {
+  assertLongReviewRenderJobFilesystemSafety,
+  validateLongReviewRenderJob
+} from "../src/server/production/long-render-job.mjs";
+import {
+  captureLongReviewCandidateSourceIdentity,
+  LONG_REVIEW_PUBLICATION_RECEIPT_FILE_NAME,
+  LONG_REVIEW_QA_SCHEMA_VERSION,
+  validateLongReviewCandidateManifest,
+  validateLongReviewPublicationDurableReceipt
+} from "../src/server/production/long-review-qa.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const STUDIO_ROOT = resolve(dirname(SCRIPT_PATH), "..");
 const WORKSPACE_ROOT = resolve(STUDIO_ROOT, "..");
+const QA_JOB_ENVIRONMENT_KEY = "AI_CONCEPT_STUDIO_LONG_REVIEW_QA_JOB";
+const QA_JOB_CONFIG_PATH = process.env[QA_JOB_ENVIRONMENT_KEY]
+  ? resolve(process.env[QA_JOB_ENVIRONMENT_KEY])
+  : null;
+const CONFIGURED_RENDER_JOB = await (async () => {
+  if (!QA_JOB_CONFIG_PATH) return null;
+  const pathFromWorkspace = relative(WORKSPACE_ROOT, QA_JOB_CONFIG_PATH);
+  if (pathFromWorkspace.startsWith("..") || isAbsolute(pathFromWorkspace)) {
+    throw new Error("QA render-job config escapes the workspace");
+  }
+  await assertPlainFile(QA_JOB_CONFIG_PATH, "QA render-job config");
+  const job = validateLongReviewRenderJob(
+    JSON.parse(await readFile(QA_JOB_CONFIG_PATH, "utf8")),
+    { workspaceRoot: WORKSPACE_ROOT }
+  );
+  await assertLongReviewRenderJobFilesystemSafety(job, {
+    workspaceRoot: WORKSPACE_ROOT,
+    jobConfigPath: QA_JOB_CONFIG_PATH
+  });
+  return job;
+})();
 const REVIEW_CANDIDATES_ROOT = resolve(
-  WORKSPACE_ROOT,
-  "outputs/studio/agent-skill-20260806/review-candidates"
+  CONFIGURED_RENDER_JOB
+    ? dirname(CONFIGURED_RENDER_JOB.resolvedPaths.finalDirectory)
+    : resolve(WORKSPACE_ROOT, "outputs/studio/agent-skill-20260806/review-candidates")
 );
-const DEFAULT_CANDIDATE_DIRECTORY = resolve(
-  REVIEW_CANDIDATES_ROOT,
-  "full-video-current-visual-upgrade-v004"
-);
+const DEFAULT_CANDIDATE_DIRECTORY = CONFIGURED_RENDER_JOB?.resolvedPaths.finalDirectory ??
+  resolve(REVIEW_CANDIDATES_ROOT, "full-video-current-visual-upgrade-v004");
 const ANALYZER_PATH = resolve(
   STUDIO_ROOT,
   "scripts/qa-agent-skill-long-review-wide-v004.py"
+);
+const GENERIC_QA_SCRIPT_PATH = resolve(
+  STUDIO_ROOT,
+  "scripts/qa-agent-skill-long-review.mjs"
+);
+const LONG_REVIEW_QA_BINDING_PATH = resolve(
+  STUDIO_ROOT,
+  "src/server/production/long-review-qa.mjs"
+);
+const QA_MEDIA_INSPECTOR_PATH = resolve(STUDIO_ROOT, "src/server/qa.mjs");
+export const PYTHON_RUNTIME_LOCK_PATH = resolve(
+  STUDIO_ROOT,
+  "scripts/qa-agent-skill-long-review-wide-v004-python-runtime.json"
+);
+export const PYTHON_REQUIREMENTS_LOCK_PATH = resolve(
+  STUDIO_ROOT,
+  "scripts/qa-agent-skill-long-review-wide-v004-requirements.lock.txt"
 );
 
 const SCENES = Object.freeze([
@@ -53,26 +110,35 @@ const SCENES = Object.freeze([
 ]);
 
 export const WIDE_V004_QA_CONTRACT = Object.freeze({
-  schemaVersion: "agent-skill-long-review-wide-v004-qa-pipeline-v1",
-  candidateVersion: 4,
+  schemaVersion: CONFIGURED_RENDER_JOB
+    ? LONG_REVIEW_QA_SCHEMA_VERSION
+    : "agent-skill-long-review-wide-v004-qa-pipeline-v2",
+  candidateVersion: CONFIGURED_RENDER_JOB?.candidateVersion ?? 4,
   expectedMedia: Object.freeze({
     width: 1920,
     height: 1080,
     fps: 30,
     durationSeconds: 600,
     durationToleranceSeconds: 0.25,
-    durationInFrames: 18_000
+    durationInFrames: 18_000,
+    audioCodec: "aac",
+    audioSampleRate: 48_000
   }),
   scenes: SCENES,
   representativeFrameFraction: 0.5,
   boundaryOffsetsInFrames: Object.freeze([-8, -1, 0, 1, 8]),
   periodicIntervalSeconds: 2,
   periodicWidth: 480,
-  fullFrameExtractionConcurrency: 4,
-  periodicExtractionConcurrency: 4,
+  frameExtractionStrategy: "sequential-decode-split-trim-by-frame-index",
+  fullFrameExtractionConcurrency: 1,
+  periodicExtractionConcurrency: 1,
   finalQaDirectoryName: "qa",
-  temporaryQaDirectoryName: "qa.rendering",
-  sourceVideoNames: Object.freeze(["review-10m-wide.mp4", "review-10m.mp4"])
+  temporaryQaDirectoryName: "qa.rendering-<pid>-<uuid>",
+  sourceVideoNames: Object.freeze(
+    CONFIGURED_RENDER_JOB
+      ? ["review-10m.mp4"]
+      : ["review-10m-wide.mp4", "review-10m.mp4"]
+  )
 });
 
 function parseArguments(argv) {
@@ -88,6 +154,9 @@ function parseArguments(argv) {
       continue;
     }
     if (argument.startsWith("--candidate-dir=")) {
+      if (CONFIGURED_RENDER_JOB) {
+        throw new Error("versioned QA candidate directory is fixed by --job-config");
+      }
       const value = argument.slice("--candidate-dir=".length);
       if (!value) throw new Error("--candidate-dir 不能为空");
       result.candidateDirectory = isAbsolute(value)
@@ -182,14 +251,153 @@ async function assertPlainDirectory(directory, label) {
   }
 }
 
-async function sha256(filePath) {
-  return new Promise((resolveHash, reject) => {
-    const hash = createHash("sha256");
-    const stream = createReadStream(filePath);
-    stream.on("data", (chunk) => hash.update(chunk));
-    stream.on("error", reject);
-    stream.on("end", () => resolveHash(hash.digest("hex")));
+async function assertExistingRealPathInside(root, candidate, label) {
+  const [resolvedRoot, resolvedCandidate] = await Promise.all([
+    realpath(root),
+    realpath(candidate)
+  ]);
+  const pathFromRoot = relative(resolvedRoot, resolvedCandidate);
+  if (pathFromRoot.startsWith("..") || isAbsolute(pathFromRoot)) {
+    throw new Error(`${label} 经真实路径解析后超出允许范围：${resolvedCandidate}`);
+  }
+  return resolvedCandidate;
+}
+
+function statIdentity(stat) {
+  return {
+    dev: stat.dev,
+    ino: stat.ino,
+    mode: stat.mode,
+    size: stat.size,
+    mtimeNs: stat.mtimeNs
+  };
+}
+
+function sameIdentity(left, right, { metadata = true } = {}) {
+  return left.dev === right.dev &&
+    left.ino === right.ino &&
+    left.mode === right.mode &&
+    (!metadata || (left.size === right.size && left.mtimeNs === right.mtimeNs));
+}
+
+async function capturePathGuard(root, candidate, label, expectedType) {
+  const lexicalRoot = resolve(root);
+  const lexicalCandidate = ensureInside(lexicalRoot, candidate, label);
+  const canonicalRoot = await realpath(lexicalRoot);
+  const segments = relative(lexicalRoot, lexicalCandidate).split(sep).filter(Boolean);
+  const chain = [];
+  let current = lexicalRoot;
+  for (const segment of [null, ...segments]) {
+    if (segment !== null) current = resolve(current, segment);
+    const stat = await lstat(current, { bigint: true });
+    if (stat.isSymbolicLink()) throw new Error(`${label} 路径祖先不能是符号链接：${current}`);
+    const canonicalCurrent = await realpath(current);
+    const pathFromRoot = relative(canonicalRoot, canonicalCurrent);
+    if (pathFromRoot.startsWith("..") || isAbsolute(pathFromRoot)) {
+      throw new Error(`${label} 经真实路径解析后超出允许范围：${canonicalCurrent}`);
+    }
+    chain.push({ path: current, identity: statIdentity(stat) });
+  }
+  const leaf = await lstat(lexicalCandidate, { bigint: true });
+  if (expectedType === "file" && !leaf.isFile()) throw new Error(`${label} 必须是普通文件`);
+  if (expectedType === "directory" && !leaf.isDirectory()) throw new Error(`${label} 必须是普通目录`);
+  return { root: lexicalRoot, path: lexicalCandidate, label, expectedType, chain };
+}
+
+async function verifyPathGuard(guard, { allowLeafMetadataChange = false } = {}) {
+  const current = await capturePathGuard(
+    guard.root,
+    guard.path,
+    guard.label,
+    guard.expectedType
+  );
+  if (current.chain.length !== guard.chain.length) {
+    throw new Error(`${guard.label} 路径层级在 QA 期间发生变化`);
+  }
+  for (let index = 0; index < guard.chain.length; index += 1) {
+    const before = guard.chain[index];
+    const after = current.chain[index];
+    const isLeaf = index === guard.chain.length - 1;
+    if (
+      before.path !== after.path ||
+      !sameIdentity(before.identity, after.identity, {
+        metadata: !(isLeaf && allowLeafMetadataChange) && isLeaf
+      })
+    ) {
+      throw new Error(`${guard.label} inode 或元数据在 QA 期间发生变化：${before.path}`);
+    }
+  }
+  return current;
+}
+
+export async function captureQaCandidatePathGuards({
+  reviewCandidatesRoot,
+  candidateDirectory,
+  videoPath,
+  manifestPath,
+  publicationReceiptPath = null
+}) {
+  const guards = {
+    candidate: await capturePathGuard(
+      reviewCandidatesRoot,
+      candidateDirectory,
+      "候选目录",
+      "directory"
+    ),
+    video: await capturePathGuard(candidateDirectory, videoPath, "源 MP4", "file"),
+    manifest: await capturePathGuard(
+      candidateDirectory,
+      manifestPath,
+      "候选 manifest",
+      "file"
+    )
+  };
+  if (publicationReceiptPath) {
+    guards.publicationReceipt = await capturePathGuard(
+      candidateDirectory,
+      publicationReceiptPath,
+      "durable publication receipt",
+      "file"
+    );
+  }
+  return guards;
+}
+
+export async function verifyQaCandidatePathGuards(
+  guards,
+  { allowCandidateMetadataChange = false } = {}
+) {
+  const candidate = await verifyPathGuard(guards.candidate, {
+    allowLeafMetadataChange: allowCandidateMetadataChange
   });
+  await verifyPathGuard(guards.video);
+  await verifyPathGuard(guards.manifest);
+  if (guards.publicationReceipt) {
+    await verifyPathGuard(guards.publicationReceipt);
+  }
+  return { ...guards, candidate };
+}
+
+async function sha256(filePath) {
+  const handle = await open(filePath, "r");
+  try {
+    const before = await handle.stat({ bigint: true });
+    if (!before.isFile()) throw new Error(`哈希目标必须是普通文件：${filePath}`);
+    const hash = createHash("sha256");
+    for await (const chunk of handle.createReadStream({ autoClose: false })) hash.update(chunk);
+    const after = await handle.stat({ bigint: true });
+    const pathAfter = await lstat(filePath, { bigint: true });
+    if (
+      pathAfter.isSymbolicLink() ||
+      !sameIdentity(statIdentity(before), statIdentity(after)) ||
+      !sameIdentity(statIdentity(after), statIdentity(pathAfter))
+    ) {
+      throw new Error(`文件在哈希期间被替换或修改：${workspaceRelative(filePath)}`);
+    }
+    return hash.digest("hex");
+  } finally {
+    await handle.close();
+  }
 }
 
 async function inspectFile(filePath) {
@@ -212,6 +420,8 @@ function rationalToNumber(value) {
 
 function runProcess(executable, args, options = {}) {
   return new Promise((resolveRun, reject) => {
+    const timeoutMs = options.timeoutMs ?? 30 * 60 * 1000;
+    const maxOutputBytes = options.maxOutputBytes ?? 16 * 1024 * 1024;
     const child = spawn(executable, args, {
       cwd: WORKSPACE_ROOT,
       env: options.env ?? process.env,
@@ -219,22 +429,48 @@ function runProcess(executable, args, options = {}) {
     });
     let stdout = "";
     let stderr = "";
+    let outputBytes = 0;
+    let settled = false;
+    const settle = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      callback(value);
+    };
+    const timeout = setTimeout(() => {
+      child.kill("SIGKILL");
+      settle(reject, new Error(
+        `${basename(executable)} 超过 ${timeoutMs}ms 未完成，已终止以避免无限挂起`
+      ));
+    }, timeoutMs);
+    timeout.unref?.();
     if (!options.inherit) {
       child.stdout.setEncoding("utf8");
       child.stderr.setEncoding("utf8");
-      child.stdout.on("data", (chunk) => { stdout += chunk; });
-      child.stderr.on("data", (chunk) => { stderr += chunk; });
+      const capture = (target, chunk) => {
+        outputBytes += Buffer.byteLength(chunk);
+        if (outputBytes > maxOutputBytes) {
+          child.kill("SIGKILL");
+          settle(reject, new Error(
+            `${basename(executable)} 输出超过 ${maxOutputBytes} bytes，已终止`
+          ));
+          return target;
+        }
+        return target + chunk;
+      };
+      child.stdout.on("data", (chunk) => { stdout = capture(stdout, chunk); });
+      child.stderr.on("data", (chunk) => { stderr = capture(stderr, chunk); });
     }
-    child.on("error", reject);
+    child.on("error", (error) => settle(reject, error));
     child.on("exit", (code, signal) => {
       if (code !== 0) {
-        reject(new Error(
+        settle(reject, new Error(
           `${basename(executable)} 失败：code=${code} signal=${signal ?? "none"}` +
           (stderr ? `\n${stderr.trim()}` : "")
         ));
         return;
       }
-      resolveRun({ stdout, stderr });
+      settle(resolveRun, { stdout, stderr });
     });
   });
 }
@@ -248,28 +484,18 @@ async function findRemotionTool(toolName) {
     return { path: resolvedOverride, libraryDirectory: dirname(resolvedOverride), source: overrideName };
   }
 
-  const pnpmRoot = resolve(STUDIO_ROOT, "node_modules/.pnpm");
-  if (await pathExists(pnpmRoot)) {
-    const entries = (await readdir(pnpmRoot, { withFileTypes: true }))
-      .filter((entry) => entry.isDirectory() && entry.name.startsWith("@remotion+compositor-"))
-      .map((entry) => entry.name)
-      .sort()
-      .reverse();
-    for (const entry of entries) {
-      const versionSeparator = entry.lastIndexOf("@");
-      if (versionSeparator <= 0) continue;
-      const encodedPackageName = entry.slice(0, versionSeparator);
-      const packageName = encodedPackageName.replace("@remotion+", "@remotion/");
-      const candidate = resolve(pnpmRoot, entry, "node_modules", packageName, toolName);
-      if (await pathExists(candidate)) {
-        await assertPlainFile(candidate, `Remotion ${toolName}`);
-        return { path: candidate, libraryDirectory: dirname(candidate), source: "remotion-compositor" };
-      }
-    }
-  }
-
-  await runProcess(toolName, ["-version"]);
-  return { path: toolName, libraryDirectory: null, source: "PATH" };
+  const candidate = RenderInternals.getExecutablePath({
+    type: toolName,
+    indent: false,
+    logLevel: "error",
+    binariesDirectory: null
+  });
+  await assertPlainFile(candidate, `package-lock 解析的 Remotion ${toolName}`);
+  return {
+    path: candidate,
+    libraryDirectory: dirname(candidate),
+    source: "@remotion/renderer:RenderInternals.getExecutablePath"
+  };
 }
 
 function toolEnvironment(...tools) {
@@ -278,24 +504,131 @@ function toolEnvironment(...tools) {
   return { ...process.env, DYLD_LIBRARY_PATH: libraryDirectory };
 }
 
-async function findPython() {
+export function validatePythonRuntimeIdentity(identity, lock) {
+  if (lock?.schemaVersion !== "agent-skill-long-review-wide-v004-python-runtime-lock-v1") {
+    throw new Error("QA Python runtime lock schema 无效");
+  }
+  if (lock?.requirementsLock !== basename(PYTHON_REQUIREMENTS_LOCK_PATH)) {
+    throw new Error("QA Python requirements lock 未绑定到 runtime lock");
+  }
+  const mismatches = [];
+  if (identity?.pythonVersion !== lock.pythonVersion) {
+    mismatches.push(`python expected=${lock.pythonVersion} actual=${identity?.pythonVersion ?? "missing"}`);
+  }
+  if (identity?.implementation !== lock.implementation) {
+    mismatches.push(
+      `implementation expected=${lock.implementation} actual=${identity?.implementation ?? "missing"}`
+    );
+  }
+  for (const packageName of ["numpy", "Pillow"]) {
+    if (identity?.packages?.[packageName] !== lock?.packages?.[packageName]) {
+      mismatches.push(
+        `${packageName} expected=${lock?.packages?.[packageName] ?? "missing"} ` +
+        `actual=${identity?.packages?.[packageName] ?? "missing"}`
+      );
+    }
+  }
+  if (mismatches.length > 0) {
+    throw new Error(`QA Python runtime 不符合仓库锁：${mismatches.join("; ")}`);
+  }
+  return true;
+}
+
+export async function resolveLockedPythonRuntime() {
+  await Promise.all([
+    assertPlainFile(PYTHON_RUNTIME_LOCK_PATH, "QA Python runtime lock"),
+    assertPlainFile(PYTHON_REQUIREMENTS_LOCK_PATH, "QA Python requirements lock")
+  ]);
+  const lock = JSON.parse(await readFile(PYTHON_RUNTIME_LOCK_PATH, "utf8"));
+  let pythonPath;
+  let source;
   if (process.env.QA_PYTHON) {
-    const override = resolve(process.env.QA_PYTHON);
-    await assertPlainFile(override, "QA_PYTHON");
-    await runProcess(override, ["--version"]);
-    return override;
+    pythonPath = resolve(process.env.QA_PYTHON);
+    source = "QA_PYTHON";
+    pythonPath = await realpath(pythonPath);
+    await assertPlainFile(pythonPath, "QA_PYTHON resolved target");
+  } else {
+    pythonPath = resolve(
+      homedir(),
+      ".cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3"
+    );
+    source = "codex-bundled-runtime";
+    if (!(await pathExists(pythonPath))) {
+      throw new Error(
+        "未找到锁定的 Codex Python runtime；请用 QA_PYTHON 明确指定满足仓库锁的解释器"
+      );
+    }
+    pythonPath = await realpath(pythonPath);
+    await assertPlainFile(pythonPath, "Codex bundled Python resolved target");
   }
-  const bundled = resolve(
-    homedir(),
-    ".cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3"
-  );
-  if (await pathExists(bundled)) {
-    await assertPlainFile(bundled, "Codex bundled Python");
-    await runProcess(bundled, ["--version"]);
-    return bundled;
-  }
-  await runProcess("python3", ["--version"]);
-  return "python3";
+  const inspectionCode = [
+    "import json, platform, sys",
+    "import numpy",
+    "import PIL",
+    "print(json.dumps({",
+    "  'pythonVersion': platform.python_version(),",
+    "  'implementation': platform.python_implementation(),",
+    "  'executable': sys.executable,",
+    "  'packages': {'numpy': numpy.__version__, 'Pillow': PIL.__version__}",
+    "}, sort_keys=True))"
+  ].join("\n");
+  const { stdout } = await runProcess(pythonPath, ["-I", "-c", inspectionCode]);
+  const identity = JSON.parse(stdout);
+  validatePythonRuntimeIdentity(identity, lock);
+  return {
+    path: pythonPath,
+    source,
+    identity,
+    lock,
+    lockFile: await inspectFile(PYTHON_RUNTIME_LOCK_PATH),
+    requirementsLockFile: await inspectFile(PYTHON_REQUIREMENTS_LOCK_PATH)
+  };
+}
+
+export async function captureQaSourceIdentity() {
+  const sourcePaths = [
+    SCRIPT_PATH,
+    ...(CONFIGURED_RENDER_JOB
+      ? [GENERIC_QA_SCRIPT_PATH, LONG_REVIEW_QA_BINDING_PATH, QA_JOB_CONFIG_PATH]
+      : []),
+    ANALYZER_PATH,
+    QA_MEDIA_INSPECTOR_PATH,
+    PYTHON_RUNTIME_LOCK_PATH,
+    PYTHON_REQUIREMENTS_LOCK_PATH
+  ];
+  const pathspecs = sourcePaths.map((path) => workspaceRelative(path));
+  const [head, status, diff, sourceFiles] = await Promise.all([
+    runProcess("git", ["rev-parse", "HEAD"], { timeoutMs: 30_000 }),
+    runProcess("git", ["status", "--porcelain=v1", "--", ...pathspecs], {
+      timeoutMs: 30_000
+    }),
+    runProcess("git", ["diff", "--binary", "--no-ext-diff", "HEAD", "--", ...pathspecs], {
+      timeoutMs: 30_000,
+      maxOutputBytes: 32 * 1024 * 1024
+    }),
+    Promise.all(sourcePaths.map(inspectFile))
+  ]);
+  const gitHead = head.stdout.trim();
+  if (!/^[0-9a-f]{40}$/u.test(gitHead)) throw new Error(`Git HEAD 无效：${gitHead}`);
+  const worktreePayload = {
+    statusPorcelain: status.stdout,
+    diffSha256: createHash("sha256").update(diff.stdout).digest("hex"),
+    sourceFiles
+  };
+  return {
+    gitHead,
+    dirty: status.stdout.length > 0,
+    worktreeSha256: createHash("sha256")
+      .update(JSON.stringify(worktreePayload))
+      .digest("hex"),
+    sourceFiles
+  };
+}
+
+async function toolVersion(tool, env) {
+  const result = await runProcess(tool.path, ["-version"], { env });
+  const text = `${result.stdout}\n${result.stderr}`.trim();
+  return text.split(/\r?\n/u)[0] ?? "unknown";
 }
 
 async function resolveVideoPath(candidateDirectory, videoArgument) {
@@ -321,31 +654,83 @@ async function resolveVideoPath(candidateDirectory, videoArgument) {
   return existing[0];
 }
 
-async function cleanRecognizedIncompleteDirectory(temporaryQaDirectory, expected) {
-  if (!(await pathExists(temporaryQaDirectory))) return;
-  const temporaryStat = await lstat(temporaryQaDirectory);
-  if (!temporaryStat.isDirectory() || temporaryStat.isSymbolicLink()) {
-    throw new Error(`临时 QA 路径不是安全的普通目录，拒绝清理：${workspaceRelative(temporaryQaDirectory)}`);
+export function qaArtifactPaths({
+  candidateDirectory,
+  qaDirectoryName,
+  runId = `${process.pid}-${randomUUID()}`
+}) {
+  const stagingRoot = dirname(candidateDirectory);
+  const candidateName = basename(candidateDirectory);
+  return {
+    finalQaDirectory: ensureInside(
+      candidateDirectory,
+      resolve(candidateDirectory, qaDirectoryName),
+      "最终 QA 目录"
+    ),
+    temporaryQaDirectory: ensureInside(
+      stagingRoot,
+      resolve(stagingRoot, `.${candidateName}.${qaDirectoryName}.rendering-${runId}`),
+      "临时 QA 目录"
+    ),
+    publicationLockDirectory: ensureInside(
+      stagingRoot,
+      resolve(stagingRoot, `.${candidateName}.${qaDirectoryName}.publish-lock`),
+      "QA 发布锁"
+    )
+  };
+}
+
+async function publishQaArtifactDirectory({
+  temporaryQaDirectory,
+  finalQaDirectory,
+  publicationLockDirectory,
+  assertPathsCurrent = async () => {},
+  validationContext
+}) {
+  if (!validationContext) {
+    throw new TypeError("QA publication requires a complete validation context");
   }
-  const sentinelPath = resolve(
-    temporaryQaDirectory,
-    ".qa-agent-skill-long-review-wide-v004.incomplete.json"
-  );
-  await assertPlainFile(sentinelPath, "不完整 QA 标记");
-  let sentinel;
+  await validateLongReviewAnalyzerArtifacts({
+    qaDirectory: temporaryQaDirectory,
+    ...validationContext
+  });
+  await assertPathsCurrent("before-publication-lock");
   try {
-    sentinel = JSON.parse(await readFile(sentinelPath, "utf8"));
+    await mkdir(publicationLockDirectory, { recursive: false });
   } catch (error) {
-    throw new Error(`不完整 QA 标记无法解析，拒绝清理：${error.message}`);
+    if (error?.code === "EEXIST") {
+      throw new Error(`同一 QA 版本正在发布，拒绝并发覆盖：${workspaceRelative(publicationLockDirectory)}`);
+    }
+    throw error;
   }
-  if (
-    sentinel?.schemaVersion !== WIDE_V004_QA_CONTRACT.schemaVersion ||
-    sentinel?.candidateDirectory !== expected.candidateDirectory ||
-    sentinel?.videoPath !== expected.videoPath
-  ) {
-    throw new Error("临时 QA 标记与本次候选不一致，拒绝清理");
+  try {
+    await assertPathsCurrent("after-publication-lock");
+    if (await pathExists(finalQaDirectory)) {
+      throw new Error(`最终 QA 目录已存在；为保留旧产物，拒绝覆盖：${workspaceRelative(finalQaDirectory)}`);
+    }
+    await validateLongReviewAnalyzerArtifacts({
+      qaDirectory: temporaryQaDirectory,
+      ...validationContext
+    });
+    await assertPathsCurrent("before-publication-rename");
+    await rename(temporaryQaDirectory, finalQaDirectory);
+    await assertPathsCurrent("after-publication-rename", {
+      allowCandidateMetadataChange: true,
+      skipTemporaryDirectory: true
+    });
+    await assertPlainDirectory(finalQaDirectory, "已发布 QA 目录");
+    await assertExistingRealPathInside(
+      dirname(finalQaDirectory),
+      finalQaDirectory,
+      "已发布 QA 目录"
+    );
+  } finally {
+    await rmdir(publicationLockDirectory).catch((error) => {
+      process.stderr.write(
+        `警告：QA 发布锁清理失败，但不会把已完成的原子发布误报为失败：${error.message}\n`
+      );
+    });
   }
-  await rm(temporaryQaDirectory, { recursive: true, force: true });
 }
 
 function frameForSecond(second) {
@@ -436,55 +821,143 @@ function buildFramePlan() {
   return { fullSamples, periodicSamples };
 }
 
-async function extractSamples({ samples, videoPath, qaDirectory, ffmpeg, env, periodic }) {
-  const concurrency = periodic
-    ? WIDE_V004_QA_CONTRACT.periodicExtractionConcurrency
-    : WIDE_V004_QA_CONTRACT.fullFrameExtractionConcurrency;
-  const finalFrameSecond =
-    (WIDE_V004_QA_CONTRACT.expectedMedia.durationInFrames - 1) /
-    WIDE_V004_QA_CONTRACT.expectedMedia.fps;
-  const seekCeilingSecond = Math.max(0, finalFrameSecond - 0.001);
-  let cursor = 0;
-  let completed = 0;
-  const worker = async () => {
-    while (cursor < samples.length) {
-      const index = cursor;
-      cursor += 1;
-      const sample = samples[index];
-      const outputPath = resolve(qaDirectory, sample.filename);
-      // Seek just before the requested presentation timestamp. Seeking after it
-      // makes ffmpeg return the following frame while retaining the requested
-      // frame number in our filename.
-      const targetSecond = Math.max(
-        0,
-        Math.min(seekCeilingSecond, sample.second - 0.001)
-      );
-      const args = [
-        "-hide_banner",
-        "-loglevel", "error",
-        "-ss", targetSecond.toFixed(9),
-        "-i", videoPath,
-        "-map", "0:v:0",
-        "-frames:v", "1"
-      ];
-      if (periodic) {
-        args.push("-vf", `scale=${WIDE_V004_QA_CONTRACT.periodicWidth}:-2:flags=lanczos`);
-      }
-      args.push("-c:v", "png", "-n", outputPath);
-      await runProcess(ffmpeg, args, { env });
-      await assertPlainFile(outputPath, "提取帧");
-      completed += 1;
-      if (completed % 25 === 0 || completed === samples.length) {
-        process.stdout.write(
-          `${periodic ? "周期" : "代表/边界"}帧：${completed}/${samples.length}\n`
-        );
-      }
+export function buildExactFrameExtractionArgs({
+  samples,
+  videoPath,
+  qaDirectory,
+  periodic = false
+}) {
+  if (!Array.isArray(samples) || samples.length === 0) {
+    throw new Error("精确抽帧计划不能为空");
+  }
+  const sourceLabels = samples.map((_, index) => `[source-${index}]`).join("");
+  const filterSteps = [`[0:v:0]split=${samples.length}${sourceLabels}`];
+  for (const [index, sample] of samples.entries()) {
+    if (!Number.isSafeInteger(sample.frame) || sample.frame < 0) {
+      throw new Error(`精确抽帧编号无效：${sample.frame}`);
     }
-  };
-  await Promise.all(Array.from({ length: concurrency }, worker));
+    const scale = periodic
+      ? `,scale=${WIDE_V004_QA_CONTRACT.periodicWidth}:-2:flags=lanczos`
+      : "";
+    filterSteps.push(
+      `[source-${index}]trim=start_frame=${sample.frame}:end_frame=${sample.frame + 1}` +
+      `${scale}[frame-${index}]`
+    );
+  }
+
+  const args = [
+    "-nostdin",
+    "-hide_banner",
+    "-loglevel", "error",
+    "-filter_complex_threads", "1",
+    "-n",
+    "-i", videoPath,
+    "-filter_complex", filterSteps.join(";")
+  ];
+  for (const [index, sample] of samples.entries()) {
+    args.push(
+      "-map", `[frame-${index}]`,
+      "-frames:v", "1",
+      "-c:v", "png",
+      resolve(qaDirectory, sample.filename)
+    );
+  }
+  return args;
 }
 
-async function probeMedia({ videoPath, manifestPath, ffprobe, env }) {
+export async function extractSamples({ samples, videoPath, qaDirectory, ffmpeg, env, periodic }) {
+  const args = buildExactFrameExtractionArgs({
+    samples,
+    videoPath,
+    qaDirectory,
+    periodic
+  });
+  await runProcess(ffmpeg, args, { env });
+  for (const sample of samples) {
+    await assertPlainFile(resolve(qaDirectory, sample.filename), "提取帧");
+  }
+  process.stdout.write(
+    `${periodic ? "周期" : "代表/边界"}帧：${samples.length}/${samples.length}（顺序解码，按帧索引精确提取）\n`
+  );
+}
+
+export function evaluateWideV004MediaProbe(raw) {
+  const video = raw.streams?.find((stream) => stream.codec_type === "video") ?? null;
+  const audio = raw.streams?.find((stream) => stream.codec_type === "audio") ?? null;
+  const actualFps = rationalToNumber(video?.avg_frame_rate);
+  const actualFrames = decodedVideoFrameCount(video);
+  const duration = Number(raw.format?.duration);
+  const expected = WIDE_V004_QA_CONTRACT.expectedMedia;
+  const checks = {
+    mp4Container: raw.format?.format_name?.split(",").includes("mp4") === true,
+    width1920: video?.width === expected.width,
+    height1080: video?.height === expected.height,
+    fps30: Math.abs(actualFps - expected.fps) < 0.0001,
+    durationApproximately600Seconds:
+      Number.isFinite(duration) && Math.abs(duration - expected.durationSeconds) <= expected.durationToleranceSeconds,
+    exactly18000VideoFrames: actualFrames === expected.durationInFrames,
+    h264Video: video?.codec_name === "h264",
+    yuv420p: video?.pix_fmt === "yuv420p",
+    exactlyOneAudioTrack:
+      raw.streams?.filter((stream) => stream.codec_type === "audio").length === 1,
+    aacAudio: audio?.codec_name === expected.audioCodec,
+    audioSampleRate48k: Number(audio?.sample_rate) === expected.audioSampleRate
+  };
+  return { video, audio, actualFps, actualFrames, duration, expected, checks };
+}
+
+export function validateWideV004CandidateManifest(manifest, videoIntegrity, videoPath) {
+  const expected = WIDE_V004_QA_CONTRACT.expectedMedia;
+  const checks = {
+    finalManifestSchema:
+      manifest?.schemaVersion === "agent-skill-long-review-wide-v004-chunked-final-v1",
+    renderContractSchema:
+      manifest?.contract?.schemaVersion === "agent-skill-long-review-wide-v004-chunked-v1",
+    candidateVersion: manifest?.contract?.candidateVersion === 4,
+    episodeId: manifest?.contract?.episodeId === "agent-skill-20260806",
+    compositionId: manifest?.contract?.compositionId === "AgentSkillLongReview",
+    dimensions: manifest?.contract?.width === expected.width
+      && manifest?.contract?.height === expected.height,
+    timeline: manifest?.contract?.fps === expected.fps
+      && manifest?.contract?.durationInFrames === expected.durationInFrames,
+    finalMediaSchema:
+      manifest?.finalMedia?.schemaVersion ===
+        "agent-skill-long-review-wide-v004-final-media-v1",
+    finalMediaBytes: manifest?.finalMedia?.file?.bytes === videoIntegrity?.bytes,
+    finalMediaSha256: manifest?.finalMedia?.file?.sha256 === videoIntegrity?.sha256,
+    publishedOutputPath: manifest?.publication?.outputPath === workspaceRelative(videoPath)
+  };
+  const failed = Object.entries(checks)
+    .filter(([, passed]) => !passed)
+    .map(([name]) => name);
+  if (failed.length > 0) {
+    throw new Error(`候选 manifest 未强绑定本次 v004 MP4：${failed.join(", ")}`);
+  }
+  return { passed: true, checks };
+}
+
+export function validateConfiguredLongReviewCandidateManifest(
+  manifest,
+  videoIntegrity,
+  videoPath,
+  currentInputIdentity = null,
+  requireCurrentInputIdentity = true
+) {
+  if (!CONFIGURED_RENDER_JOB) {
+    return validateWideV004CandidateManifest(manifest, videoIntegrity, videoPath);
+  }
+  return validateLongReviewCandidateManifest({
+    manifest,
+    job: CONFIGURED_RENDER_JOB,
+    videoIntegrity,
+    videoPath,
+    workspaceRoot: WORKSPACE_ROOT,
+    currentInputIdentity,
+    requireCurrentInputIdentity
+  });
+}
+
+export async function probeMedia({ videoPath, manifestPath, ffprobe, env }) {
   const { stdout } = await runProcess(ffprobe, [
     "-v", "error",
     "-count_frames",
@@ -498,26 +971,12 @@ async function probeMedia({ videoPath, manifestPath, ffprobe, env }) {
     videoPath
   ], { env });
   const raw = JSON.parse(stdout);
-  const video = raw.streams?.find((stream) => stream.codec_type === "video") ?? null;
-  const actualFps = rationalToNumber(video?.avg_frame_rate);
-  const actualFrames = [video?.nb_frames, video?.nb_read_frames, video?.nb_read_packets]
-    .map(Number)
-    .find(Number.isFinite) ?? Number.NaN;
-  const duration = Number(raw.format?.duration);
-  const expected = WIDE_V004_QA_CONTRACT.expectedMedia;
-  const checks = {
-    mp4Container: raw.format?.format_name?.split(",").includes("mp4") === true,
-    width1920: video?.width === expected.width,
-    height1080: video?.height === expected.height,
-    fps30: Math.abs(actualFps - expected.fps) < 0.0001,
-    durationApproximately600Seconds:
-      Number.isFinite(duration) && Math.abs(duration - expected.durationSeconds) <= expected.durationToleranceSeconds,
-    exactly18000VideoFrames: actualFrames === expected.durationInFrames,
-    h264Video: video?.codec_name === "h264",
-    yuv420p: video?.pix_fmt === "yuv420p"
-  };
+  const { video, actualFps, actualFrames, duration, expected, checks } =
+    evaluateWideV004MediaProbe(raw);
   return {
-    schemaVersion: "agent-skill-long-review-wide-v004-media-metadata-v1",
+    schemaVersion: CONFIGURED_RENDER_JOB
+      ? "agent-skill-long-review-media-metadata-v1"
+      : "agent-skill-long-review-wide-v004-media-metadata-v1",
     generatedAt: new Date().toISOString(),
     source: {
       video: await inspectFile(videoPath),
@@ -529,6 +988,8 @@ async function probeMedia({ videoPath, manifestPath, ffprobe, env }) {
     normalized: {
       durationSeconds: duration,
       videoFrameCount: actualFrames,
+      declaredVideoFrameCount: Number(video?.nb_frames),
+      readVideoPacketCount: Number(video?.nb_read_packets),
       videoFps: actualFps,
       width: video?.width ?? null,
       height: video?.height ?? null
@@ -554,6 +1015,121 @@ async function listFilesRecursively(directory) {
   return files;
 }
 
+async function readStableArtifact(filePath, label) {
+  const before = await inspectFile(filePath);
+  const contents = await readFile(filePath);
+  const after = await inspectFile(filePath);
+  if (
+    JSON.stringify(before) !== JSON.stringify(after) ||
+    contents.length !== before.bytes ||
+    createHash("sha256").update(contents).digest("hex") !== before.sha256
+  ) {
+    throw new Error(`${label} 在读取期间发生变化`);
+  }
+  return contents;
+}
+
+async function readStableJsonArtifact(filePath, label) {
+  const contents = await readStableArtifact(filePath, label);
+  try {
+    return JSON.parse(contents.toString("utf8"));
+  } catch (error) {
+    throw new Error(`${label} 不是有效 JSON：${error.message}`);
+  }
+}
+
+export async function validateLongReviewAnalyzerArtifacts({
+  qaDirectory,
+  contract,
+  candidateManifestBinding,
+  sourceVideo,
+  sourceManifest,
+  sourcePublicationReceipt = null,
+  publicationReceiptBinding = null
+}) {
+  const generic = contract.schemaVersion === LONG_REVIEW_QA_SCHEMA_VERSION;
+  const expected = {
+    summary: generic
+      ? "agent-skill-long-review-qa-summary-v1"
+      : "agent-skill-long-review-wide-v004-qa-summary-v1",
+    metrics: generic
+      ? "agent-skill-long-review-frame-analysis-v1"
+      : "agent-skill-long-review-wide-v004-frame-analysis-v1"
+  };
+  const [runManifest, mediaEvidence, frameIndex, metrics, summary, reportBytes] =
+    await Promise.all([
+      readStableJsonArtifact(resolve(qaDirectory, "run-manifest.json"), "QA run manifest"),
+      readStableJsonArtifact(
+        resolve(qaDirectory, "media-integrity-evidence.json"),
+        "媒体完整性证据"
+      ),
+      readStableJsonArtifact(resolve(qaDirectory, "frame-index.json"), "帧索引"),
+      readStableJsonArtifact(resolve(qaDirectory, "frame-metrics.json"), "帧指标"),
+      readStableJsonArtifact(resolve(qaDirectory, "qa-summary.json"), "QA summary"),
+      readStableArtifact(resolve(qaDirectory, "QA-REPORT.md"), "QA 报告")
+    ]);
+  const categories = summary?.manualReview?.categories;
+  const report = reportBytes.toString("utf8");
+  const checks = {
+    runManifestSchema: runManifest?.schemaVersion === contract.schemaVersion,
+    runManifestCandidateVersion:
+      runManifest?.contract?.candidateVersion === contract.candidateVersion,
+    runManifestBinding:
+      runManifest?.candidateManifestBinding?.passed === true &&
+      JSON.stringify(runManifest.candidateManifestBinding) ===
+        JSON.stringify(candidateManifestBinding),
+    runManifestSource:
+      JSON.stringify(runManifest?.sourceVideo) === JSON.stringify(sourceVideo) &&
+      JSON.stringify(runManifest?.sourceManifest) === JSON.stringify(sourceManifest),
+    runManifestPublicationReceipt: generic
+      ? runManifest?.publicationReceiptBinding?.passed === true &&
+        JSON.stringify(runManifest.publicationReceiptBinding) ===
+          JSON.stringify(publicationReceiptBinding) &&
+        JSON.stringify(runManifest.sourcePublicationReceipt) ===
+          JSON.stringify(sourcePublicationReceipt)
+      : runManifest?.publicationReceiptBinding == null &&
+        runManifest?.sourcePublicationReceipt == null,
+    runManifestManualPending:
+      runManifest?.guarantees?.manualVisualJudgmentsRemainPending === true,
+    mediaEvidenceMachineOnly:
+      mediaEvidence?.machineOnly === true &&
+      mediaEvidence?.manualPlaybackRequired === true &&
+      mediaEvidence?.passed === true,
+    frameIndexCandidateVersion:
+      frameIndex?.candidateVersion === contract.candidateVersion,
+    summarySchema: summary?.schemaVersion === expected.summary,
+    summaryCandidateVersion: summary?.candidateVersion === contract.candidateVersion,
+    summarySource:
+      JSON.stringify(summary?.candidate?.video) === JSON.stringify(sourceVideo) &&
+      JSON.stringify(summary?.candidate?.manifest) === JSON.stringify(sourceManifest),
+    summaryNotRegistered:
+      summary?.candidate?.registered === false &&
+      summary?.candidate?.approvalStatus === "not_approved",
+    summaryPending:
+      summary?.status === "pending_manual_visual_review" &&
+      summary?.manualReview?.status === "pending",
+    categoriesPending:
+      Array.isArray(categories) &&
+      categories.length > 0 &&
+      categories.every((category) => category?.status === "pending"),
+    metricsSchema: metrics?.schemaVersion === expected.metrics,
+    metricsCandidateVersion: metrics?.candidateVersion === contract.candidateVersion,
+    reportCandidateVersion:
+      report.includes(`v${String(contract.candidateVersion).padStart(3, "0")}`),
+    reportPending:
+      report.includes("待人工视觉审查") && report.includes("不代表视觉批准"),
+    reportNotApproved:
+      !/(?:\baccepted\b|\bapproved\b|已批准|视觉批准[：:]?\s*通过)/iu.test(report)
+  };
+  const failed = Object.entries(checks)
+    .filter(([, passed]) => !passed)
+    .map(([name]) => name);
+  if (failed.length > 0) {
+    throw new Error(`Python analyzer 产物未保持正式 QA 的 pending 绑定：${failed.join(", ")}`);
+  }
+  return { passed: true, checks };
+}
+
 async function writeArtifactIndex(qaDirectory, sentinelPath) {
   const indexPath = resolve(qaDirectory, "artifact-index.json");
   const checksumPath = resolve(qaDirectory, "qa-artifacts.sha256");
@@ -568,7 +1144,9 @@ async function writeArtifactIndex(qaDirectory, sentinelPath) {
     });
   }
   const index = {
-    schemaVersion: "agent-skill-long-review-wide-v004-artifact-index-v1",
+    schemaVersion: CONFIGURED_RENDER_JOB
+      ? "agent-skill-long-review-artifact-index-v1"
+      : "agent-skill-long-review-wide-v004-artifact-index-v1",
     generatedAt: new Date().toISOString(),
     artifactCount: artifacts.length,
     artifacts
@@ -583,8 +1161,13 @@ async function writeArtifactIndex(qaDirectory, sentinelPath) {
   return { indexPath, checksumPath, artifactCount: artifacts.length + 2 };
 }
 
-async function main() {
-  const arguments_ = parseArguments(process.argv.slice(2));
+export async function runAgentSkillLongReviewQa(
+  argv = process.argv.slice(2)
+) {
+  if (arguments.length > 1) {
+    throw new TypeError("production long-review QA does not accept dependency injection");
+  }
+  const arguments_ = parseArguments(argv);
   if (arguments_.help) {
     printHelp();
     return;
@@ -595,7 +1178,13 @@ async function main() {
     arguments_.candidateDirectory,
     "候选目录"
   );
-  if (!/(?:^|[-_])v004(?:$|[-_.])/u.test(basename(candidateDirectory))) {
+  if (
+    CONFIGURED_RENDER_JOB &&
+    candidateDirectory !== resolve(CONFIGURED_RENDER_JOB.resolvedPaths.finalDirectory)
+  ) {
+    throw new Error("候选目录与显式 render-job 不一致");
+  }
+  if (!CONFIGURED_RENDER_JOB && !/(?:^|[-_])v004(?:$|[-_.])/u.test(basename(candidateDirectory))) {
     throw new Error(`本脚本只允许写入 v004 候选目录：${workspaceRelative(candidateDirectory)}`);
   }
   if (!(await pathExists(candidateDirectory))) {
@@ -604,78 +1193,255 @@ async function main() {
     );
   }
   await assertPlainDirectory(candidateDirectory, "候选目录");
+  await assertExistingRealPathInside(REVIEW_CANDIDATES_ROOT, candidateDirectory, "候选目录");
 
   const videoPath = await resolveVideoPath(candidateDirectory, arguments_.videoPath);
   await assertPlainFile(videoPath, "源 MP4");
+  await assertExistingRealPathInside(candidateDirectory, videoPath, "源 MP4");
   if (videoPath.slice(-4).toLowerCase() !== ".mp4") {
     throw new Error(`源视频必须是 MP4：${workspaceRelative(videoPath)}`);
   }
   const manifestCandidate = resolve(candidateDirectory, "review-manifest.json");
-  const manifestPath = await pathExists(manifestCandidate) ? manifestCandidate : null;
-  if (manifestPath) await assertPlainFile(manifestPath, "候选 manifest");
-
-  const finalQaDirectory = ensureInside(
-    candidateDirectory,
-    resolve(candidateDirectory, arguments_.qaDirectoryName),
-    "最终 QA 目录"
+  if (!(await pathExists(manifestCandidate))) {
+    throw new Error("正式 QA 必须绑定 review-manifest.json；未找到时拒绝生成不可追溯证据");
+  }
+  const manifestPath = manifestCandidate;
+  await assertPlainFile(manifestPath, "候选 manifest");
+  await assertExistingRealPathInside(candidateDirectory, manifestPath, "候选 manifest");
+  const candidateManifestBytes = await readFile(manifestPath);
+  const candidateManifestIntegrityBefore = await inspectFile(manifestPath);
+  if (
+    candidateManifestBytes.length !== candidateManifestIntegrityBefore.bytes ||
+    createHash("sha256").update(candidateManifestBytes).digest("hex") !==
+      candidateManifestIntegrityBefore.sha256
+  ) {
+    throw new Error("候选 manifest 在读取时发生变化；拒绝使用非原子快照");
+  }
+  let candidateManifest;
+  try {
+    candidateManifest = JSON.parse(candidateManifestBytes.toString("utf8"));
+  } catch (error) {
+    throw new Error(`候选 manifest 无法解析：${error.message}`);
+  }
+  const candidateVideoIntegrityBefore = await inspectFile(videoPath);
+  let candidateManifestBinding = validateConfiguredLongReviewCandidateManifest(
+    candidateManifest,
+    candidateVideoIntegrityBefore,
+    videoPath,
+    null,
+    !CONFIGURED_RENDER_JOB
   );
-  const temporaryQaDirectory = ensureInside(
+  const publicationReceiptPath = CONFIGURED_RENDER_JOB
+    ? resolve(candidateDirectory, LONG_REVIEW_PUBLICATION_RECEIPT_FILE_NAME)
+    : null;
+  let publicationReceiptIntegrityBefore = null;
+  let publicationReceipt = null;
+  // Compatibility boundary: only the direct historical v004 entry (no job config)
+  // may lack a generic durable receipt. Every configured/versioned job fails closed.
+  if (CONFIGURED_RENDER_JOB) {
+    if (!(await pathExists(publicationReceiptPath))) {
+      const error = new Error(
+        "generic long-review QA requires publication-durable-receipt.json; durability-unknown or historical candidates fail closed"
+      );
+      error.code = "long_review_publication_receipt_missing";
+      throw error;
+    }
+    await assertPlainFile(publicationReceiptPath, "durable publication receipt");
+    await assertExistingRealPathInside(
+      candidateDirectory,
+      publicationReceiptPath,
+      "durable publication receipt"
+    );
+    const publicationReceiptBytes = await readFile(publicationReceiptPath);
+    publicationReceiptIntegrityBefore = await inspectFile(publicationReceiptPath);
+    if (
+      publicationReceiptBytes.length !== publicationReceiptIntegrityBefore.bytes ||
+      createHash("sha256").update(publicationReceiptBytes).digest("hex") !==
+        publicationReceiptIntegrityBefore.sha256
+    ) {
+      throw new Error("durable publication receipt changed while being read");
+    }
+    try {
+      publicationReceipt = JSON.parse(publicationReceiptBytes.toString("utf8"));
+    } catch (error) {
+      throw new Error(`durable publication receipt is not valid JSON: ${error.message}`);
+    }
+  }
+  const publicationReceiptBinding = CONFIGURED_RENDER_JOB
+    ? validateLongReviewPublicationDurableReceipt({
+        receipt: publicationReceipt,
+        manifest: candidateManifest,
+        manifestIntegrity: candidateManifestIntegrityBefore,
+        videoIntegrity: candidateVideoIntegrityBefore,
+        job: CONFIGURED_RENDER_JOB
+      })
+    : null;
+  let pathGuards = await captureQaCandidatePathGuards({
+    reviewCandidatesRoot: REVIEW_CANDIDATES_ROOT,
     candidateDirectory,
-    resolve(candidateDirectory, `${arguments_.qaDirectoryName}.rendering`),
-    "临时 QA 目录"
-  );
+    videoPath,
+    manifestPath,
+    publicationReceiptPath
+  });
+  if (
+    publicationReceiptPath &&
+    JSON.stringify(await inspectFile(publicationReceiptPath)) !==
+      JSON.stringify(publicationReceiptIntegrityBefore)
+  ) {
+    throw new Error(
+      "durable publication receipt changed before path binding; refusing QA"
+    );
+  }
+  let temporaryDirectoryGuard = null;
+  const assertPathsCurrent = async (_stage, options = {}) => {
+    pathGuards = await verifyQaCandidatePathGuards(pathGuards, options);
+    if (temporaryDirectoryGuard && !options.skipTemporaryDirectory) {
+      temporaryDirectoryGuard = await verifyPathGuard(temporaryDirectoryGuard, {
+        allowLeafMetadataChange: true
+      });
+    }
+    return pathGuards;
+  };
+  const {
+    finalQaDirectory,
+    temporaryQaDirectory,
+    publicationLockDirectory
+  } = qaArtifactPaths({
+    candidateDirectory,
+    qaDirectoryName: arguments_.qaDirectoryName
+  });
   if (await pathExists(finalQaDirectory)) {
     throw new Error(`最终 QA 目录已存在；为保留旧产物，拒绝覆盖：${workspaceRelative(finalQaDirectory)}`);
+  }
+
+  await assertPathsCurrent("after-initial-candidate-validation");
+
+  const candidateInputIdentityBefore = CONFIGURED_RENDER_JOB
+    ? await captureLongReviewCandidateSourceIdentity({
+        job: CONFIGURED_RENDER_JOB,
+        jobConfigPath: QA_JOB_CONFIG_PATH,
+        workspaceRoot: WORKSPACE_ROOT
+      })
+    : null;
+  if (CONFIGURED_RENDER_JOB) {
+    candidateManifestBinding = validateConfiguredLongReviewCandidateManifest(
+      candidateManifest,
+      candidateVideoIntegrityBefore,
+      videoPath,
+      candidateInputIdentityBefore,
+      true
+    );
   }
 
   const expectedSentinel = {
     candidateDirectory: workspaceRelative(candidateDirectory),
     videoPath: workspaceRelative(videoPath)
   };
-  await cleanRecognizedIncompleteDirectory(temporaryQaDirectory, expectedSentinel);
-
-  const [ffmpeg, ffprobe, python] = await Promise.all([
+  const [ffmpeg, ffprobe, pythonRuntime, qaSourceIdentityBefore] = await Promise.all([
     findRemotionTool("ffmpeg"),
     findRemotionTool("ffprobe"),
-    findPython()
+    resolveLockedPythonRuntime(),
+    captureQaSourceIdentity()
   ]);
   const mediaToolEnv = toolEnvironment(ffmpeg, ffprobe);
+  const [ffmpegVersion, ffprobeVersion] = await Promise.all([
+    toolVersion(ffmpeg, mediaToolEnv),
+    toolVersion(ffprobe, mediaToolEnv)
+  ]);
   await assertPlainFile(ANALYZER_PATH, "QA 分析脚本");
 
+  await assertPathsCurrent("before-temporary-directory-create");
   await mkdir(temporaryQaDirectory, { recursive: false });
+  temporaryDirectoryGuard = await capturePathGuard(
+    REVIEW_CANDIDATES_ROOT,
+    temporaryQaDirectory,
+    "临时 QA 目录",
+    "directory"
+  );
   const sentinelPath = resolve(
     temporaryQaDirectory,
-    ".qa-agent-skill-long-review-wide-v004.incomplete.json"
+    CONFIGURED_RENDER_JOB
+      ? ".qa-agent-skill-long-review.incomplete.json"
+      : ".qa-agent-skill-long-review-wide-v004.incomplete.json"
   );
   const sentinel = {
     schemaVersion: WIDE_V004_QA_CONTRACT.schemaVersion,
     candidateDirectory: expectedSentinel.candidateDirectory,
     videoPath: expectedSentinel.videoPath,
+    runId: basename(temporaryQaDirectory),
+    pid: process.pid,
     startedAt: new Date().toISOString(),
     status: "running"
   };
+  await assertPathsCurrent("before-sentinel-write");
   await writeFile(sentinelPath, `${JSON.stringify(sentinel, null, 2)}\n`, "utf8");
 
   try {
+    await assertPathsCurrent("before-media-probe");
     const mediaMetadata = await probeMedia({
       videoPath,
       manifestPath,
       ffprobe: ffprobe.path,
       env: mediaToolEnv
     });
+    if (
+      JSON.stringify(mediaMetadata.source.video) !==
+        JSON.stringify(candidateVideoIntegrityBefore) ||
+      JSON.stringify(mediaMetadata.source.manifest) !==
+        JSON.stringify(candidateManifestIntegrityBefore)
+    ) {
+      throw new Error("候选 MP4 或 manifest 在强绑定后发生变化；拒绝生成混合来源证据");
+    }
+    await assertPathsCurrent("before-media-metadata-write");
     await writeFile(
       resolve(temporaryQaDirectory, "media-metadata.json"),
       `${JSON.stringify(mediaMetadata, null, 2)}\n`,
       "utf8"
     );
+    if (mediaMetadata.status !== "pass") {
+      const failedMetadataChecks = Object.entries(mediaMetadata.checks)
+        .filter(([, passed]) => !passed)
+        .map(([name]) => name);
+      throw new Error(`候选媒体规格未通过：${failedMetadataChecks.join(", ")}`);
+    }
+    const mediaEvidence = await inspectRenderedMedia(videoPath, {
+      getExecutablePath: ({ type }) => type === "ffmpeg" ? ffmpeg.path : ffprobe.path
+    });
+    const mediaTechnicalChecks = renderedMediaTechnicalChecks(mediaEvidence);
+    await assertPathsCurrent("before-media-evidence-write");
+    await writeFile(
+      resolve(temporaryQaDirectory, "media-integrity-evidence.json"),
+      `${JSON.stringify({
+        schemaVersion: CONFIGURED_RENDER_JOB
+          ? "agent-skill-long-review-media-integrity-v1"
+          : "agent-skill-long-review-wide-v004-media-integrity-v1",
+        machineOnly: true,
+        manualPlaybackRequired: true,
+        statement: "机器完整解码、音频窗口与代表帧检查不能替代人工连续 1× 观看最终 MP4。",
+        passed: mediaTechnicalChecks.every((check) => check.passed),
+        checks: mediaTechnicalChecks,
+        evidence: mediaEvidence
+      }, null, 2)}\n`,
+      "utf8"
+    );
+    const blockingMediaChecks = mediaTechnicalChecks.filter((check) => !check.passed);
+    if (blockingMediaChecks.length > 0) {
+      throw new Error(
+        `完整媒体机器 QA 未通过：${blockingMediaChecks.map((check) => check.id).join(", ")}`
+      );
+    }
 
     const framePlan = buildFramePlan();
+    await assertPathsCurrent("before-frame-directories-write");
     await mkdir(resolve(temporaryQaDirectory, "frames/full"), { recursive: true });
     await mkdir(resolve(temporaryQaDirectory, "frames/periodic"), { recursive: true });
     const frameIndex = {
-      schemaVersion: "agent-skill-long-review-wide-v004-frame-index-v1",
+      schemaVersion: CONFIGURED_RENDER_JOB
+        ? "agent-skill-long-review-frame-index-v1"
+        : "agent-skill-long-review-wide-v004-frame-index-v1",
       generatedAt: new Date().toISOString(),
       sourceVideo: workspaceRelative(videoPath),
+      candidateVersion: WIDE_V004_QA_CONTRACT.candidateVersion,
       fps: WIDE_V004_QA_CONTRACT.expectedMedia.fps,
       durationInFrames: WIDE_V004_QA_CONTRACT.expectedMedia.durationInFrames,
       scenes: SCENES,
@@ -686,12 +1452,14 @@ async function main() {
       fullSamples: framePlan.fullSamples,
       periodicSamples: framePlan.periodicSamples
     };
+    await assertPathsCurrent("before-frame-index-write");
     await writeFile(
       resolve(temporaryQaDirectory, "frame-index.json"),
       `${JSON.stringify(frameIndex, null, 2)}\n`,
       "utf8"
     );
 
+    await assertPathsCurrent("before-full-frame-extraction");
     await extractSamples({
       samples: framePlan.fullSamples,
       videoPath,
@@ -700,6 +1468,7 @@ async function main() {
       env: mediaToolEnv,
       periodic: false
     });
+    await assertPathsCurrent("after-full-frame-extraction");
     await extractSamples({
       samples: framePlan.periodicSamples,
       videoPath,
@@ -709,6 +1478,7 @@ async function main() {
       periodic: true
     });
 
+    await assertPathsCurrent("after-periodic-frame-extraction");
     const runManifest = {
       schemaVersion: WIDE_V004_QA_CONTRACT.schemaVersion,
       generatedAt: new Date().toISOString(),
@@ -716,28 +1486,41 @@ async function main() {
       qaDirectoryName: arguments_.qaDirectoryName,
       sourceVideo: await inspectFile(videoPath),
       sourceManifest: manifestPath ? await inspectFile(manifestPath) : null,
+      sourcePublicationReceipt: publicationReceiptPath
+        ? await inspectFile(publicationReceiptPath)
+        : null,
+      candidateManifestBinding,
+      publicationReceiptBinding,
+      qaSourceIdentity: qaSourceIdentityBefore,
       contract: WIDE_V004_QA_CONTRACT,
+      mediaTechnicalChecks,
       tools: {
-        ffmpeg: { path: ffmpeg.path, source: ffmpeg.source },
-        ffprobe: { path: ffprobe.path, source: ffprobe.source },
-        python
+        ffmpeg: { path: ffmpeg.path, source: ffmpeg.source, version: ffmpegVersion },
+        ffprobe: { path: ffprobe.path, source: ffprobe.source, version: ffprobeVersion },
+        python: pythonRuntime
       },
       guarantees: {
         sourceVideoRequiredBeforeAnyQaWrite: true,
         existingFinalQaRefusesOverwrite: true,
-        recognizedIncompleteTemporaryQaMayBeCleaned: true,
+        uniqueTemporaryDirectoryNeverDeletesAnotherRun: true,
+        cooperativePublicationLockPreventsConcurrentOverwrite: true,
         sourceMediaMutated: false,
         sourceCodeMutated: false,
         manualVisualJudgmentsRemainPending: true
       }
     };
+    await assertPathsCurrent("before-run-manifest-write");
     await writeFile(
       resolve(temporaryQaDirectory, "run-manifest.json"),
       `${JSON.stringify(runManifest, null, 2)}\n`,
       "utf8"
     );
 
-    await runProcess(python, [ANALYZER_PATH, "--qa-dir", temporaryQaDirectory], { inherit: true });
+    await assertPathsCurrent("before-analyzer");
+    await runProcess(pythonRuntime.path, ["-I", ANALYZER_PATH, "--qa-dir", temporaryQaDirectory], {
+      inherit: true
+    });
+    await assertPathsCurrent("after-analyzer");
     for (const required of [
       "frame-metrics.json",
       "qa-summary.json",
@@ -749,21 +1532,68 @@ async function main() {
     ]) {
       await assertPlainFile(resolve(temporaryQaDirectory, required), `必需 QA 产物 ${required}`);
     }
+    await validateLongReviewAnalyzerArtifacts({
+      qaDirectory: temporaryQaDirectory,
+      contract: WIDE_V004_QA_CONTRACT,
+      candidateManifestBinding,
+      sourceVideo: mediaMetadata.source.video,
+      sourceManifest: mediaMetadata.source.manifest,
+      sourcePublicationReceipt: publicationReceiptIntegrityBefore,
+      publicationReceiptBinding
+    });
 
     const sourceVideoAfter = await inspectFile(videoPath);
     if (JSON.stringify(mediaMetadata.source.video) !== JSON.stringify(sourceVideoAfter)) {
       throw new Error("源 MP4 在 QA 期间发生变化；拒绝发布可能不一致的 QA 产物");
     }
-    if (manifestPath) {
-      const sourceManifestAfter = await inspectFile(manifestPath);
-      if (JSON.stringify(mediaMetadata.source.manifest) !== JSON.stringify(sourceManifestAfter)) {
-        throw new Error("候选 manifest 在 QA 期间发生变化；拒绝发布可能不一致的 QA 产物");
+    const sourceManifestAfter = await inspectFile(manifestPath);
+    if (JSON.stringify(mediaMetadata.source.manifest) !== JSON.stringify(sourceManifestAfter)) {
+      throw new Error("候选 manifest 在 QA 期间发生变化；拒绝发布可能不一致的 QA 产物");
+    }
+    if (publicationReceiptPath) {
+      const sourcePublicationReceiptAfter = await inspectFile(publicationReceiptPath);
+      if (
+        JSON.stringify(publicationReceiptIntegrityBefore) !==
+        JSON.stringify(sourcePublicationReceiptAfter)
+      ) {
+        throw new Error(
+          "durable publication receipt changed during QA; refusing mixed-source evidence"
+        );
+      }
+    }
+    const qaSourceIdentityAfter = await captureQaSourceIdentity();
+    if (JSON.stringify(qaSourceIdentityAfter) !== JSON.stringify(qaSourceIdentityBefore)) {
+      throw new Error("QA 驱动、分析器、运行时锁或 Git HEAD 在 QA 期间发生变化；拒绝发布");
+    }
+    if (CONFIGURED_RENDER_JOB) {
+      const candidateInputIdentityAfter = await captureLongReviewCandidateSourceIdentity({
+        job: CONFIGURED_RENDER_JOB,
+        jobConfigPath: QA_JOB_CONFIG_PATH,
+        workspaceRoot: WORKSPACE_ROOT
+      });
+      if (JSON.stringify(candidateInputIdentityAfter) !== JSON.stringify(candidateInputIdentityBefore)) {
+        throw new Error("候选源码、Git 工作树或旁白在 QA 期间发生变化；拒绝发布");
       }
     }
 
+    await assertPathsCurrent("before-artifact-index-write");
     const artifactIndex = await writeArtifactIndex(temporaryQaDirectory, sentinelPath);
+    await assertPathsCurrent("before-incomplete-sentinel-remove");
     await rm(sentinelPath, { force: false });
-    await rename(temporaryQaDirectory, finalQaDirectory);
+    await publishQaArtifactDirectory({
+      temporaryQaDirectory,
+      finalQaDirectory,
+      publicationLockDirectory,
+      assertPathsCurrent,
+      validationContext: {
+        contract: WIDE_V004_QA_CONTRACT,
+        candidateManifestBinding,
+        sourceVideo: mediaMetadata.source.video,
+        sourceManifest: mediaMetadata.source.manifest,
+        sourcePublicationReceipt: publicationReceiptIntegrityBefore,
+        publicationReceiptBinding
+      }
+    });
     process.stdout.write(`${JSON.stringify({
       status: "qa_artifacts_ready_for_manual_review",
       candidateDirectory: workspaceRelative(candidateDirectory),
@@ -782,12 +1612,19 @@ async function main() {
       error: error instanceof Error ? error.message : String(error)
     };
     try {
+      await assertPathsCurrent("before-failure-sentinel-write");
       await writeFile(sentinelPath, `${JSON.stringify(failureSentinel, null, 2)}\n`, "utf8");
     } catch {
-      // Preserve the original failure; an unmarked temporary directory is never auto-deleted.
+      // Preserve the original failure. Never follow a path that failed identity revalidation.
     }
     throw error;
   }
 }
 
-await main();
+export function decodedVideoFrameCount(videoStream) {
+  const count = Number(videoStream?.nb_read_frames);
+  return Number.isSafeInteger(count) && count >= 0 ? count : Number.NaN;
+}
+
+const invokedAsCli = process.argv[1] && resolve(process.argv[1]) === SCRIPT_PATH;
+if (invokedAsCli) await runAgentSkillLongReviewQa();

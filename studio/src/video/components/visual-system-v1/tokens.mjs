@@ -1,3 +1,5 @@
+import { VIDEO_SANS_FONT_FAMILY } from "../../font-system.mjs";
+
 export const VISUAL_SYSTEM_V1_DEPTH_ROLES = Object.freeze([
   "active-node",
   "key-result",
@@ -189,7 +191,7 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
     whiteHighlight: "rgba(255, 255, 255, 0.88)"
   }),
   typography: Object.freeze({
-    fontFamily: '"PingFang SC", "HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif',
+    fontFamily: VIDEO_SANS_FONT_FAMILY,
     headlineWidePx: 84,
     headlineVerticalPx: 68,
     supportingWidePx: 34,

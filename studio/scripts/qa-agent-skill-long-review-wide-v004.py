@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build visual-QA metrics and contact sheets for the encoded wide v004 candidate."""
+"""Build visual-QA metrics and contact sheets for a versioned long-review candidate."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 
-SCHEMA_VERSION = "agent-skill-long-review-wide-v004-frame-analysis-v1"
+LEGACY_QA_SCHEMA_VERSION = "agent-skill-long-review-wide-v004-qa-pipeline-v2"
 THRESHOLDS = {
     "periodicIntervalSeconds": 2,
     "staticMainContentMeanAbsDiff8BitMaximum": 0.65,
@@ -549,6 +549,8 @@ def build_summary(
     metrics: dict[str, Any],
     contact_sheets: list[str],
     write_scope: str,
+    candidate_version: int,
+    generic_contract: bool,
 ) -> dict[str, Any]:
     media_failures = [
         check_id
@@ -636,7 +638,12 @@ def build_summary(
         ),
     ]
     return {
-        "schemaVersion": "agent-skill-long-review-wide-v004-qa-summary-v1",
+        "schemaVersion": (
+            "agent-skill-long-review-qa-summary-v1"
+            if generic_contract
+            else "agent-skill-long-review-wide-v004-qa-summary-v1"
+        ),
+        "candidateVersion": candidate_version,
         "candidate": {
             "video": media_metadata["source"]["video"],
             "manifest": media_metadata["source"]["manifest"],
@@ -689,7 +696,7 @@ def markdown_report(summary: dict[str, Any], metrics: dict[str, Any]) -> str:
     coverage = summary["coverage"]
     findings = summary["automatedChecks"]["findings"]
     lines = [
-        "# 横版完整视频 v004 · 视觉 QA 报告",
+        f"# 横版完整视频 v{summary['candidateVersion']:03d} · 视觉 QA 报告",
         "",
         "> 状态：待人工视觉审查。本文件是问题记录模板，不代表视觉批准。",
         "",
@@ -772,8 +779,13 @@ def main() -> None:
         raise FileNotFoundError(f"QA directory is missing: {qa_dir}")
     frame_index = read_json(qa_dir / "frame-index.json")
     media_metadata = read_json(qa_dir / "media-metadata.json")
+    run_manifest = read_json(qa_dir / "run-manifest.json")
+    candidate_version = run_manifest.get("contract", {}).get("candidateVersion")
+    if not isinstance(candidate_version, int) or candidate_version < 1:
+        raise ValueError("QA run manifest is missing a positive candidateVersion")
+    generic_contract = run_manifest.get("schemaVersion") != LEGACY_QA_SCHEMA_VERSION
     if len(frame_index.get("scenes", [])) != 18:
-        raise ValueError("The wide v004 QA contract requires exactly 18 scenes")
+        raise ValueError("The long-review QA contract requires exactly 18 scenes")
     if frame_index.get("representativeFrameCount") != 18:
         raise ValueError("Representative-frame coverage is incomplete")
     if frame_index.get("boundaryTransitionCount") != 17:
@@ -796,7 +808,12 @@ def main() -> None:
         low_information,
     )
     metrics = {
-        "schemaVersion": SCHEMA_VERSION,
+        "schemaVersion": (
+            "agent-skill-long-review-frame-analysis-v1"
+            if generic_contract
+            else "agent-skill-long-review-wide-v004-frame-analysis-v1"
+        ),
+        "candidateVersion": candidate_version,
         "source": {
             "video": frame_index["sourceVideo"],
             "periodicSampleCount": len(periodic_samples),
@@ -822,7 +839,9 @@ def main() -> None:
         frame_index,
         metrics,
         contact_sheets,
-        f"candidate v004/{qa_dir.name} only",
+        f"candidate v{candidate_version:03d}/{qa_dir.name} only",
+        candidate_version,
+        generic_contract,
     )
     write_json(qa_dir / "qa-summary.json", summary)
     (qa_dir / "QA-REPORT.md").write_text(

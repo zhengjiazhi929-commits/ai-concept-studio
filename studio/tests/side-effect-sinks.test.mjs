@@ -141,6 +141,7 @@ function researchDependencies(counters = {}) {
       };
     },
     readLatestResearchPack: async () => null,
+    readResearchPackAtPath: async () => null,
     readResearchConfig: async () => ({
       maxConcurrency: 1,
       minimumSources: 0,

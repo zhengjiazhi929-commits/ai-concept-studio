@@ -88,10 +88,12 @@ export async function scanTrackedFiles({
       continue;
     }
     const content = await readFileImpl(absolutePath);
-    if (content.includes(0)) {
-      continue;
-    }
-    for (const finding of findHighConfidenceSecrets(content.toString("utf8"))) {
+    // High-confidence token formats are ASCII. Scan binary bytes as latin1
+    // instead of skipping every file that contains NUL; this catches exposed
+    // credentials in tracked media, archives, and Git bundles without trying
+    // to decode arbitrary binary data as UTF-8.
+    const encoding = content.includes(0) ? "latin1" : "utf8";
+    for (const finding of findHighConfidenceSecrets(content.toString(encoding))) {
       findings.push({ path, ...finding });
     }
   }
