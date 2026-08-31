@@ -1,8 +1,8 @@
 # AI Concept Studio 当前状态
 
-更新时间：2026-08-31 21:15（Asia/Shanghai）
+更新时间：2026-08-31 21:42（Asia/Shanghai）
 
-状态真源版本：18
+状态真源版本：19
 
 远端 `main` 当前提交：`23990937411710e394cde0be5253b02841d42d11`，来自已合并的
 PR #6。对应 hosted `Verify` run `33298465095` 已成功，历史证据为 `749/749`、
@@ -11,46 +11,56 @@ PR #6。对应 hosted `Verify` run `33298465095` 已成功，历史证据为 `74
 ## 当前准确结论
 
 本轮 P1/P2 可靠性优化位于隔离分支 `codex/reliability-p1-p2-20260831`，以当前
-`origin/main` 为基线。90 个任务相关路径已从 `eea796e25b45f89ce4811d166be41c695fb625c0`
-起选择性提交并推送到远端同名分支；随后又提交了 render-job、状态证据和显式 Remotion
-超时修复。PR #7 已创建且保持 OPEN，没有自动合并请求，也没有合并，因此 `main` 仍未改变。
+`origin/main` 为基线。首批 90 个任务相关路径已从
+`eea796e25b45f89ce4811d166be41c695fb625c0` 起选择性提交；后续 render-job、状态证据和
+显式 Remotion 超时/字体内联提交使远端 HEAD 相对 `main` 合计为 94 个路径。当前本地 v011
+草案新增第 95 个路径。PR #7 已创建且保持 OPEN，没有自动合并请求，也没有合并，因此
+`main` 仍未改变。
 
-显式 Remotion 超时提交 `837342a7c9e76245d5f7b5aa12cccf84207ec870` 的 GitHub hosted
-push `Verify` run `33392665301` 和 PR merge-ref `Verify` run `33392669795` 均已成功。
+字体内联提交 `b43f7d52591cd68c6157e17cb9b5ffc9b9c178e0` 的 GitHub hosted push
+`Verify` run `33396309165` 和 PR merge-ref `Verify` run `33396315995` 均已成功。
 它们完成了跟踪源码 checkout、精确 Node/Python/pnpm 运行时、秘密扫描、锁定依赖安装、
-生产依赖审计，以及完整源码、测试、回滚与 Remotion 像素门禁。这些 run 只证明
-`837342a`；字体内联修复提交后形成的新 HEAD 仍必须通过新的 hosted `Verify` 才可启动 v010。
+生产依赖审计，以及 894/894 测试、287 个源码文件、35/35 动效检查、7/7 回滚演练和
+4 个实际解码的 Remotion 代表帧。这些 run 只证明 `b43f7d5`，不证明其后本地草案或完整成片。
 
 首次使用显式 job `a3d8b4b` / `full-video-current-visual-upgrade-v008` 启动时，
 chunk 0 在发布任何 part、稳定 chunk 或最终目录前因 Remotion 默认 30000ms 浏览器初始化预算
-退出。同环境只读计时在约 91.8 秒后成功载入相同 Composition，证明是启动预算缺口，不是画面
-源码崩溃。失败的 v008 work directory、manifest 和日志原样保留，禁止清理、覆盖或伪装成成片。
+退出。同环境只读计时在约 91.8 秒后成功载入相同 Composition，说明默认 30 秒不足以完成
+该次 Composition load；它不证明完整渲染健康。失败的 v008 work directory、manifest 和日志
+原样保留，禁止清理、覆盖或伪装成成片。
 
 后续显式 job `full-video-current-visual-upgrade-v009` 以 180000ms 预算启动了两次；两次都在
 chunk 0 发布稳定 part/chunk/metadata/final 前，因 `Loading locked Noto Sans SC video font`
 对应的 `delayRender()` 在 178000ms 后未清除而失败。相同输入的独立
-`selectComposition` 诊断约 65 秒成功，说明新的失败点是 render browser 的字体资源交付，
-不是 Composition 选择本身。v009 work directory、manifest、日志和 bundle 全部原样保留。
+`selectComposition` 诊断约 65 秒成功，当时把直接阻塞点缩小到自定义字体等待，但未证明
+底层根因是字体资源交付。v009 work directory、manifest、日志和 bundle 全部原样保留。
 
-下一候选使用全新的显式 job `full-video-current-visual-upgrade-v010`：1920×1080、30fps、
-18000 帧、20×900 帧分段、`concurrency=1`、片间暂停 5000ms。它固定
-`AgentSkillLongReview`、Episode 和临时 `voice-v001`，使用全新 final/work 目录，不覆盖
-v008、v009 或已被视觉拒绝的历史 v007。分段 bundle 现在只把 Remotion 唯一的字体
-`asset/resource` 规则改成 `asset/inline`，并在规则缺失或重复时失败关闭；合同固定
-`fontAssetDelivery: inline-bundle`。真实低优先级浏览器证明中，bundle 用时 20.113 秒、
-Composition 选择 62.850 秒、H.264 frame 0 渲染 30.526 秒，总计 113.489 秒；其中
-`bundle.js` 为 7,991,280 bytes，且输出目录没有额外 WOFF2 文件。该证明只覆盖字体交付链，不等于完整 30 秒 chunk，
-因此 v010 chunk 0 仍是中文缺字、回退字体和完整集成的首个门禁。
+`full-video-current-visual-upgrade-v010` 随后按 20×900 帧、`concurrency=1`、片间暂停
+5000ms、外部 `taskpolicy -b nice -n 20` 启动。bundle 确实含 101 个 `data:font/woff2`
+资源且没有独立 WOFF2，但 chunk 0 仍在约 178 秒因同一个
+`Loading locked Noto Sans SC video font` 顶层 `delayRender()` 未清除而失败；没有发布
+stable chunk、part、metadata 或 final，失败 work directory、manifest、log 和 bundle 均保留。
+这排除了“第二条 HTTP 字体交付链”作为唯一充分解释：资源内联已生效，但 chunk render
+中直接阻塞点仍是顶层三字重 `document.fonts.load()` 对应的自定义 `delayRender()` handle
+未清除；独立 Composition 选择此前可以成功。
 
-字体内联修复后的第一次本地完整 `CI=true pnpm verify` 在高并发负载下为 `893/894`：
-唯一失败是 64 路旧锁竞争测试中 6 个竞争者超过默认 3 秒等待预算；该精确测试随后以
-`test-concurrency=1` 自然退出并 `1/1` 通过。之后不跳项的第二次完整复跑已干净通过：
-`894/894` 测试、287 个源码文件、35/35 动效检查、7/7 回滚演练，以及 4 个实际解码且
-像素哈希互异的 Remotion 代表帧。
-另有针对 durable JSON、分段渲染、通用长片 QA、版本化 JSON 锁、Episode 提交、
-Research/Trend、审计 outbox、预算恢复和生产入口隔离的跨模块扩大专项测试 `224/224` 通过。
-`pnpm audit --prod --audit-level high` 未发现已知漏洞。以上是隔离工作树证据，不等于
-远端门禁、完整十分钟渲染、视觉验收或发布。
+当前本地修正撤销字体内联和该顶层自定义探针，只保留锁定的本地
+`@fontsource-variable/noto-sans-sc/wght.css`，并依赖锁定 Remotion renderer 在逐帧
+`seek-to-frame` 中等待 `document.fonts.ready`。默认 bundle 的真实低优先级运行时证明为：
+101 个独立 WOFF2、无 `data:font`，bundle 5.538 秒、Composition 选择 11.133 秒、
+S01/S08/S10/S14/S17/S18 六张代表帧各约 8.956–14.092 秒，2 帧 H.264 12.077 秒，
+全程 95.619 秒；会话内六帧 spot-check 未见明显缺字或 tofu，但肉眼不能证明每个字形都使用
+锁定字体，也不替代完整视觉 QA。
+
+源码变更后第一次完整校验按预期以 `887/893` 停在 6 个同根因的 implementation hash
+mismatch；没有绕过门禁，而是用评测实现本身重算并只更新闭包派生哈希为
+`d20b88c06afc40f20b0bb8688383fa42fe0b5786a87a7e1935031398da398d4d`。随后评测绑定
+专项 `12/12`、字体与分段渲染专项 `34/34` 均通过；不跳项的
+`CI=true pnpm verify` 已干净通过 `893/893` 测试、287 个源码文件、35/35 动效检查、
+7/7 回滚演练、4 个实际解码且像素哈希互异的 Remotion 代表帧、秘密扫描与 diff 检查。
+测试总数相对 `b43f7d5` 净减 1，是删除已撤销 inline-webpack override 的独立测试，并把当前
+字体交付合同断言并入既有分段超时测试，不是跳过失败项。
+以上是隔离工作树本地证据；当前草案仍须选择性 commit、push 并通过新的 hosted `Verify`。
 
 ## 本轮任务相关修复
 
@@ -74,9 +84,9 @@ Research/Trend、审计 outbox、预算恢复和生产入口隔离的跨模块�
    不覆盖旧候选。chunk worker 只写 attempt 临时文件；只有仍持同一 owner lock 的 parent
    能发布稳定 chunk/metadata。真实 `SIGKILL` 回归证明旧 worker 断连退出且 successor 可接管。
    两个 Remotion 入口共用 180 秒显式页面/渲染超时预算；专项测试固定两处必须绑定同一值，避免
-   8GB 机器在低优先级冷启动下反复撞默认 30 秒超时。为消除第二个浏览器内字体资源链，
-   chunk bundle 对 Remotion 唯一字体规则执行 fail-closed 的 `asset/inline` 覆盖；未来增加
-   大型 TTF/OTF/EOT 资源前必须重新评估 bundle 体积。
+   8GB 机器在低优先级冷启动下反复撞默认 30 秒超时。v010 已证明字体资源内联不能解决
+   顶层自定义字体等待未清除；当前草案恢复 Remotion 默认 `asset/resource`，不再改写 webpack
+   字体规则，也不再增加第二套页面级 `delayRender()` 等待。
 
 ### P2
 
@@ -101,10 +111,11 @@ Research/Trend、审计 outbox、预算恢复和生产入口隔离的跨模块�
    `durability_unknown`，只有与 MP4、manifest 和 render-job 精确绑定的正向 durable receipt
    才能进入 QA 或被报告为已发布；其余情况须就地只读确认，不把已发布候选误报为可重跑失败。
    pre-rename 错误继续 fail closed。
-4. 中文字体固定为 `@fontsource-variable/noto-sans-sc@5.3.0`，所有 Remotion 入口在字体
-   加载完成后继续渲染。该包当前包含 101 个 WOFF2 文件、总计 4,516,508 bytes；这只描述
-   包内容，不代表浏览器曾请求全部 101 个文件。v010 的分段入口把受支持字体类型统一内联，
-   避免低优先级 render browser 依赖第二条字体 HTTP 交付链。
+4. 中文字体固定为 `@fontsource-variable/noto-sans-sc@5.3.0`。加载入口只导入本地 CSS，
+   不再在模块顶层调用 `delayRender()` 或并行探测 400/600/800 三种字重；锁定 Remotion
+   renderer 的逐帧 `document.fonts.ready` 源码契约由专项测试固定，代表帧与 2 帧 H.264
+   只作为运行时冒烟。该包当前包含 101 个 WOFF2 文件、CSS 不含远端 URL；真实默认 bundle
+   也确认发布了 101 个独立 WOFF2，但这不等于浏览器请求或使用了全部字形资源。
 5. CI 的 diff 检查覆盖真实提交范围和未跟踪文件；render smoke 使用内联生产语义计划，
    解码 4 个不同阶段的 PNG 像素；Python QA 固定 CPython 3.12.13、NumPy 2.3.5 和
    Pillow 12.3.0，并使用哈希锁。
@@ -112,8 +123,10 @@ Research/Trend、审计 outbox、预算恢复和生产入口隔离的跨模块�
    本地启动器绑定 Node、pnpm、manifest、lockfile 和直接依赖状态。
 7. 正式 Episode writer、renderer 和 bundle helper 在任何路径读取或 I/O 前拒绝测试专用
    observer/dependency 注入；可替换实现只位于 internal core 和 test harness。评测闭包同时静态绑定
-   116 个实现路径与实现哈希 `243d3bdc640ee0ce367d42cf1ba62c52420142cead7b639da5b8004ce01dd64f`，
-   新拆分的 core 不会脱离当前评测证据。
+   116 个控制实现路径与实现哈希
+   `d20b88c06afc40f20b0bb8688383fa42fe0b5786a87a7e1935031398da398d4d`；本轮纳入该闭包的
+   `font-system.mjs` 变化不会脱离控制评测证据。字体加载入口另由字体复现专项直接绑定，
+   不把 agent-control 指纹误报为全部视频源码的覆盖证明。
 
 ## 视频与视觉验收状态
 
@@ -122,9 +135,14 @@ Research/Trend、审计 outbox、预算恢复和生产入口隔离的跨模块�
 - v009 曾两次启动，但都在 chunk 0 因锁定中文字体的 `delayRender()` 超时失败；同样没有发布
   任何稳定分段、part、metadata 或最终目录。同一 v009 work directory 中的两次 worker
   失败记录均保留，可用于只读诊断。
-- v010 尚未启动。只有本状态所在新 HEAD 完成选择性 commit、push、最新 hosted `Verify`，且
-  clean HEAD、输入哈希、全新输出路径、AC 电源、磁盘和无残留进程复核通过后，才可按
-  20×30 秒、`taskpolicy -b nice -n 20` 自动续跑。
+- v010 已启动但 chunk 0 因顶层字体探针超时失败；没有稳定分段、part、metadata 或最终目录，
+  失败工作目录完整保留。
+- 新显式 job `full-video-current-visual-upgrade-v011` 是当前本地未提交草案，固定
+  1920×1080、30fps、18000 帧、20×900 帧、`concurrency=1`、5000ms 片间暂停以及全新
+  final/work 目录；当前尚未启动。
+  只有本状态所在草案完成选择性 commit、push、最新 hosted `Verify`，且 clean HEAD、输入哈希、
+  全新输出路径、AC 电源、磁盘和无残留进程复核通过后，才可按
+  `taskpolicy -b nice -n 20` 自动续跑。
 - 当前仍没有新的完整 MP4、逐段 ffprobe、无损拼接、音频 mux、联系表或连续 1× 人工观看结果。
 - 机器测试、静态检查和多帧 smoke 不能替代实际成片视觉检查。
 - `voice-v001` 或系统合成旁白仍是临时声音，不是最终真人录音。
@@ -146,8 +164,8 @@ Dependabot security updates、secret scanning 和 push protection 均关闭。�
 - PR #7 已进入审阅但必须保持未合并。最终 merge 仍以
   完整十分钟候选、机器 QA、视觉 Skill 检查、连续 1× 人工观看和 Zhengjiazhi 视觉认可全部通过为前提。
 
-- `machine_status`: local_894_of_894_font_inline_fix_latest_hosted_verify_required_before_v010
-- `technical_status`: pr_7_open_v008_v009_failures_preserved_v010_not_started
+- `machine_status`: local_893_of_893_font_wait_candidate_latest_hosted_verify_required_before_v011
+- `technical_status`: pr_7_open_v008_v009_v010_failures_preserved_v011_not_started
 - `business_acceptance_status`: full_video_and_visual_acceptance_not_run
-- `git_status`: pr_7_open_no_auto_merge_no_merge
+- `git_status`: pr_7_open_remote_b43f7d5_local_draft_uncommitted_no_auto_merge_no_merge
 - `release_status`: not_released

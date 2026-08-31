@@ -117,39 +117,6 @@ const CHROME_EXECUTABLE =
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 export const CHUNKED_REMOTION_TIMEOUT_MS = 180_000;
 
-// Remotion exposes one rule for every supported font extension. Keeping the
-// whole rule inline avoids a second browser-time asset delivery path; reassess
-// bundle size before adding large TTF/OTF/EOT assets to the video runtime.
-export function inlineBundledFontsWebpackOverride(config) {
-  if (!Array.isArray(config?.module?.rules)) {
-    throw new Error("Remotion webpack config is missing module.rules");
-  }
-  let matchedFontRuleCount = 0;
-  const rules = config.module.rules.map((rule) => {
-    const testSource = rule?.test instanceof RegExp ? rule.test.source : "";
-    const isFontAssetRule =
-      rule?.type === "asset/resource" &&
-      ["woff", "otf", "ttf", "eot"].every((token) =>
-        testSource.includes(token)
-      );
-    if (!isFontAssetRule) return rule;
-    matchedFontRuleCount += 1;
-    return {...rule, type: "asset/inline"};
-  });
-  if (matchedFontRuleCount !== 1) {
-    throw new Error(
-      `Expected exactly one Remotion font asset rule, found ${matchedFontRuleCount}`,
-    );
-  }
-  return {
-    ...config,
-    module: {
-      ...config.module,
-      rules,
-    },
-  };
-}
-
 export const CHUNKED_V004_CONTRACT = Object.freeze({
   schemaVersion: CONFIGURED_RENDER_JOB
     ? "agent-skill-long-review-chunked-v1"
@@ -166,7 +133,8 @@ export const CHUNKED_V004_CONTRACT = Object.freeze({
   defaultChunkFrames: 900,
   defaultInterChunkPauseMs: 5_000,
   remotionTimeoutMs: CHUNKED_REMOTION_TIMEOUT_MS,
-  fontAssetDelivery: "inline-bundle",
+  fontAssetDelivery: "bundled-resource",
+  fontReadiness: "remotion-document-fonts-ready",
   codec: "h264",
   pixelFormat: "yuv420p",
   crf: 22,
@@ -1266,7 +1234,6 @@ async function ensureBundle(baseContext, attemptToken) {
       publicDir: PUBLIC_ROOT,
       outDir: partDirectory,
       symlinkPublicDir: false,
-      webpackOverride: inlineBundledFontsWebpackOverride,
       onProgress: (progress) => {
         const percent = Math.floor(progress);
         if (percent % 20 === 0) process.stdout.write(`bundle ${percent}%\n`);

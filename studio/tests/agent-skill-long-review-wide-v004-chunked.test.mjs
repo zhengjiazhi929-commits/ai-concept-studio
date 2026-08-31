@@ -28,7 +28,6 @@ import {
   evaluateChunkProbe,
   evaluateConcatenatedProbe,
   evaluateFinalProbe,
-  inlineBundledFontsWebpackOverride,
   isChunkResumeEligible,
   inspectLongReviewPublication,
   parseCliArguments,
@@ -44,6 +43,11 @@ test("分段渲染为 composition 与 media 共用显式 Remotion 超时预算",
   assert.equal(
     CHUNKED_V004_CONTRACT.remotionTimeoutMs,
     CHUNKED_REMOTION_TIMEOUT_MS,
+  );
+  assert.equal(CHUNKED_V004_CONTRACT.fontAssetDelivery, "bundled-resource");
+  assert.equal(
+    CHUNKED_V004_CONTRACT.fontReadiness,
+    "remotion-document-fonts-ready",
   );
   const source = await readFile(
     resolve(
@@ -61,46 +65,8 @@ test("分段渲染为 composition 与 media 共用显式 Remotion 超时预算",
     2,
     "selectComposition 与 renderMedia 必须使用同一个显式 Remotion 超时预算",
   );
-});
-
-test("分段 bundle 内联全部受支持字体类型并对规则漂移失败关闭", () => {
-  const cssRule = {test: /\.css$/iu, type: "javascript/auto"};
-  const mediaRule = {
-    test: /\.(png|svg|mp4)$/iu,
-    type: "asset/resource",
-  };
-  const fontRule = {
-    test: /\.(woff(2)?|otf|ttf|eot)$/iu,
-    type: "asset/resource",
-  };
-  const config = {
-    mode: "production",
-    module: {rules: [cssRule, mediaRule, fontRule]},
-  };
-  const overridden = inlineBundledFontsWebpackOverride(config);
-  assert.notEqual(overridden, config);
-  assert.notEqual(overridden.module, config.module);
-  assert.equal(overridden.module.rules[0], cssRule);
-  assert.equal(overridden.module.rules[1], mediaRule);
-  assert.deepEqual(overridden.module.rules[2], {
-    ...fontRule,
-    type: "asset/inline",
-  });
-  assert.equal(config.module.rules[2].type, "asset/resource");
-  assert.equal(CHUNKED_V004_CONTRACT.fontAssetDelivery, "inline-bundle");
-
-  assert.throws(
-    () => inlineBundledFontsWebpackOverride({
-      module: {rules: [cssRule, mediaRule]},
-    }),
-    /exactly one Remotion font asset rule, found 0/u,
-  );
-  assert.throws(
-    () => inlineBundledFontsWebpackOverride({
-      module: {rules: [fontRule, {...fontRule}]},
-    }),
-    /exactly one Remotion font asset rule, found 2/u,
-  );
+  assert.doesNotMatch(source, /inlineBundledFontsWebpackOverride/u);
+  assert.doesNotMatch(source, /type:\s*["']asset\/inline["']/u);
 });
 
 function publicationManifest(runFingerprint = "a".repeat(64)) {

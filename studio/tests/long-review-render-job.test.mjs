@@ -5,6 +5,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   rename,
   rm,
   symlink,
@@ -480,6 +481,29 @@ test("仓库提供的版本化 render-job 示例与当前 schema 一致", async 
   assert.equal(validated.candidateVersion, 1);
   assert.equal(validated.temporaryVoice, true);
   assert.equal(validated.temporaryVoiceIsFinalHumanRecording, false);
+
+  const configDirectory = resolve(process.cwd(), "config", "render-jobs");
+  const configFiles = (await readdir(configDirectory))
+    .filter((name) => name.endsWith(".json"))
+    .sort();
+  assert.deepEqual(configFiles, [
+    "full-video-current-visual-upgrade-v008.json",
+    "full-video-current-visual-upgrade-v009.json",
+    "full-video-current-visual-upgrade-v010.json",
+    "full-video-current-visual-upgrade-v011.json"
+  ]);
+  const jobs = await Promise.all(configFiles.map(async (name) =>
+    validateLongReviewRenderJob(
+      JSON.parse(await readFile(resolve(configDirectory, name), "utf8")),
+      {workspaceRoot: resolve(process.cwd(), "..")}
+    )
+  ));
+  assert.deepEqual(jobs.map((job) => job.candidateVersion), [8, 9, 10, 11]);
+  for (const job of jobs) {
+    assert.equal(job.schemaVersion, LONG_REVIEW_RENDER_JOB_SCHEMA_VERSION);
+    assert.equal(job.temporaryVoice, true);
+    assert.equal(job.temporaryVoiceIsFinalHumanRecording, false);
+  }
 });
 
 test("通用入口只接受版本化 job，不再把 v004 当当前候选", async () => {

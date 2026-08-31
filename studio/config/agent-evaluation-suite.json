@@ -48,7 +48,7 @@
     },
     "implementation": {
       "version": "agent-control-release-v6",
-      "hash": "243d3bdc640ee0ce367d42cf1ba62c52420142cead7b639da5b8004ce01dd64f"
+      "hash": "d20b88c06afc40f20b0bb8688383fa42fe0b5786a87a7e1935031398da398d4d"
     }
   },
   "requiredCases": [
