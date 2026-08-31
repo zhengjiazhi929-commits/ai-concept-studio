@@ -1,8 +1,8 @@
 # AI Concept Studio 当前状态
 
-更新时间：2026-08-31 19:27（Asia/Shanghai）
+更新时间：2026-08-31 20:15（Asia/Shanghai）
 
-状态真源版本：15
+状态真源版本：16
 
 远端 `main` 当前提交：`23990937411710e394cde0be5253b02841d42d11`，来自已合并的
 PR #6。对应 hosted `Verify` run `33298465095` 已成功，历史证据为 `749/749`、
@@ -12,12 +12,18 @@ PR #6。对应 hosted `Verify` run `33298465095` 已成功，历史证据为 `74
 
 本轮 P1/P2 可靠性优化位于隔离分支 `codex/reliability-p1-p2-20260831`，以当前
 `origin/main` 为基线。90 个任务相关路径已选择性提交为
-`eea796e25b45f89ce4811d166be41c695fb625c0`，并推送到远端同名分支。没有创建 PR、
-没有合并，因此 `main` 仍未改变。
+`eea796e25b45f89ce4811d166be41c695fb625c0`，并推送到远端同名分支。PR #7 已创建且保持
+OPEN，没有自动合并请求，也没有合并，因此 `main` 仍未改变。
 
 GitHub hosted `Verify` run `33386899516` 已对该代码提交成功完成，耗时 1 分 23 秒。
 它完成了跟踪源码 checkout、精确 Node/Python/pnpm 运行时、秘密扫描、锁定依赖安装、
 生产依赖审计，以及完整源码、测试、回滚与 Remotion 像素门禁。
+PR merge-ref `Verify` run `33390178020` 也已成功。
+
+完整候选使用新的显式 job `a3d8b4b` / `full-video-current-visual-upgrade-v008`：
+1920×1080、30fps、18000 帧、20×900 帧分段、`concurrency=1`、片间暂停 5000ms。它固定
+`AgentSkillLongReview`、Episode 和临时 `voice-v001`，且不覆盖已被视觉拒绝的历史 v007。
+任何渲染都必须等该 job 所在的 PR 最新 HEAD 再次通过 hosted `Verify`，并在 clean HEAD 上启动。
 
 最终差异上的本地完整 `CI=true pnpm verify` 已通过：`892/892` 测试、287 个源码文件、
 35/35 动效检查、7/7 回滚演练，以及 4 个实际解码且像素哈希互异的 Remotion 代表帧。
@@ -104,11 +110,11 @@ Dependabot security updates、secret scanning 和 push protection 均关闭。�
   脚本和全部无关脏文件；本轮未覆盖、清理或提交它们。
 - 隔离分支中只有任务相关的代码、测试、CI 和规范被提交。生成物、生产数据快照、
   缓存、媒体和无关文件均未进入提交。
-- 代码已满足进入 PR 审阅的本地与 hosted CI 条件，但尚未创建 PR。最终 merge 仍以
+- PR #7 已进入审阅但必须保持未合并。最终 merge 仍以
   完整十分钟候选、机器 QA、视觉 Skill 检查、连续 1× 人工观看和 Zhengjiazhi 视觉认可全部通过为前提。
 
-- `machine_status`: local_892_of_892_and_hosted_verify_33386899516_passed
-- `technical_status`: p1_p2_code_committed_and_pushed_to_review_branch
+- `machine_status`: local_892_of_892_push_verify_and_pr_merge_ref_verify_passed
+- `technical_status`: pr_7_open_v008_job_committed_latest_head_must_verify_before_render
 - `business_acceptance_status`: full_video_and_visual_acceptance_not_run
-- `git_status`: commit_and_push_complete_no_pr_no_merge
+- `git_status`: pr_7_open_no_auto_merge_no_merge
 - `release_status`: not_released
