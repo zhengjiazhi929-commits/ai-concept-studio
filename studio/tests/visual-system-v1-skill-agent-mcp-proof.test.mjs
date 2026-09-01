@@ -840,7 +840,7 @@ test("章节完成切点保持满亮，不在71到72或191到192帧闪暗", asyn
   assert.match(progress, /bottom: layout\.vertical \? 18 : 16/u);
   assert.match(progress, /gap: layout\.vertical \? 8 : 15/u);
   assert.match(progress, /color: palette\.muted/u);
-  assert.match(progress, /fontWeight: 600/u);
+  assert.match(progress, /fontWeight: typography\.fontWeights\.navigation/u);
   assert.match(progress, /backgroundColor: palette\.mint/u);
   assert.match(progress, /visualSystemV1ChapterDisplayLabel\(chapter\.label, index\)/u);
   assert.doesNotMatch(progress, /segment\.status === "done"[^\n]*opacity|opacity:\s*segment\.status/u);

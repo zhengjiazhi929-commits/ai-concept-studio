@@ -6,6 +6,18 @@ export const VISUAL_SYSTEM_V1_DEPTH_ROLES = Object.freeze([
   "human-confirmation"
 ]);
 
+export const VISUAL_SYSTEM_V1_FONT_WEIGHTS = Object.freeze({
+  display: 760,
+  primaryLabel: 680,
+  sectionLabel: 600,
+  subtitle: 600,
+  technicalLabel: 600,
+  supporting: 520,
+  explanatory: 520,
+  detail: 500,
+  navigation: 500
+});
+
 export const VISUAL_SYSTEM_V1 = Object.freeze({
   schemaVersion: "visual-system-v1",
   status: "review-candidate",
@@ -144,7 +156,7 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
         horizontalPaddingPx: 26
       }),
       labelLetterSpacingPx: -0.8,
-      detailFontWeight: 620,
+      detailFontWeight: VISUAL_SYSTEM_V1_FONT_WEIGHTS.detail,
       detailLineHeight: 1.22
     }),
     longformEmphasis: Object.freeze({
@@ -165,7 +177,7 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
         horizontalPaddingPx: 26
       }),
       labelLetterSpacingPx: -0.8,
-      detailFontWeight: 650,
+      detailFontWeight: VISUAL_SYSTEM_V1_FONT_WEIGHTS.detail,
       detailLineHeight: 1.26
     })
   }),
@@ -192,6 +204,7 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
   }),
   typography: Object.freeze({
     fontFamily: VIDEO_SANS_FONT_FAMILY,
+    fontWeights: VISUAL_SYSTEM_V1_FONT_WEIGHTS,
     headlineWidePx: 84,
     headlineVerticalPx: 68,
     supportingWidePx: 34,

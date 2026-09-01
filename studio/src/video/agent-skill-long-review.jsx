@@ -231,7 +231,7 @@ function AdaptiveSemanticGroups({ spec, layout }) {
             top: 7,
             color: palette.mintDeep,
             fontSize: 15,
-            fontWeight: 820,
+            fontWeight: typography.fontWeights.sectionLabel,
             letterSpacing: ".06em",
             lineHeight: 1
           }}
@@ -333,7 +333,7 @@ function StageCaption({ caption, copyOpacity = 1 }) {
         style={{
           color: palette.mintDeep,
           fontSize: 28,
-          fontWeight: 760,
+          fontWeight: typography.fontWeights.sectionLabel,
           lineHeight: 1.25,
           letterSpacing: "-.015em"
         }}
@@ -429,7 +429,7 @@ function ShapeGrammarLegend({ cue, globalFrame, copyOpacity = 1 }) {
         gap: 18,
         color: palette.muted,
         fontSize: SHAPE_GRAMMAR_LEGEND_FONT_SIZE_PX,
-        fontWeight: 720,
+        fontWeight: typography.fontWeights.explanatory,
         letterSpacing: ".01em",
         opacity,
         pointerEvents: "none"
@@ -726,7 +726,7 @@ function SceneLayer({ episode, layer, globalFrame, subtitlePresentationMode }) {
           zIndex: 4,
           color: palette.ink,
           fontSize: titleFontSize(title),
-          fontWeight: 900,
+          fontWeight: typography.fontWeights.display,
           lineHeight: 1.08,
           letterSpacing: "-.045em",
           whiteSpace: "nowrap",
@@ -745,7 +745,7 @@ function SceneLayer({ episode, layer, globalFrame, subtitlePresentationMode }) {
           zIndex: 4,
           color: palette.muted,
           fontSize: typography.supportingWidePx,
-          fontWeight: 650,
+          fontWeight: typography.fontWeights.supporting,
           lineHeight: 1.34,
           letterSpacing: "-.02em",
           whiteSpace: "nowrap",

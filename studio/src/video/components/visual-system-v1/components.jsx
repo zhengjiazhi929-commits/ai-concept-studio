@@ -131,7 +131,7 @@ export function VisualSystemV1OpenCanvasHeader({ title = "VISUAL SYSTEM V1" }) {
         borderBottom: `1px solid ${palette.line}`,
         color: palette.mintDeep,
         fontSize: 16,
-        fontWeight: 820,
+        fontWeight: typography.fontWeights.sectionLabel,
         letterSpacing: ".12em"
       }}
     >
@@ -184,7 +184,7 @@ export function VisualSystemV1SingleContentWindow({
           backgroundColor: palette.windowChrome,
           color: palette.mintDeep,
           fontSize: layout.vertical ? 18 : 16,
-          fontWeight: 820,
+          fontWeight: typography.fontWeights.sectionLabel,
           letterSpacing: ".12em"
         }}
       >
@@ -363,7 +363,7 @@ export function VisualSystemV1FlatNode({
             style={{
               color: accentColor,
               fontSize: cardTypography?.markerFontSizePx ?? 13,
-              fontWeight: 900,
+              fontWeight: typography.fontWeights.sectionLabel,
               lineHeight: cardTypography?.marker.lineHeight ?? 1.2,
               letterSpacing: `${cardTypography?.marker.letterSpacingEm ?? 0.1}em`,
               whiteSpace: "nowrap"
@@ -380,7 +380,7 @@ export function VisualSystemV1FlatNode({
           marginTop: cardTypography?.markerTitleGapPx ?? 13,
           color: palette.ink,
           fontSize: cardTypography?.labelFontSizePx ?? 28,
-          fontWeight: 860,
+          fontWeight: typography.fontWeights.primaryLabel,
           lineHeight: cardTypography?.label.lineHeight ?? 1.12,
           letterSpacing: `${cardTypography?.label.letterSpacingEm ?? -0.025}em`,
           wordBreak: phraseSafe ? "keep-all" : "normal",
@@ -398,7 +398,7 @@ export function VisualSystemV1FlatNode({
             marginTop: cardTypography?.titleDetailGapPx ?? 7,
             color: palette.muted,
             fontSize: cardTypography?.detailFontSizePx ?? 18,
-            fontWeight: 620,
+            fontWeight: typography.fontWeights.detail,
             lineHeight: cardTypography?.detail.lineHeight ?? 1.35,
             wordBreak: phraseSafe ? "keep-all" : "normal",
             overflowWrap: phraseSafe ? "normal" : "break-word",
@@ -513,7 +513,9 @@ export function VisualSystemV1StandaloneIcon({
               : "100%",
             color: palette.ink,
             fontSize: semanticIconNode ? semanticIconNodeDefaults.labelFontSizePx : 22,
-            fontWeight: semanticIconNode ? 850 : 760,
+            fontWeight: semanticIconNode
+              ? typography.fontWeights.primaryLabel
+              : typography.fontWeights.sectionLabel,
             lineHeight: semanticIconNode ? semanticIconNodeDefaults.labelLineHeight : 1.08,
             letterSpacing: semanticIconNode
               ? semanticIconNodeDefaults.labelLetterSpacingPx
@@ -531,7 +533,7 @@ export function VisualSystemV1StandaloneIcon({
                 marginTop: semanticIconNodeDefaults.detailGapPx,
                 color: palette.muted,
                 fontSize: semanticIconNodeDefaults.detailFontSizePx,
-                fontWeight: 620,
+                fontWeight: typography.fontWeights.detail,
                 lineHeight: semanticIconNodeDefaults.detailLineHeight,
                 letterSpacing: semanticIconNodeDefaults.detailLetterSpacingPx,
                 whiteSpace: "nowrap"
@@ -688,7 +690,7 @@ export function VisualSystemV1SemanticNode({
           style={{
             color: accentColor,
             fontSize: semanticNode.marker.fontSizePx,
-            fontWeight: 850,
+            fontWeight: typography.fontWeights.sectionLabel,
             letterSpacing: ".08em",
             lineHeight: 1.1,
             opacity: normalizedContentOpacity * 0.76
@@ -709,7 +711,7 @@ export function VisualSystemV1SemanticNode({
             minWidth: 0,
             color: palette.ink,
             fontSize: labelFontSize,
-            fontWeight: 880,
+            fontWeight: typography.fontWeights.primaryLabel,
             lineHeight: 1.08,
             letterSpacing: `${semanticTypography.labelLetterSpacingPx}px`,
             whiteSpace: informationCard ? "nowrap" : undefined,
@@ -807,14 +809,14 @@ function VisualSystemV1ShallowDepthObject({
           padding: "22px 24px"
         }}
       >
-        <div style={{ color: ink, fontSize: 13, fontWeight: 900, letterSpacing: ".12em" }}>
+        <div style={{ color: ink, fontSize: 13, fontWeight: typography.fontWeights.sectionLabel, letterSpacing: ".12em" }}>
           {eyebrow}
         </div>
-        <div style={{ marginTop: 15, color: palette.ink, fontSize: 30, fontWeight: 900, letterSpacing: "-.03em" }}>
+        <div style={{ marginTop: 15, color: palette.ink, fontSize: 30, fontWeight: typography.fontWeights.primaryLabel, letterSpacing: "-.03em" }}>
           {label}
         </div>
         {detail ? (
-          <div style={{ marginTop: 8, color: secondary ? "#6F6395" : palette.muted, fontSize: 18, fontWeight: 650, lineHeight: 1.35 }}>
+          <div style={{ marginTop: 8, color: secondary ? "#6F6395" : palette.muted, fontSize: 18, fontWeight: typography.fontWeights.detail, lineHeight: 1.35 }}>
             {detail}
           </div>
         ) : null}
@@ -955,7 +957,7 @@ export function VisualSystemV1ChapterProgress({
                 marginBottom: layout.vertical ? 7 : 8,
                 color: palette.muted,
                 fontSize: layout.vertical ? 13 : 17,
-                fontWeight: 600,
+                fontWeight: typography.fontWeights.navigation,
                 lineHeight: "22px",
                 letterSpacing: ".02em",
                 whiteSpace: "nowrap"
@@ -1011,7 +1013,7 @@ export function VisualSystemV1PlainSubtitle({ captions, visualWeight = "primary"
         zIndex: 10,
         color: VISUAL_SYSTEM_V1.defaults.subtitleColor,
         fontSize,
-        fontWeight: 700,
+        fontWeight: typography.fontWeights.subtitle,
         lineHeight: typography.subtitleLineHeight,
         letterSpacing: "-.025em",
         textAlign: "center",

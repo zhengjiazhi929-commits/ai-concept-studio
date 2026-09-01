@@ -221,7 +221,7 @@ export function VisualSystemV1TechnicalArtifact({
               color: palette.mintDeep,
               fontFamily: typography.fontFamily,
               fontSize: 18,
-              fontWeight: 760,
+              fontWeight: typography.fontWeights.technicalLabel,
               lineHeight: "28px",
               letterSpacing: ".04em",
               textAlign: position.textAlign,
