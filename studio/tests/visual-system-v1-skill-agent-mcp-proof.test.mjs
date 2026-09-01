@@ -70,6 +70,11 @@ test("visual-system-v1 保留双画幅兼容能力，但新默认只输出横版
   assert.equal(VISUAL_SYSTEM_V1.depth.maximumVisibleDepthPx, 2.5);
   assert.equal(VISUAL_SYSTEM_V1.wallpaper.driftPeriodSeconds, 20);
   assert.equal(VISUAL_SYSTEM_V1.wallpaper.maximumDriftFraction, 0.015);
+  assert.equal(VISUAL_SYSTEM_V1.wallpaper.feathering, "radial-gradient-stops");
+  assert.equal(
+    VISUAL_SYSTEM_V1.wallpaper.compositorPolicy,
+    "no-viewport-filter-no-viewport-will-change"
+  );
   assert.deepEqual(VISUAL_SYSTEM_V1.defaults, {
     surfaceMode: "flat-only",
     sameLevelSurfaceUniform: true,
@@ -169,6 +174,8 @@ test("visual-system-v1 保留双画幅兼容能力，但新默认只输出横版
     }
   });
   assert.ok(VISUAL_SYSTEM_V1.forbidden.includes("chapter-duration-text"));
+  assert.ok(VISUAL_SYSTEM_V1.forbidden.includes("viewport-scale-filter-blur"));
+  assert.ok(VISUAL_SYSTEM_V1.forbidden.includes("viewport-scale-will-change"));
   assert.equal(VISUAL_SYSTEM_V1.depth.available, true);
   assert.equal(VISUAL_SYSTEM_V1.depth.enabledByDefault, false);
   assert.equal(VISUAL_SYSTEM_V1.motion.cardReflowFrames, 8);
@@ -176,6 +183,20 @@ test("visual-system-v1 保留双画幅兼容能力，但新默认只输出横版
   assert.equal(VISUAL_SYSTEM_V1_SKILL_AGENT_MCP_PROOF.durationInFrames, 360);
   assert.equal(VISUAL_SYSTEM_V1_SKILL_AGENT_MCP_PROOF.durationSeconds, 12);
   assert.deepEqual(Object.keys(VISUAL_SYSTEM_V1_SKILL_AGENT_MCP_PROOF.compositions), ["wide"]);
+});
+
+test("通用画布背景只用渐变羽化，禁止全屏模糊合成层", async () => {
+  const components = await source("../src/video/components/visual-system-v1/components.jsx");
+  const canvasStart = components.indexOf("export function VisualSystemV1Canvas");
+  const canvasEnd = components.indexOf(
+    "export function VisualSystemV1OpenCanvasHeader",
+    canvasStart
+  );
+  assert.ok(canvasStart >= 0 && canvasEnd > canvasStart);
+  const canvasSource = components.slice(canvasStart, canvasEnd);
+  assert.match(canvasSource, /radial-gradient/gu);
+  assert.doesNotMatch(canvasSource, /filter\s*:/u);
+  assert.doesNotMatch(canvasSource, /willChange\s*:/u);
 });
 
 test("通用库仍能读取竖版兼容布局，但v9样片只允许横版", () => {

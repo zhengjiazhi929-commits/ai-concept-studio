@@ -24,6 +24,10 @@ import {
   assertAiTechIconProductionPlacement
 } from "../shared/ai-tech-icon-contract.mjs";
 import {
+  defineTechnicalArtifactProfile,
+  validateTechnicalArtifactProfile
+} from "../shared/technical-artifact-profile.mjs";
+import {
   EDITORIAL_ICON_PRESENTATIONS,
   EDITORIAL_ICON_PURPOSES,
   EDITORIAL_NARRATIVE_TREATMENT_MECHANISMS,
@@ -927,6 +931,8 @@ function sceneSpec({
   edges = [],
   groups = [],
   standaloneIcons = [],
+  artifactProfile = null,
+  continuityNodeIds = [],
   stages: stageItems
 }) {
   if (!["stable-final", "explicit-reflow"].includes(layoutStability)) {
@@ -1027,8 +1033,18 @@ function sceneSpec({
   const nodeIds = new Set(nodes.map((item) => item.id));
   const edgeIds = new Set(edges.map((item) => item.id));
   const edgeById = new Map(edges.map((item) => [item.id, item]));
+  const artifactProfileReview = validateTechnicalArtifactProfile(artifactProfile, nodeIds);
+  if (!artifactProfileReview.valid) {
+    throw new Error(`${id} 的技术工件 profile 无效：${artifactProfileReview.issues.join(", ")}`);
+  }
+  for (const continuityNodeId of continuityNodeIds) {
+    if (!nodeIds.has(continuityNodeId)) {
+      throw new Error(`${id} 的 continuityNodeIds 包含未知节点 ${continuityNodeId}`);
+    }
+  }
   const revealedNodeIds = new Set();
   const revealedEdgeIds = new Set();
+  const seenContinuityNodeIds = new Set();
   let previousVisibleNodeIds = [];
   let previousVisibleEdgeIds = [];
   for (const item of stages) {
@@ -1057,6 +1073,15 @@ function sceneSpec({
       ? [...revealedEdgeIds]
       : [...item.visibleEdgeIds];
     const currentVisibleNodeSet = new Set(currentVisibleNodeIds);
+    for (const continuityNodeId of continuityNodeIds) {
+      if (currentVisibleNodeSet.has(continuityNodeId)) {
+        seenContinuityNodeIds.add(continuityNodeId);
+      } else if (seenContinuityNodeIds.has(continuityNodeId)) {
+        throw new Error(
+          `${id}/${item.id} 移除了必须持续保留的节点 ${continuityNodeId}`
+        );
+      }
+    }
     for (const visibleEdgeId of currentVisibleEdgeIds) {
       const visibleEdge = edgeById.get(visibleEdgeId);
       if (
@@ -1088,6 +1113,11 @@ function sceneSpec({
     }
     previousVisibleNodeIds = currentVisibleNodeIds;
     previousVisibleEdgeIds = currentVisibleEdgeIds;
+  }
+  for (const continuityNodeId of continuityNodeIds) {
+    if (!seenContinuityNodeIds.has(continuityNodeId)) {
+      throw new Error(`${id} 的持续节点 ${continuityNodeId} 从未进入画面`);
+    }
   }
   for (const item of edges) {
     const presentation = item.connectorPresentation;
@@ -1259,6 +1289,8 @@ function sceneSpec({
     edges: Object.freeze(edges),
     groups: Object.freeze(groups.map((group) => Object.freeze({ ...group, nodeIds: Object.freeze([...group.nodeIds]) }))),
     standaloneIcons: Object.freeze(standaloneIcons),
+    artifactProfile,
+    continuityNodeIds: Object.freeze([...continuityNodeIds]),
     stages: Object.freeze(stages),
     stageCount: stages.length,
     holdStartFrame,
@@ -1627,6 +1659,15 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
   }),
   sceneSpec({
     id: "S08", kind: "native-evidence", title: "渐进式加载怎样工作", deck: "批准证据转译：上下文只装当前需要的层", material: material(2), visualMode: "mixed-diagram",
+    artifactProfile: defineTechnicalArtifactProfile({
+      kind: "bounded-resource-artifact",
+      semanticPurpose: "用稳定的上下文容器区分可加载内容、当前聚焦与预算结果",
+      zones: [
+        { id: "available", label: "可加载层", anchorNodeIds: ["metadata-slot", "instruction-slot", "resource-slot"] },
+        { id: "focused", label: "当前载入", anchorNodeIds: ["focus"] },
+        { id: "budget", label: "预算结果", anchorNodeIds: ["context-budget", "parked"] }
+      ]
+    }),
     nodes: [
       node("metadata-slot", 12, 32, 140, 84, "名称 + 描述", "全量轻量索引", "blue", {
         semanticGroupId: "adoption-path", semanticRole: "step", surfaceSemanticRole: "process-step", surfaceRole: "information-card", surfacePurpose: "actionable-object"
@@ -1667,11 +1708,6 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
         surfaceBoundary: relationSurfaceBoundary("从聚焦动作切换到被保护的上下文预算结果。")
       }),
       edge("budget-parked", "context-budget", "parked", "M 394 406 H 420 V 532 H 354", "orange")
-    ],
-    standaloneIcons: [
-      standaloneIcon("context-window-symbol", "focus", "context-window", "semantic-anchor", {
-        participation: "graph-node"
-      })
     ],
     stages: [
       stage("metadata", 234, "Agent 始终只看到所有 Skill 的名称与描述", ["metadata-slot"]),
@@ -1727,6 +1763,16 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
   }),
   sceneSpec({
     id: "S10", kind: "native-evidence", title: "Skill、Tool 与 MCP 的分工", deck: "批准证据转译：方法、动作与连接协议", material: material(3), visualMode: "mixed-diagram",
+    continuityNodeIds: ["skill", "tool", "mcp"],
+    artifactProfile: defineTechnicalArtifactProfile({
+      kind: "layered-runtime-map",
+      semanticPurpose: "用稳定分层保留方法、能力连接和组合结果的空间关系",
+      zones: [
+        { id: "method", label: "方法与判断", anchorNodeIds: ["skill", "agent", "tool"] },
+        { id: "protocol", label: "协议与系统", anchorNodeIds: ["mcp", "external"] },
+        { id: "result", label: "组合结论", anchorNodeIds: ["combine", "weekly"] }
+      ]
+    }),
     nodes: [
       node("skill", 10, 24, 140, 88, "Skill", "怎样完成一类任务", "mint", {
         semanticGroupId: "role-flow", surfaceRole: "open-canvas", surfacePurpose: "process-anchor", visualPresentation: "process-anchor"
@@ -1783,7 +1829,9 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
         visibleNodeIds: ["skill", "agent", "tool", "mcp"], visibleEdgeIds: ["skill-agent", "agent-tool", "agent-mcp"]
       }),
       stage("external", 317.038, "外部系统通过协议暴露和调用能力", ["external"], ["mcp-external"], {
-        visibleNodeIds: ["mcp", "external"], visibleEdgeIds: ["mcp-external"], cueText: "协议连接外部能力"
+        visibleNodeIds: ["skill", "agent", "tool", "mcp", "external"],
+        visibleEdgeIds: ["skill-agent", "agent-tool", "agent-mcp", "mcp-external"],
+        cueText: "协议连接外部能力"
       }),
       stage("orchestration", 321.833, "Skill 可以规定 Agent 何时调用 MCP Tool", [], [], {
         visibleNodeIds: ["skill", "tool", "mcp", "agent"], visibleEdgeIds: ["skill-agent", "agent-tool", "agent-mcp"], cueText: "方法编排能力调用"
@@ -1792,7 +1840,9 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
         visibleNodeIds: ["skill", "tool", "mcp", "combine"], visibleEdgeIds: ["skill-combine", "tool-combine", "mcp-combine"]
       }),
       stage("weekly", 332.077, "把三者放进同一个周报任务才能看清分工", ["weekly"], ["combine-weekly"], {
-        visibleNodeIds: ["combine", "weekly"], visibleEdgeIds: ["combine-weekly"]
+        visibleNodeIds: ["skill", "tool", "mcp", "combine", "weekly"],
+        visibleEdgeIds: ["skill-combine", "tool-combine", "mcp-combine", "combine-weekly"],
+        cueText: "三层回到真实流程"
       })
     ]
   }),
@@ -1872,6 +1922,15 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
   }),
   sceneSpec({
     id: "S12", kind: "native-evidence", title: "什么时候值得做成 Skill", deck: "批准证据转译：用真实任务寻找稳定重复区", material: material(4),
+    artifactProfile: defineTechnicalArtifactProfile({
+      kind: "decision-field",
+      semanticPurpose: "用稳定的证据、判断和去向三区表达是否值得固化",
+      zones: [
+        { id: "evidence", label: "样本与观察", anchorNodeIds: ["samples", "stable-rare", "repeat-unstable"] },
+        { id: "decision", label: "Skill 判断", anchorNodeIds: ["candidate"] },
+        { id: "outcome", label: "处理去向", anchorNodeIds: ["explore", "first-gate"] }
+      ]
+    }),
     nodes: [
       node("stable-rare", 18, 52, 204, 112, "稳定但少见", "先不固化", "blue"),
       node("candidate", 258, 52, 204, 112, "Skill 候选", "稳定 · 重复 · 可验收", "mint", {
@@ -1970,6 +2029,14 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
   }),
   sceneSpec({
     id: "S14", kind: "native-evidence", title: "治理不是上传之后再说", deck: "批准证据转译：风险、控制和证据必须对应", material: material(5), visualMode: "mixed-diagram",
+    artifactProfile: defineTechnicalArtifactProfile({
+      kind: "evidence-lifecycle-ledger",
+      semanticPurpose: "用生命周期轨道和证据责任轨道持续承载治理关系",
+      zones: [
+        { id: "lifecycle", label: "生命周期", anchorNodeIds: ["publisher", "installer", "operator", "reviewer"] },
+        { id: "accountability", label: "证据与责任", anchorNodeIds: ["scanner", "owner"] }
+      ]
+    }),
     nodes: [
       node("publisher", 18, 28, 154, 88, "发布前", "Skill 包 · 来源 · 代码 · 工具", "blue", {
         semanticGroupId: "governance-lifecycle", semanticRole: "time-anchor", surfaceRole: "open-canvas", surfacePurpose: "process-anchor", visualPresentation: "process-anchor"
@@ -2148,6 +2215,7 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
   }),
   sceneSpec({
     id: "S16", kind: "native-evidence", title: "真正的产品判断", deck: "批准证据转译：先过前置门，再设计采用入口", material: material(4),
+    continuityNodeIds: ["stable", "detect", "authority", "version", "gate"],
     nodes: [
       node("candidate", 160, 18, 160, 76, "候选 Skill", "不要先问能不能做", "blue"),
       node("stable", 18, 140, 138, 82, "方法稳定吗？", "步骤会不会频繁变", "blue"),
@@ -2164,6 +2232,7 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       edge("candidate-authority", "candidate", "authority", "M 290 94 V 116 H 393 V 140", "orange"),
       edge("detect-version", "detect", "version", "M 240 222 V 272", "mint"),
       edge("stable-gate", "stable", "gate", "M 87 222 V 366 H 190 V 390", "blue"),
+      edge("detect-gate", "detect", "gate", "M 240 222 V 390", "purple"),
       edge("authority-gate", "authority", "gate", "M 393 222 V 366 H 290 V 390", "orange"),
       edge("version-gate", "version", "gate", "M 240 354 V 390", "mint"),
       edge("gate-chaos", "gate", "chaos", "M 190 462 V 480 H 113 V 500", "orange", { relation: "warning", semanticType: "branches-to", semanticLabel: "未通过", directed: true }),
@@ -2177,17 +2246,29 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
         visibleNodeIds: ["candidate", "stable", "detect"], visibleEdgeIds: ["candidate-stable", "candidate-detect"], cueText: "先问稳定与可检测"
       }),
       stage("authority", 517.732, "再问依赖哪些数据和工具、谁能执行", ["authority"], ["candidate-authority"], {
-        visibleNodeIds: ["candidate", "authority"], visibleEdgeIds: ["candidate-authority"]
+        visibleNodeIds: ["candidate", "stable", "detect", "authority"],
+        visibleEdgeIds: ["candidate-stable", "candidate-detect", "candidate-authority"]
       }),
       stage("version", 523.239, "新版本如何验证也必须有答案", ["version"], ["detect-version"], {
-        visibleNodeIds: ["detect", "version"], visibleEdgeIds: ["detect-version"]
+        visibleNodeIds: ["stable", "detect", "authority", "version"],
+        visibleEdgeIds: ["detect-version"]
       }),
-      stage("chaos", 528.986, "否则只会更快复制一次性混乱", ["gate", "chaos"], ["stable-gate", "authority-gate", "version-gate", "gate-chaos"], {
-        visibleNodeIds: ["stable", "authority", "version", "gate", "chaos"],
-        visibleEdgeIds: ["stable-gate", "authority-gate", "version-gate", "gate-chaos"], cueText: "不要复制一次性混乱"
+      stage("chaos", 528.986, "否则只会更快复制一次性混乱", ["gate", "chaos"], ["stable-gate", "detect-gate", "authority-gate", "version-gate", "gate-chaos"], {
+        visibleNodeIds: ["stable", "detect", "authority", "version", "gate", "chaos"],
+        visibleEdgeIds: ["stable-gate", "detect-gate", "authority-gate", "version-gate", "gate-chaos"],
+        cueText: "不要复制一次性混乱"
+      }),
+      stage("gate-settle", 532.4, "四项检查汇入同一前置门", [], [], {
+        activeNodeIds: ["gate"],
+        activeEdgeIds: ["stable-gate", "detect-gate", "authority-gate", "version-gate"],
+        visibleNodeIds: ["stable", "detect", "authority", "version", "gate"],
+        visibleEdgeIds: ["stable-gate", "detect-gate", "authority-gate", "version-gate"],
+        cueText: "四项检查汇入前置门"
       }),
       stage("trusted", 534.493, "产品重点是建立可信采用路径", ["trusted"], ["gate-trusted"], {
-        visibleNodeIds: ["version", "gate", "trusted"], visibleEdgeIds: ["version-gate", "gate-trusted"]
+        visibleNodeIds: ["stable", "detect", "authority", "version", "gate", "trusted"],
+        visibleEdgeIds: ["stable-gate", "detect-gate", "authority-gate", "version-gate", "gate-trusted"],
+        cueText: "采用路径建立完成"
       })
     ]
   }),

@@ -55,6 +55,7 @@ export {
 } from "./content-layout.mjs";
 export {
   visualSystemV1Clamp01,
+  visualSystemV1ChapterRevealAtFrame,
   visualSystemV1ChapterProgressAtFrame,
   visualSystemV1ConnectorMotionAtFrame,
   visualSystemV1DepthMotionAtFrame,
@@ -109,3 +110,4 @@ export {
   VisualSystemV1SemanticElement,
   VisualSystemV1SemanticScene
 } from "./semantic-components.jsx";
+export { VisualSystemV1TechnicalArtifact } from "./technical-artifact.jsx";

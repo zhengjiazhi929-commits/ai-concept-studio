@@ -308,6 +308,12 @@ test("formal QA provenance binds the JavaScript media inspector implementation",
   assert.ok(identity.sourceFiles.some(({ path }) =>
     path === "studio/scripts/qa-agent-skill-long-review-wide-v004.py"
   ));
+  assert.ok(identity.sourceFiles.some(({ path }) =>
+    path === "studio/src/shared/single-frame-aba-layer-dropout-detector.mjs"
+  ));
+  assert.ok(identity.sourceFiles.some(({ path }) =>
+    path === "studio/src/server/production/long-review-single-frame-layer-dropout-qa.mjs"
+  ));
 });
 
 test("QA artifacts use per-run sibling staging and expose no unvalidated publication primitive", async () => {

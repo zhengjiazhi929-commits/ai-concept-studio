@@ -47,7 +47,10 @@
   },
   "wallpaper": {
     "base": "#EEF3FA",
-    "blurPx": 72,
+    "feathering": "radial-gradient-stops",
+    "compositorPolicy": "no-viewport-filter-no-viewport-will-change",
+    "largeLayerFilterBlur": false,
+    "largeLayerWillChange": false,
     "driftPeriodSeconds": 20,
     "maxDriftPercent": 1.5,
     "maxLuminanceShiftPercent": 6,
@@ -358,6 +361,8 @@
     "dark-theme",
     "dual-window-overlap-transition",
     "window-blur-transition",
+    "viewport-scale-filter-blur",
+    "viewport-scale-will-change",
     "fake-product-ui",
     "unverified-success-state",
     "mechanically-shrunk-desktop-for-vertical"

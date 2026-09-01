@@ -17,9 +17,11 @@ import * as chunkedRenderer from "../scripts/render-agent-skill-long-review-wide
 
 import {
   CHUNKED_LONG_REVIEW_SCHEMAS,
+  CHUNKED_CHROMIUM_OPTIONS,
   CHUNKED_REMOTION_TIMEOUT_MS,
   CHUNKED_V004_CONTRACT,
   attemptScopedPartPath,
+  assertLongReviewFromSurfaceEnvironment,
   assertResumableRunManifest,
   buildChunkRanges,
   buildConcatFfmpegArgs,
@@ -67,6 +69,77 @@ test("分段渲染为 composition 与 media 共用显式 Remotion 超时预算",
   );
   assert.doesNotMatch(source, /inlineBundledFontsWebpackOverride/u);
   assert.doesNotMatch(source, /type:\s*["']asset\/inline["']/u);
+});
+
+test("chunk worker 复用同一本机 Chrome 会话并固定安全截图契约", async () => {
+  assert.deepEqual(CHUNKED_CHROMIUM_OPTIONS, {
+    headless: true,
+    darkMode: false,
+  });
+  assert.equal(CHUNKED_V004_CONTRACT.renderBrowserExecutable, "system-google-chrome");
+  assert.equal(CHUNKED_V004_CONTRACT.renderChromeMode, "chrome-for-testing");
+  assert.equal(
+    CHUNKED_V004_CONTRACT.renderBrowserSession,
+    "one-worker-one-reused-browser",
+  );
+  assert.equal(CHUNKED_V004_CONTRACT.renderBrowserCapture, "from-surface");
+  assert.equal(
+    CHUNKED_V004_CONTRACT.wallpaperCompositorPolicy,
+    "no-viewport-filter-no-viewport-will-change",
+  );
+  assert.doesNotThrow(() => assertLongReviewFromSurfaceEnvironment({}));
+  assert.throws(
+    () => assertLongReviewFromSurfaceEnvironment({DISABLE_FROM_SURFACE: "1"}),
+    /immutable from-surface render contract/u,
+  );
+
+  const source = await readFile(
+    resolve(
+      import.meta.dirname,
+      "..",
+      "scripts",
+      "render-agent-skill-long-review-wide-v004-chunked.mjs",
+    ),
+    "utf8",
+  );
+  const workerStart = source.indexOf("async function renderBoundChunkWorker(");
+  const workerEnd = source.indexOf("function concatEscape", workerStart);
+  assert.ok(workerStart >= 0 && workerEnd > workerStart);
+  const workerSource = source.slice(workerStart, workerEnd);
+  assert.equal(
+    (workerSource.match(/openBrowser\("chrome"/gu) ?? []).length,
+    1,
+    "每个 worker 只能启动一个 Chrome 会话",
+  );
+  assert.equal(
+    (workerSource.match(/puppeteerInstance: browser/gu) ?? []).length,
+    2,
+    "composition 选择与 media 渲染必须复用同一浏览器",
+  );
+  assert.equal(
+    (workerSource.match(/chromiumOptions: CHUNKED_CHROMIUM_OPTIONS/gu) ?? []).length,
+    3,
+  );
+  assert.match(workerSource, /hardwareAcceleration: "disable"/u);
+  assert.match(workerSource, /activeBrowsers\.add\(browser\)/u);
+  assert.match(workerSource, /if \(terminating\)/u);
+  assert.match(workerSource, /await closeTrackedBrowser\(browser\)/u);
+  const closeStart = source.indexOf("async function closeTrackedBrowser(");
+  const closeEnd = source.indexOf("async function terminate", closeStart);
+  assert.ok(closeStart >= 0 && closeEnd > closeStart);
+  const closeSource = source.slice(closeStart, closeEnd);
+  assert.match(closeSource, /activeBrowsers\.delete\(browser\)/u);
+  assert.match(closeSource, /await browser\.close\(\{silent: true\}\)/u);
+  assert.equal(
+    (source.match(/assertLongReviewFromSurfaceEnvironment\(\);/gu) ?? []).length,
+    2,
+    "parent 与 worker 都必须拒绝截图模式环境漂移",
+  );
+  const terminateStart = source.indexOf("async function terminate(signal)");
+  const terminateEnd = source.indexOf("function installSignalHandlers", terminateStart);
+  const terminateSource = source.slice(terminateStart, terminateEnd);
+  assert.match(terminateSource, /await closeTrackedBrowser\(browser\)/u);
+  assert.match(terminateSource, /!browserOpening/u);
 });
 
 function publicationManifest(runFingerprint = "a".repeat(64)) {

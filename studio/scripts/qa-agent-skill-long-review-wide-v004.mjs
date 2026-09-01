@@ -34,6 +34,15 @@ import {
   validateLongReviewCandidateManifest,
   validateLongReviewPublicationDurableReceipt
 } from "../src/server/production/long-review-qa.mjs";
+import {
+  analyzeLongReviewSingleFrameLayerDropout,
+  LONG_REVIEW_SINGLE_FRAME_LAYER_DROPOUT_SCAN
+} from "../src/server/production/long-review-single-frame-layer-dropout-qa.mjs";
+import {
+  buildSingleFrameAbaLayerDropoutEvidencePlan,
+  SINGLE_FRAME_ABA_LAYER_DROPOUT_EVIDENCE_SCHEMA_VERSION,
+  SINGLE_FRAME_ABA_LAYER_DROPOUT_SCHEMA_VERSION
+} from "../src/shared/single-frame-aba-layer-dropout-detector.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const STUDIO_ROOT = resolve(dirname(SCRIPT_PATH), "..");
@@ -79,6 +88,14 @@ const LONG_REVIEW_QA_BINDING_PATH = resolve(
   "src/server/production/long-review-qa.mjs"
 );
 const QA_MEDIA_INSPECTOR_PATH = resolve(STUDIO_ROOT, "src/server/qa.mjs");
+const FLICKER_QA_PATH = resolve(
+  STUDIO_ROOT,
+  "src/server/production/long-review-single-frame-layer-dropout-qa.mjs"
+);
+const FLICKER_DETECTOR_PATH = resolve(
+  STUDIO_ROOT,
+  "src/shared/single-frame-aba-layer-dropout-detector.mjs"
+);
 export const PYTHON_RUNTIME_LOCK_PATH = resolve(
   STUDIO_ROOT,
   "scripts/qa-agent-skill-long-review-wide-v004-python-runtime.json"
@@ -132,6 +149,13 @@ export const WIDE_V004_QA_CONTRACT = Object.freeze({
   frameExtractionStrategy: "sequential-decode-split-trim-by-frame-index",
   fullFrameExtractionConcurrency: 1,
   periodicExtractionConcurrency: 1,
+  singleFrameAbaLayerDropout: Object.freeze({
+    ...LONG_REVIEW_SINGLE_FRAME_LAYER_DROPOUT_SCAN,
+    scope: "single-frame-A-B-A-layer-dropout-only",
+    sceneBoundaryPolicy: "center-frame-within-plus-or-minus-8-is-informational",
+    knownBoundary:
+      "A-B-B-A and longer events are not classified because pixels alone cannot distinguish them from intentional multi-frame pulses"
+  }),
   finalQaDirectoryName: "qa",
   temporaryQaDirectoryName: "qa.rendering-<pid>-<uuid>",
   sourceVideoNames: Object.freeze(
@@ -593,6 +617,8 @@ export async function captureQaSourceIdentity() {
       : []),
     ANALYZER_PATH,
     QA_MEDIA_INSPECTOR_PATH,
+    FLICKER_QA_PATH,
+    FLICKER_DETECTOR_PATH,
     PYTHON_RUNTIME_LOCK_PATH,
     PYTHON_REQUIREMENTS_LOCK_PATH
   ];
@@ -1056,7 +1082,16 @@ export async function validateLongReviewAnalyzerArtifacts({
       ? "agent-skill-long-review-frame-analysis-v1"
       : "agent-skill-long-review-wide-v004-frame-analysis-v1"
   };
-  const [runManifest, mediaEvidence, frameIndex, metrics, summary, reportBytes] =
+  const [
+    runManifest,
+    mediaEvidence,
+    frameIndex,
+    layerDropout,
+    layerDropoutEvidence,
+    metrics,
+    summary,
+    reportBytes
+  ] =
     await Promise.all([
       readStableJsonArtifact(resolve(qaDirectory, "run-manifest.json"), "QA run manifest"),
       readStableJsonArtifact(
@@ -1064,12 +1099,22 @@ export async function validateLongReviewAnalyzerArtifacts({
         "媒体完整性证据"
       ),
       readStableJsonArtifact(resolve(qaDirectory, "frame-index.json"), "帧索引"),
+      readStableJsonArtifact(
+        resolve(qaDirectory, "single-frame-aba-layer-dropout.json"),
+        "单帧 A-B-A layer-dropout 检测"
+      ),
+      readStableJsonArtifact(
+        resolve(qaDirectory, "single-frame-aba-layer-dropout-evidence-plan.json"),
+        "单帧 A-B-A layer-dropout 人工证据计划"
+      ),
       readStableJsonArtifact(resolve(qaDirectory, "frame-metrics.json"), "帧指标"),
       readStableJsonArtifact(resolve(qaDirectory, "qa-summary.json"), "QA summary"),
       readStableArtifact(resolve(qaDirectory, "QA-REPORT.md"), "QA 报告")
     ]);
   const categories = summary?.manualReview?.categories;
   const report = reportBytes.toString("utf8");
+  const expectedLayerDropoutEvidence =
+    buildSingleFrameAbaLayerDropoutEvidencePlan(layerDropout);
   const checks = {
     runManifestSchema: runManifest?.schemaVersion === contract.schemaVersion,
     runManifestCandidateVersion:
@@ -1097,6 +1142,37 @@ export async function validateLongReviewAnalyzerArtifacts({
       mediaEvidence?.passed === true,
     frameIndexCandidateVersion:
       frameIndex?.candidateVersion === contract.candidateVersion,
+    layerDropoutSchema:
+      layerDropout?.schemaVersion ===
+        SINGLE_FRAME_ABA_LAYER_DROPOUT_SCHEMA_VERSION,
+    layerDropoutCandidateVersion:
+      layerDropout?.candidateVersion === contract.candidateVersion,
+    layerDropoutSource:
+      JSON.stringify(layerDropout?.sourceVideo) === JSON.stringify(sourceVideo),
+    layerDropoutReadOnly:
+      layerDropout?.automaticFrameRepairAttempted === false,
+    layerDropoutEvidenceSchema:
+      layerDropoutEvidence?.schemaVersion ===
+        SINGLE_FRAME_ABA_LAYER_DROPOUT_EVIDENCE_SCHEMA_VERSION,
+    layerDropoutEvidenceBinding:
+      layerDropoutEvidence?.candidateVersion === contract.candidateVersion &&
+      JSON.stringify(layerDropoutEvidence?.sourceVideo) ===
+        JSON.stringify(sourceVideo) &&
+      layerDropoutEvidence?.totalBlockingEventCount ===
+        layerDropout?.blockingEventCount &&
+      layerDropoutEvidence?.recordedBlockingEventCount ===
+        layerDropout?.blockingEvents?.length &&
+      JSON.stringify(layerDropoutEvidence?.exactFrameNumbers) ===
+        JSON.stringify(expectedLayerDropoutEvidence.exactFrameNumbers) &&
+      JSON.stringify(layerDropoutEvidence?.events) ===
+        JSON.stringify(expectedLayerDropoutEvidence.events),
+    layerDropoutSummaryBinding:
+      summary?.automatedChecks?.singleFrameAbaLayerDropout?.status ===
+        layerDropout?.status &&
+      summary?.automatedChecks?.singleFrameAbaLayerDropout?.blockingEventCount ===
+        layerDropout?.blockingEventCount &&
+      summary?.automatedChecks?.singleFrameAbaLayerDropout
+        ?.informationalEventCount === layerDropout?.informationalEventCount,
     summarySchema: summary?.schemaVersion === expected.summary,
     summaryCandidateVersion: summary?.candidateVersion === contract.candidateVersion,
     summarySource:
@@ -1106,8 +1182,11 @@ export async function validateLongReviewAnalyzerArtifacts({
       summary?.candidate?.registered === false &&
       summary?.candidate?.approvalStatus === "not_approved",
     summaryPending:
-      summary?.status === "pending_manual_visual_review" &&
-      summary?.manualReview?.status === "pending",
+      summary?.status === (
+        layerDropout?.blockingEventCount > 0
+          ? "blocking_visual_integrity_issue"
+          : "pending_manual_visual_review"
+      ) && summary?.manualReview?.status === "pending",
     categoriesPending:
       Array.isArray(categories) &&
       categories.length > 0 &&
@@ -1159,6 +1238,98 @@ async function writeArtifactIndex(qaDirectory, sentinelPath) {
   }
   await writeFile(checksumPath, `${checksumLines.join("\n")}\n`, "utf8");
   return { indexPath, checksumPath, artifactCount: artifacts.length + 2 };
+}
+
+export async function enforcePublishedSingleFrameLayerDropoutGate({
+  qaDirectory,
+  expectedAnalysis
+}) {
+  await assertPlainDirectory(qaDirectory, "已发布 QA 目录");
+  const entries = await readdir(qaDirectory);
+  if (entries.some((name) => name.endsWith(".incomplete.json"))) {
+    throw new Error("已发布 QA 目录仍包含 incomplete sentinel");
+  }
+  const analysisPath = resolve(qaDirectory, "single-frame-aba-layer-dropout.json");
+  const evidencePath = resolve(
+    qaDirectory,
+    "single-frame-aba-layer-dropout-evidence-plan.json"
+  );
+  const summaryPath = resolve(qaDirectory, "qa-summary.json");
+  const indexPath = resolve(qaDirectory, "artifact-index.json");
+  const checksumPath = resolve(qaDirectory, "qa-artifacts.sha256");
+  const [analysis, evidence, summary, index, checksumBytes] = await Promise.all([
+    readStableJsonArtifact(analysisPath, "已发布单帧 A-B-A layer-dropout 分析"),
+    readStableJsonArtifact(evidencePath, "已发布单帧 A-B-A layer-dropout 证据计划"),
+    readStableJsonArtifact(summaryPath, "已发布 QA summary"),
+    readStableJsonArtifact(indexPath, "已发布 QA artifact index"),
+    readStableArtifact(checksumPath, "已发布 QA checksums")
+  ]);
+  if (
+    analysis?.schemaVersion !== SINGLE_FRAME_ABA_LAYER_DROPOUT_SCHEMA_VERSION ||
+    analysis?.status !== "fail" ||
+    !Number.isSafeInteger(analysis?.blockingEventCount) ||
+    analysis.blockingEventCount < 1 ||
+    analysis?.automaticFrameRepairAttempted !== false ||
+    JSON.stringify(analysis) !== JSON.stringify(expectedAnalysis)
+  ) {
+    throw new Error("已发布单帧 A-B-A layer-dropout 阻断分析与本次运行不一致");
+  }
+  const expectedEvidence = buildSingleFrameAbaLayerDropoutEvidencePlan(analysis);
+  if (
+    evidence?.schemaVersion !==
+      SINGLE_FRAME_ABA_LAYER_DROPOUT_EVIDENCE_SCHEMA_VERSION ||
+    evidence?.totalBlockingEventCount !== analysis.blockingEventCount ||
+    evidence?.recordedBlockingEventCount !== analysis.blockingEvents.length ||
+    evidence?.automaticFrameRepairAttempted !== false ||
+    JSON.stringify(evidence?.exactFrameNumbers) !==
+      JSON.stringify(expectedEvidence.exactFrameNumbers) ||
+    JSON.stringify(evidence?.events) !== JSON.stringify(expectedEvidence.events)
+  ) {
+    throw new Error("已发布单帧 A-B-A layer-dropout 精确帧证据计划不完整");
+  }
+  if (
+    summary?.status !== "blocking_visual_integrity_issue" ||
+    summary?.automatedChecks?.singleFrameAbaLayerDropout?.blockingEventCount !==
+      analysis.blockingEventCount
+  ) {
+    throw new Error("已发布 QA summary 未持久绑定单帧 A-B-A layer-dropout 阻断状态");
+  }
+
+  const required = new Map();
+  for (const filePath of [analysisPath, evidencePath, summaryPath, indexPath]) {
+    const inspected = await inspectFile(filePath);
+    required.set(relative(qaDirectory, filePath).replaceAll("\\", "/"), inspected);
+  }
+  for (const [path, inspected] of required) {
+    if (path !== "artifact-index.json") {
+      const artifact = index?.artifacts?.find((item) => item?.path === path);
+      if (
+        artifact?.bytes !== inspected.bytes ||
+        artifact?.sha256 !== inspected.sha256
+      ) {
+        throw new Error(`artifact index 未绑定已发布阻断证据：${path}`);
+      }
+    }
+  }
+  const checksumLines = new Set(
+    checksumBytes.toString("utf8").trim().split(/\r?\n/u)
+  );
+  for (const [path, inspected] of required) {
+    if (!checksumLines.has(`${inspected.sha256}  ${path}`)) {
+      throw new Error(`checksum 清单未绑定已发布阻断证据：${path}`);
+    }
+  }
+
+  const error = new Error(
+    `single-frame A-B-A layer-dropout gate failed with ` +
+    `${analysis.blockingEventCount} blocking event(s); durable evidence: ` +
+    `${workspaceRelative(evidencePath)}`
+  );
+  error.name = "LongReviewSingleFrameLayerDropoutBlockingError";
+  error.code = "LONG_REVIEW_SINGLE_FRAME_LAYER_DROPOUT_BLOCKING";
+  error.qaDirectory = qaDirectory;
+  error.evidencePath = evidencePath;
+  throw error;
 }
 
 export async function runAgentSkillLongReviewQa(
@@ -1293,6 +1464,7 @@ export async function runAgentSkillLongReviewQa(
     );
   }
   let temporaryDirectoryGuard = null;
+  let publishedLayerDropoutBlockingGate = null;
   const assertPathsCurrent = async (_stage, options = {}) => {
     pathGuards = await verifyQaCandidatePathGuards(pathGuards, options);
     if (temporaryDirectoryGuard && !options.skipTemporaryDirectory) {
@@ -1431,6 +1603,50 @@ export async function runAgentSkillLongReviewQa(
       );
     }
 
+    await assertPathsCurrent("before-single-frame-layer-dropout-scan");
+    const layerDropoutAnalysis = {
+      ...await analyzeLongReviewSingleFrameLayerDropout({
+        ffmpegPath: ffmpeg.path,
+        videoPath,
+        fps: WIDE_V004_QA_CONTRACT.expectedMedia.fps,
+        expectedFrameCount: WIDE_V004_QA_CONTRACT.expectedMedia.durationInFrames,
+        sceneBoundaryFrames: SCENES.slice(1).map((scene) =>
+          frameForSecond(scene.startSecond)
+        ),
+        env: mediaToolEnv
+      }),
+      generatedAt: new Date().toISOString(),
+      candidateVersion: WIDE_V004_QA_CONTRACT.candidateVersion,
+      sourceVideo: mediaMetadata.source.video
+    };
+    const layerDropoutEvidencePlan = {
+      ...buildSingleFrameAbaLayerDropoutEvidencePlan(layerDropoutAnalysis),
+      generatedAt: new Date().toISOString(),
+      candidateVersion: WIDE_V004_QA_CONTRACT.candidateVersion,
+      sourceVideo: mediaMetadata.source.video
+    };
+    await assertPathsCurrent("before-single-frame-layer-dropout-write");
+    await writeFile(
+      resolve(temporaryQaDirectory, "single-frame-aba-layer-dropout.json"),
+      `${JSON.stringify(layerDropoutAnalysis, null, 2)}\n`,
+      "utf8"
+    );
+    await writeFile(
+      resolve(
+        temporaryQaDirectory,
+        "single-frame-aba-layer-dropout-evidence-plan.json"
+      ),
+      `${JSON.stringify(layerDropoutEvidencePlan, null, 2)}\n`,
+      "utf8"
+    );
+    process.stdout.write(
+      `单帧 A-B-A layer-dropout：${layerDropoutAnalysis.analyzedTripleCount}/` +
+      `${layerDropoutAnalysis.analyzedTripleCount}，` +
+      `阻断 ${layerDropoutAnalysis.blockingEventCount}，` +
+      `边界信息 ${layerDropoutAnalysis.informationalEventCount}\n`
+    );
+    await assertPathsCurrent("after-single-frame-layer-dropout-scan");
+
     const framePlan = buildFramePlan();
     await assertPathsCurrent("before-frame-directories-write");
     await mkdir(resolve(temporaryQaDirectory, "frames/full"), { recursive: true });
@@ -1494,6 +1710,14 @@ export async function runAgentSkillLongReviewQa(
       qaSourceIdentity: qaSourceIdentityBefore,
       contract: WIDE_V004_QA_CONTRACT,
       mediaTechnicalChecks,
+      singleFrameAbaLayerDropout: {
+        artifact: "single-frame-aba-layer-dropout.json",
+        evidencePlanArtifact:
+          "single-frame-aba-layer-dropout-evidence-plan.json",
+        status: layerDropoutAnalysis.status,
+        blockingEventCount: layerDropoutAnalysis.blockingEventCount,
+        informationalEventCount: layerDropoutAnalysis.informationalEventCount
+      },
       tools: {
         ffmpeg: { path: ffmpeg.path, source: ffmpeg.source, version: ffmpegVersion },
         ffprobe: { path: ffprobe.path, source: ffprobe.source, version: ffprobeVersion },
@@ -1506,6 +1730,8 @@ export async function runAgentSkillLongReviewQa(
         cooperativePublicationLockPreventsConcurrentOverwrite: true,
         sourceMediaMutated: false,
         sourceCodeMutated: false,
+        singleFrameAbaLayerDropoutScanIsReadOnly: true,
+        automaticFrameRepairAttempted: false,
         manualVisualJudgmentsRemainPending: true
       }
     };
@@ -1522,6 +1748,8 @@ export async function runAgentSkillLongReviewQa(
     });
     await assertPathsCurrent("after-analyzer");
     for (const required of [
+      "single-frame-aba-layer-dropout.json",
+      "single-frame-aba-layer-dropout-evidence-plan.json",
       "frame-metrics.json",
       "qa-summary.json",
       "QA-REPORT.md",
@@ -1595,15 +1823,30 @@ export async function runAgentSkillLongReviewQa(
       }
     });
     process.stdout.write(`${JSON.stringify({
-      status: "qa_artifacts_ready_for_manual_review",
+      status: layerDropoutAnalysis.status === "pass"
+        ? "qa_artifacts_ready_for_manual_review"
+        : "qa_artifacts_ready_with_blocking_single_frame_layer_dropout",
       candidateDirectory: workspaceRelative(candidateDirectory),
       sourceVideo: workspaceRelative(videoPath),
       qaDirectory: workspaceRelative(finalQaDirectory),
       artifactCount: artifactIndex.artifactCount,
       representativeScenes: SCENES.length,
       sceneTransitions: SCENES.length - 1,
-      periodicSamples: framePlan.periodicSamples.length
+      periodicSamples: framePlan.periodicSamples.length,
+      singleFrameAbaLayerDropout: {
+        status: layerDropoutAnalysis.status,
+        blockingEventCount: layerDropoutAnalysis.blockingEventCount,
+        informationalEventCount: layerDropoutAnalysis.informationalEventCount,
+        evidencePlan:
+          "single-frame-aba-layer-dropout-evidence-plan.json"
+      }
     }, null, 2)}\n`);
+    if (layerDropoutAnalysis.status === "fail") {
+      publishedLayerDropoutBlockingGate = {
+        qaDirectory: finalQaDirectory,
+        expectedAnalysis: layerDropoutAnalysis
+      };
+    }
   } catch (error) {
     const failureSentinel = {
       ...sentinel,
@@ -1618,6 +1861,11 @@ export async function runAgentSkillLongReviewQa(
       // Preserve the original failure. Never follow a path that failed identity revalidation.
     }
     throw error;
+  }
+  if (publishedLayerDropoutBlockingGate) {
+    await enforcePublishedSingleFrameLayerDropoutGate(
+      publishedLayerDropoutBlockingGate
+    );
   }
 }
 

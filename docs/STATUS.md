@@ -1,8 +1,8 @@
 # AI Concept Studio 当前状态
 
-更新时间：2026-08-31 22:13（Asia/Shanghai）
+更新时间：2026-09-01 13:15（Asia/Shanghai）
 
-状态真源版本：20
+状态真源版本：21
 
 远端 `main` 当前提交：`23990937411710e394cde0be5253b02841d42d11`，来自已合并的
 PR #6。对应 hosted `Verify` run `33298465095` 已成功，历史证据为 `749/749`、
@@ -10,13 +10,25 @@ PR #6。对应 hosted `Verify` run `33298465095` 已成功，历史证据为 `74
 
 ## 当前准确结论
 
-本轮 P1/P2 可靠性优化位于隔离分支 `codex/reliability-p1-p2-20260831`，以当前
-`origin/main` 为基线。首批 90 个任务相关路径已从
-`eea796e25b45f89ce4811d166be41c695fb625c0` 起选择性提交；后续 render-job、状态证据和
-显式 Remotion 超时/字体修正提交使远端 HEAD
-`0252032968fda9a1489430cb0707616549a640a7` 相对 `main` 合计为 95 个路径。当前本地 v012
-草案新增第 96 个路径。PR #7 已创建且保持 OPEN，没有自动合并请求，也没有合并，因此
-`main` 仍未改变。
+本轮 P1/P2 可靠性优化位于隔离分支 `codex/reliability-p1-p2-20260831`。远端分支与本地已提交
+HEAD 都是 `fd5991060757ead96f2a080430daf2a5f068ee56`；它在 `origin/main`
+`23990937411710e394cde0be5253b02841d42d11` 之上 8 个提交。PR #7 已创建且保持 OPEN，
+没有自动合并请求，也没有合并，因此 `main` 仍未改变。
+
+当前未提交 v013 草案在该隔离工作树继续修正长片视觉与正式 QA：用四类绑定真实节点的技术工件
+替代重复卡片模板；S08/S10/S12/S14 改为按语义节点揭示；S16 保留持续前置条件；首帧先显示标题；
+信息卡强制完整边框、连接线保持横竖正交、卡片文字不内嵌图标、S18 不再挂载遮字对号；右上水印
+继续固定 120×120 和 40px 安全边距。分段 renderer 每个 worker 复用一个本机 Chrome，并拒绝
+`DISABLE_FROM_SURFACE` 环境漂移；正式 QA 新增明确限定为单帧 A-B-A layer-dropout 的顺序解码门禁，
+阻断时先耐久发布 JSON、索引、校验和与精确 A/B/C 帧计划，再以非零状态退出，不自动修帧。
+
+本地证据目前包括视觉/renderer/render-job 专项 76/76、layer-dropout/QA 专项 28/28、
+评测闭包专项 12/12、Impeccable 源码探测 0 项，以及新目录中的 S08、S10 两段
+1920×1080、30fps、181 帧 MP4；两段各 179 个三帧窗口均为 0 阻断、0 信息事件。
+不跳项的 `CI=true pnpm verify` 已通过 915/915 测试、291 个语法文件、35/35 动效库、
+7/7 回滚演练、4 个真实解码且像素哈希不同的 Remotion 代表帧、秘密扫描与完整 diff 检查。
+这些证据仍不等于 hosted CI、v013 完整十分钟成片或最终视觉认可。下一步是选择性
+commit/push；hosted CI 通过才启动 v013 的 20×30 秒低优先级自动续跑，仍不 merge。
 
 字体等待修正提交 `0252032968fda9a1489430cb0707616549a640a7` 的 GitHub hosted push
 `Verify` run `33399083724` 和 PR merge-ref `Verify` run `33399090248` 均已成功。
@@ -156,13 +168,15 @@ v008-v010 都在更早阶段失败，所以此前测试没有暴露该 seam。�
   失败工作目录完整保留。
 - v011 已完成一次 chunk 0 编码和两次 `ffprobe`，随后因 publisher 与 `chunks/` 子目录的
   确定性路径合同错位而失败；异常清理后没有 stable chunk 可恢复，失败现场保持只读。
-- 新显式 job `full-video-current-visual-upgrade-v012` 是当前本地未提交草案，固定
-  1920×1080、30fps、18000 帧、20×900 帧、`concurrency=1`、5000ms 片间暂停以及全新
-  final/work 目录；当前尚未启动，也不会覆盖 v011。
-  只有本状态所在草案完成选择性 commit、push、最新 hosted `Verify`，且 clean HEAD、输入哈希、
-  全新输出路径、AC 电源、磁盘和无残留进程复核通过后，才可按
+- v012 完整 600 秒候选、机器 QA 和联系表已保留在独立候选目录，并完成了指定问题点与全片联系表的
+  视觉复核；它证明 v012 本身，不证明当前未提交 v013 源码。v012 及所有更早候选禁止覆盖或清理。
+- 新显式 job `full-video-current-visual-upgrade-v013` 固定 1920×1080、30fps、18000 帧、
+  20×900 帧、`concurrency=1`、5000ms 片间暂停以及全新 final/work 目录；当前尚未启动，
+  不会覆盖 v012。只有 v013 草案完成选择性 commit、push、最新 hosted `Verify`，且 clean HEAD、
+  输入哈希、全新输出路径、AC 电源、磁盘和无残留进程复核通过后，才可按
   `taskpolicy -b nice -n 20` 自动续跑。
-- 当前仍没有新的完整 MP4、逐段 ffprobe、无损拼接、音频 mux、联系表或连续 1× 人工观看结果。
+- 当前仍没有 v013 完整 MP4、逐段 ffprobe、无损拼接、音频 mux、正式 QA 联系表或连续 1×
+  人工观看结果。S08/S10 聚焦片段只用于提交前方向确认。
 - 机器测试、静态检查和多帧 smoke 不能替代实际成片视觉检查。
 - `voice-v001` 或系统合成旁白仍是临时声音，不是最终真人录音。
 - Research v1、Script v1、Storyboard v1 的历史批准不等于 Assets/Voice 或 Final Gate 已批准。
@@ -183,8 +197,8 @@ Dependabot security updates、secret scanning 和 push protection 均关闭。�
 - PR #7 已进入审阅但必须保持未合并。最终 merge 仍以
   完整十分钟候选、机器 QA、视觉 Skill 检查、连续 1× 人工观看和 Zhengjiazhi 视觉认可全部通过为前提。
 
-- `machine_status`: publication_lock_fix_local_895_of_895_latest_hosted_verify_required_before_v012
-- `technical_status`: pr_7_open_v008_v009_v010_v011_failures_preserved_v012_not_started
-- `business_acceptance_status`: full_video_and_visual_acceptance_not_run
-- `git_status`: pr_7_open_remote_0252032_local_v012_draft_uncommitted_no_auto_merge_no_merge
+- `machine_status`: v013_local_verify_915_of_915_hosted_verify_pending
+- `technical_status`: pr_7_open_v008_to_v011_failures_and_v012_preserved_v013_not_started
+- `business_acceptance_status`: v013_full_video_and_visual_acceptance_not_run
+- `git_status`: pr_7_open_remote_fd59910_local_v013_draft_uncommitted_no_auto_merge_no_merge
 - `release_status`: not_released

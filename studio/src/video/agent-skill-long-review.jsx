@@ -14,6 +14,7 @@ import {
   VisualSystemV1PopText,
   VisualSystemV1SemanticNode,
   VisualSystemV1StandaloneIcon,
+  VisualSystemV1TechnicalArtifact,
   visualSystemV1ProgressAtFrame,
   visualSystemV1StandaloneOverlaySlot
 } from "./components/visual-system-v1/index.jsx";
@@ -27,6 +28,7 @@ import {
 import {
   AGENT_SKILL_LONG_REVIEW_CHAPTERS,
   AGENT_SKILL_LONG_REVIEW_CONNECTOR_TONES,
+  AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES,
   AGENT_SKILL_LONG_REVIEW_SCENE_START_FRAMES,
   AGENT_SKILL_LONG_REVIEW_SCENE_SPECS,
   AGENT_SKILL_LONG_REVIEW_TITLE_PREROLL_FRAMES,
@@ -109,6 +111,7 @@ function WideMovingBackdrop({ frameOverride = null }) {
   return (
     <div
       data-visual-system-wallpaper="three-edge-blobs-25s-seamless"
+      data-wallpaper-compositor-policy={VISUAL_SYSTEM_V1.wallpaper.compositorPolicy}
       data-wallpaper-loop-frames={periodFrames}
       data-wallpaper-sample-frame={frame}
       style={{ position: "absolute", inset: 0, overflow: "hidden", backgroundColor: palette.paper }}
@@ -128,11 +131,9 @@ function WideMovingBackdrop({ frameOverride = null }) {
               borderRadius: "50%",
               opacity: blob.opacity,
               background: `radial-gradient(ellipse at center, ${blob.color} 0%, ${blob.color} 34%, rgba(242,246,243,0) 74%)`,
-              filter: "blur(88px)",
               translate: `${position.x}px ${position.y}px`,
               scale: position.scale,
-              transformOrigin: "center center",
-              willChange: "translate, scale"
+              transformOrigin: "center center"
             }}
           />
         );
@@ -493,6 +494,18 @@ function TechnicalDiagram({
       data-visible-semantic-count={semanticLayout.visibleCount}
       data-surface-mode="flat-only"
     >
+      <VisualSystemV1TechnicalArtifact
+        profile={spec.artifactProfile}
+        safeArea={semanticLayout.safeArea}
+        geometryById={semanticLayout.fullGeometryById}
+        nodeVisibilityProgress={state.nodeVisibilityProgress}
+        progress={visualSystemV1ProgressAtFrame(
+          globalFrame,
+          spec.startFrame + spec.visualPlan.timing.graphicStartFrame,
+          AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES
+        )}
+        contentOpacity={copyOpacity}
+      />
       <AdaptiveSemanticGroups spec={spec} layout={semanticLayout} />
       <AdaptiveConnectors
         spec={spec}
@@ -694,9 +707,7 @@ function SceneLayer({ episode, layer, globalFrame, subtitlePresentationMode }) {
   const scene = episode?.scenes?.find((item) => item.id === layer.sceneId) ?? spec;
   const visualSceneCopy = longReviewVisualSceneCopy(spec.id, scene);
   const title = visualSceneCopy.title;
-  const titleStartFrame = spec.startFrame === 0
-    ? 0
-    : spec.startFrame - AGENT_SKILL_LONG_REVIEW_TITLE_PREROLL_FRAMES;
+  const titleStartFrame = spec.startFrame - AGENT_SKILL_LONG_REVIEW_TITLE_PREROLL_FRAMES;
   return (
     <div
       style={{ position: "absolute", inset: 0, opacity: layer.opacity }}
@@ -833,7 +844,11 @@ export function AgentSkillLongReview({ episode }) {
           />
         ) : null}
       </div>
-      <VisualSystemV1ChapterProgress chapters={AGENT_SKILL_LONG_REVIEW_CHAPTERS} />
+      <VisualSystemV1ChapterProgress
+        chapters={AGENT_SKILL_LONG_REVIEW_CHAPTERS}
+        revealStartFrame={AGENT_SKILL_LONG_REVIEW_TITLE_PREROLL_FRAMES}
+        revealDurationInFrames={8}
+      />
     </AbsoluteFill>
   );
 }

@@ -207,7 +207,8 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
     driftPeriodSeconds: 20,
     maximumDriftFraction: 0.015,
     maximumLuminanceDelta: 0.06,
-    blurPx: 72,
+    feathering: "radial-gradient-stops",
+    compositorPolicy: "no-viewport-filter-no-viewport-will-change",
     mintOpacity: 0.2,
     purpleOpacity: 0.08
   }),
@@ -281,6 +282,8 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
     "default-vertical-output",
     "large-content-wrapper",
     "default-top-header",
-    "chapter-duration-text"
+    "chapter-duration-text",
+    "viewport-scale-filter-blur",
+    "viewport-scale-will-change"
   ])
 });

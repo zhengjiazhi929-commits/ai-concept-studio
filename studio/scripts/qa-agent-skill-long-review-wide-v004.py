@@ -546,6 +546,7 @@ def build_contact_sheets(
 def build_summary(
     media_metadata: dict[str, Any],
     frame_index: dict[str, Any],
+    layer_dropout_analysis: dict[str, Any],
     metrics: dict[str, Any],
     contact_sheets: list[str],
     write_scope: str,
@@ -567,6 +568,40 @@ def build_summary(
                 "category": "media-contract",
                 "id": check_id,
                 "message": f"Encoded media does not satisfy expected check: {check_id}",
+            }
+        )
+    blocking_layer_dropout_count = int(layer_dropout_analysis["blockingEventCount"])
+    informational_layer_dropout_count = int(
+        layer_dropout_analysis["informationalEventCount"]
+    )
+    if blocking_layer_dropout_count:
+        first_frames = [
+            str(event["frameB"])
+            for event in layer_dropout_analysis.get("blockingEvents", [])[:12]
+        ]
+        suffix = f" First center frames: {', '.join(first_frames)}." if first_frames else ""
+        automated_findings.append(
+            {
+                "severity": "blocking",
+                "category": "single-frame-layer-dropout",
+                "id": "single-frame-aba-layer-dropout",
+                "message": (
+                    f"{blocking_layer_dropout_count} non-boundary single-frame A-B-A "
+                    f"layer-dropout triples crossed the gate.{suffix}"
+                ),
+            }
+        )
+    if informational_layer_dropout_count:
+        automated_findings.append(
+            {
+                "severity": "info",
+                "category": "scene-boundary",
+                "id": "single-frame-aba-boundary-information",
+                "message": (
+                    f"{informational_layer_dropout_count} single-frame A-B-A layer-dropout "
+                    "triples occurred within +/-8 frames "
+                    "of a scene boundary; these are recorded for review and do not fail the gate."
+                ),
             }
         )
     for run in static_runs_:
@@ -650,7 +685,15 @@ def build_summary(
             "registered": False,
             "approvalStatus": "not_approved",
         },
-        "status": "blocking_media_issue" if media_failures else "pending_manual_visual_review",
+        "status": (
+            "blocking_media_issue"
+            if media_failures
+            else (
+                "blocking_visual_integrity_issue"
+                if blocking_layer_dropout_count
+                else "pending_manual_visual_review"
+            )
+        ),
         "coverage": {
             "sceneCount": len(frame_index["scenes"]),
             "representativeFrameCount": frame_index["representativeFrameCount"],
@@ -666,6 +709,18 @@ def build_summary(
             },
             "longStaticCandidateCount": len(static_runs_),
             "lowInformationSampleCount": len(low_information),
+            "singleFrameAbaLayerDropout": {
+                "status": layer_dropout_analysis["status"],
+                "detectorScope": layer_dropout_analysis["detectorScope"],
+                "analyzedTripleCount": layer_dropout_analysis["analyzedTripleCount"],
+                "blockingEventCount": blocking_layer_dropout_count,
+                "informationalEventCount": informational_layer_dropout_count,
+                "automaticFrameRepairAttempted": False,
+                "boundaryPolicy": layer_dropout_analysis["boundaryPolicy"],
+                "knownLimitations": layer_dropout_analysis["knownLimitations"],
+                "evidencePlanArtifact":
+                    "single-frame-aba-layer-dropout-evidence-plan.json",
+            },
             "findings": automated_findings,
             "interpretationBoundary": (
                 "Frame metrics are candidate detectors only. They cannot approve composition, typography, "
@@ -695,16 +750,28 @@ def build_summary(
 def markdown_report(summary: dict[str, Any], metrics: dict[str, Any]) -> str:
     coverage = summary["coverage"]
     findings = summary["automatedChecks"]["findings"]
+    status_line = (
+        "> 状态：发现自动阻断项，仍待人工视觉审查。本文件不代表视觉批准。"
+        if summary["status"] == "blocking_visual_integrity_issue"
+        else "> 状态：待人工视觉审查。本文件是问题记录模板，不代表视觉批准。"
+    )
     lines = [
         f"# 横版完整视频 v{summary['candidateVersion']:03d} · 视觉 QA 报告",
         "",
-        "> 状态：待人工视觉审查。本文件是问题记录模板，不代表视觉批准。",
+        status_line,
         "",
         "## 覆盖范围",
         "",
         f"- 场景代表帧：{coverage['representativeFrameCount']}/{coverage['sceneCount']}",
         f"- 场景转场：{coverage['sceneTransitionCount']} 个，每个采样 {len(coverage['boundaryOffsetsInFrames'])} 帧位置",
         f"- 节奏采样：每 {coverage['periodicIntervalSeconds']} 秒一次，共 {coverage['periodicSampleCount']} 张",
+        (
+            "- 单帧 A-B-A layer-dropout：连续扫描 "
+            f"{summary['automatedChecks']['singleFrameAbaLayerDropout']['analyzedTripleCount']} 个三帧窗口；"
+            f"阻断 {summary['automatedChecks']['singleFrameAbaLayerDropout']['blockingEventCount']}，"
+            f"场景边界信息 {summary['automatedChecks']['singleFrameAbaLayerDropout']['informationalEventCount']}"
+        ),
+        "- 单帧丢层人工核对清单：`single-frame-aba-layer-dropout-evidence-plan.json`（精确 A/B/C 帧号）",
         "- 自动指标：媒体元数据、主内容区帧差、低信息候选；自动指标只负责提示，不负责审美判定",
         "",
         "## 自动发现",
@@ -764,7 +831,10 @@ def markdown_report(summary: dict[str, Any], metrics: dict[str, Any]) -> str:
             "## 审查边界",
             "",
             "- 本次 QA 不修改视频代码、不覆盖候选 MP4、不更新正式批准状态。",
-            "- 像素帧差可能受极慢背景柔光影响；AI 水印和底部字幕已通过主内容裁切尽量排除，但候选仍需人工判断。",
+            "- 单帧 A-B-A layer-dropout 检测扫描整张解码灰度帧，包含水印和字幕区域；不尝试自动补帧或替换候选视频。",
+            "- 只有独立的 2 秒周期静止/低信息指标采用主内容裁切，以减少水印和字幕对该指标的影响。",
+            "- A-B-B-A 及更长缺失属于已知边界：相同像素序列也可能是刻意的多帧脉冲，当前门禁不做语义不可靠的扩大判断。",
+            "- 播放器、显示链路或图片预览中的合成异常若不存在于解码像素中，本门禁无法检测。",
             "- 文字裁切和字幕安全区没有可靠 OCR 自动结论，必须查看代表帧和边界联系表。",
             "",
         ]
@@ -779,6 +849,12 @@ def main() -> None:
         raise FileNotFoundError(f"QA directory is missing: {qa_dir}")
     frame_index = read_json(qa_dir / "frame-index.json")
     media_metadata = read_json(qa_dir / "media-metadata.json")
+    layer_dropout_analysis = read_json(
+        qa_dir / "single-frame-aba-layer-dropout.json"
+    )
+    layer_dropout_evidence = read_json(
+        qa_dir / "single-frame-aba-layer-dropout-evidence-plan.json"
+    )
     run_manifest = read_json(qa_dir / "run-manifest.json")
     candidate_version = run_manifest.get("contract", {}).get("candidateVersion")
     if not isinstance(candidate_version, int) or candidate_version < 1:
@@ -790,6 +866,30 @@ def main() -> None:
         raise ValueError("Representative-frame coverage is incomplete")
     if frame_index.get("boundaryTransitionCount") != 17:
         raise ValueError("Scene-transition coverage is incomplete")
+    if layer_dropout_analysis.get("candidateVersion") != candidate_version:
+        raise ValueError("Single-frame A-B-A layer-dropout candidateVersion is not bound")
+    if layer_dropout_analysis.get("automaticFrameRepairAttempted") is not False:
+        raise ValueError("Single-frame A-B-A layer-dropout analysis must remain read-only")
+    expected_frame_count = frame_index.get("durationInFrames")
+    if layer_dropout_analysis.get("frameCount") != expected_frame_count:
+        raise ValueError("Single-frame A-B-A layer-dropout frame coverage is incomplete")
+    if layer_dropout_analysis.get("analyzedTripleCount") != max(0, expected_frame_count - 2):
+        raise ValueError("Single-frame A-B-A layer-dropout triple coverage is incomplete")
+    expected_layer_dropout_status = (
+        "fail"
+        if layer_dropout_analysis.get("blockingEventCount", 0) > 0
+        else "pass"
+    )
+    if layer_dropout_analysis.get("status") != expected_layer_dropout_status:
+        raise ValueError("Single-frame A-B-A layer-dropout status is inconsistent")
+    if layer_dropout_analysis.get("sourceVideo") != media_metadata.get("source", {}).get("video"):
+        raise ValueError("Single-frame A-B-A layer-dropout source video is not bound")
+    if layer_dropout_evidence.get("candidateVersion") != candidate_version:
+        raise ValueError("Single-frame A-B-A layer-dropout evidence candidateVersion is not bound")
+    if layer_dropout_evidence.get("sourceVideo") != media_metadata.get("source", {}).get("video"):
+        raise ValueError("Single-frame A-B-A layer-dropout evidence source video is not bound")
+    if layer_dropout_evidence.get("totalBlockingEventCount") != layer_dropout_analysis.get("blockingEventCount"):
+        raise ValueError("Single-frame A-B-A layer-dropout evidence count is inconsistent")
 
     periodic_samples = frame_index["periodicSamples"]
     sample_stats = [
@@ -821,8 +921,10 @@ def main() -> None:
         },
         "thresholds": THRESHOLDS,
         "samplingBoundary": (
-            "Periodic images are downscaled to 480 px width. The main-content crop excludes the "
-            "top-right watermark edge and bottom caption/progress region. Metrics are review signals, not approvals."
+            "Periodic-only metric images are downscaled to 480 px width. For those metrics only, "
+            "the main-content crop excludes the top-right watermark edge and bottom caption/progress "
+            "region. The full-frame A-B-A layer-dropout scan does not crop either region. Metrics are "
+            "review signals, not approvals."
         ),
         "periodicSamples": sample_stats,
         "periodicFrameDifferences": pairs,
@@ -837,6 +939,7 @@ def main() -> None:
     summary = build_summary(
         media_metadata,
         frame_index,
+        layer_dropout_analysis,
         metrics,
         contact_sheets,
         f"candidate v{candidate_version:03d}/{qa_dir.name} only",
@@ -857,6 +960,8 @@ def main() -> None:
                 "periodicSampleCount": summary["coverage"]["periodicSampleCount"],
                 "longStaticCandidateCount": summary["automatedChecks"]["longStaticCandidateCount"],
                 "lowInformationSampleCount": summary["automatedChecks"]["lowInformationSampleCount"],
+                "singleFrameAbaLayerDropoutStatus": summary["automatedChecks"]["singleFrameAbaLayerDropout"]["status"],
+                "singleFrameAbaLayerDropoutBlockingEventCount": summary["automatedChecks"]["singleFrameAbaLayerDropout"]["blockingEventCount"],
                 "contactSheetCount": len(contact_sheets),
             },
             ensure_ascii=False,

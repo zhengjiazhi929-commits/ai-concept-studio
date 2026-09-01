@@ -14,6 +14,7 @@ import {
 } from "./content-layout.mjs";
 import { visualSystemV1ChapterDisplayLabel } from "./chapter-progress.mjs";
 import {
+  visualSystemV1ChapterRevealAtFrame,
   visualSystemV1ChapterProgressAtFrame,
   visualSystemV1ConnectorMotionAtFrame,
   visualSystemV1DepthMotionAtFrame,
@@ -92,9 +93,7 @@ export function VisualSystemV1Canvas({ children }) {
           borderRadius: "50%",
           opacity: VISUAL_SYSTEM_V1.wallpaper.mintOpacity,
           background: `radial-gradient(ellipse at center, ${palette.mintSoft} 0%, rgba(216,243,232,.64) 38%, rgba(216,243,232,0) 74%)`,
-          filter: `blur(${VISUAL_SYSTEM_V1.wallpaper.blurPx}px)`,
-          translate: `${wallpaper.mint.x}px ${wallpaper.mint.y}px`,
-          willChange: "translate"
+          translate: `${wallpaper.mint.x}px ${wallpaper.mint.y}px`
         }}
       />
       <div
@@ -108,9 +107,7 @@ export function VisualSystemV1Canvas({ children }) {
           borderRadius: "50%",
           opacity: VISUAL_SYSTEM_V1.wallpaper.purpleOpacity,
           background: `radial-gradient(ellipse at center, ${palette.purpleSoft} 0%, rgba(232,224,255,.52) 42%, rgba(232,224,255,0) 76%)`,
-          filter: `blur(${VISUAL_SYSTEM_V1.wallpaper.blurPx}px)`,
-          translate: `${wallpaper.purple.x}px ${wallpaper.purple.y}px`,
-          willChange: "translate"
+          translate: `${wallpaper.purple.x}px ${wallpaper.purple.y}px`
         }}
       />
       {children}
@@ -915,17 +912,27 @@ export function VisualSystemV1DirectedConnector({
   );
 }
 
-export function VisualSystemV1ChapterProgress({ chapters }) {
+export function VisualSystemV1ChapterProgress({
+  chapters,
+  revealStartFrame = null,
+  revealDurationInFrames = 8
+}) {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
   const layout = visualSystemV1Layout(width, height);
   const state = visualSystemV1ChapterProgressAtFrame(frame, chapters);
+  const reveal = visualSystemV1ChapterRevealAtFrame(
+    frame,
+    revealStartFrame,
+    revealDurationInFrames
+  );
   const columns = chapters
     .map((chapter) => `${chapter.endFrame - chapter.startFrame}fr`)
     .join(" ");
   return (
     <div
       data-visual-system-chapter-progress="segmented"
+      data-chapter-reveal-progress={reveal.progress}
       style={{
         position: "absolute",
         left: layout.vertical ? 54 : 90,
@@ -934,7 +941,9 @@ export function VisualSystemV1ChapterProgress({ chapters }) {
         zIndex: 8,
         display: "grid",
         gridTemplateColumns: columns,
-        gap: layout.vertical ? 8 : 15
+        gap: layout.vertical ? 8 : 15,
+        opacity: reveal.opacity,
+        translate: `0 ${reveal.translateY}px`
       }}
     >
       {chapters.map((chapter, index) => {

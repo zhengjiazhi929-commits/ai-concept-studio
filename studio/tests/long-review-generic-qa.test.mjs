@@ -648,6 +648,26 @@ test("analyzer protocol rejects accepted output and accepts only strictly pendin
         passed: true
       },
       "frame-index.json": { candidateVersion: 907 },
+      "single-frame-aba-layer-dropout.json": {
+        schemaVersion: "single-frame-aba-layer-dropout-analysis-v1",
+        candidateVersion: 907,
+        sourceVideo,
+        status: "pass",
+        blockingEvents: [],
+        blockingEventCount: 0,
+        informationalEventCount: 0,
+        automaticFrameRepairAttempted: false
+      },
+      "single-frame-aba-layer-dropout-evidence-plan.json": {
+        schemaVersion: "single-frame-aba-layer-dropout-evidence-plan-v1",
+        candidateVersion: 907,
+        sourceVideo,
+        totalBlockingEventCount: 0,
+        recordedBlockingEventCount: 0,
+        exactFrameNumbers: [],
+        events: [],
+        automaticFrameRepairAttempted: false
+      },
       "frame-metrics.json": {
         schemaVersion: "agent-skill-long-review-frame-analysis-v1",
         candidateVersion: 907
@@ -704,6 +724,13 @@ test("analyzer protocol rejects accepted output and accepts only strictly pendin
         approvalStatus: "not_approved"
       },
       status: "pending_manual_visual_review",
+      automatedChecks: {
+        singleFrameAbaLayerDropout: {
+          status: "pass",
+          blockingEventCount: 0,
+          informationalEventCount: 0
+        }
+      },
       manualReview: {
         status: "pending",
         categories: [{ id: "composition", status: "pending" }]
@@ -718,6 +745,76 @@ test("analyzer protocol rejects accepted output and accepts only strictly pendin
       writeFile(
         resolve(temporaryQaDirectory, "QA-REPORT.md"),
         "# 横版完整视频 v907 · 视觉 QA 报告\n\n待人工视觉审查。本报告不代表视觉批准。\n",
+        "utf8"
+      )
+    ]);
+    assert.equal((await validateLongReviewAnalyzerArtifacts({
+      qaDirectory: temporaryQaDirectory,
+      contract,
+      candidateManifestBinding: binding,
+      sourceVideo,
+      sourceManifest,
+      sourcePublicationReceipt,
+      publicationReceiptBinding
+    })).passed, true);
+
+    const blockingLayerDropout = {
+      ...artifacts["single-frame-aba-layer-dropout.json"],
+      status: "fail",
+      blockingEventCount: 1,
+      blockingEvents: [{
+        detectorPattern: "A-B-A",
+        classification: "blocking_single_frame_aba_layer_dropout",
+        frameA: 10,
+        frameB: 11,
+        frameC: 12
+      }]
+    };
+    const blockingEvidencePlan = {
+      ...artifacts["single-frame-aba-layer-dropout-evidence-plan.json"],
+      totalBlockingEventCount: 1,
+      recordedBlockingEventCount: 1,
+      exactFrameNumbers: [10, 11, 12],
+      events: [{
+        eventIndex: 0,
+        classification: "blocking_single_frame_aba_layer_dropout",
+        centerFrame: 11,
+        exactFrames: [
+          { role: "A-before", frame: 10 },
+          { role: "B-dropout", frame: 11 },
+          { role: "A-after", frame: 12 }
+        ],
+        metrics: {}
+      }]
+    };
+    const blockingSummary = {
+      ...pendingSummary,
+      status: "blocking_visual_integrity_issue",
+      automatedChecks: {
+        singleFrameAbaLayerDropout: {
+          status: "fail",
+          blockingEventCount: 1,
+          informationalEventCount: 0
+        }
+      }
+    };
+    await Promise.all([
+      writeFile(
+        resolve(temporaryQaDirectory, "single-frame-aba-layer-dropout.json"),
+        `${JSON.stringify(blockingLayerDropout)}\n`,
+        "utf8"
+      ),
+      writeFile(
+        resolve(
+          temporaryQaDirectory,
+          "single-frame-aba-layer-dropout-evidence-plan.json"
+        ),
+        `${JSON.stringify(blockingEvidencePlan)}\n`,
+        "utf8"
+      ),
+      writeFile(
+        resolve(temporaryQaDirectory, "qa-summary.json"),
+        `${JSON.stringify(blockingSummary)}\n`,
         "utf8"
       )
     ]);
@@ -750,4 +847,136 @@ test("generic QA package command is wired and help does not claim v004-only supp
   assert.match(stdout, /--job-config/u);
   assert.match(stdout, /not human visual acceptance/u);
   assert.doesNotMatch(stdout, /v004/iu);
+});
+
+test("published single-frame layer-dropout evidence remains durable before CLI exits non-zero", async () => {
+  const qaDirectory = resolve(
+    WORKSPACE_ROOT,
+    "outputs",
+    `.qa-published-layer-dropout-${randomUUID()}`
+  );
+  const sourceVideo = {
+    path: "fixture/review-10m.mp4",
+    bytes: 1_024,
+    sha256: "a".repeat(64)
+  };
+  const analysis = {
+    schemaVersion: "single-frame-aba-layer-dropout-analysis-v1",
+    detectorScope: "single-frame A-B-A layer-dropout only",
+    candidateVersion: 13,
+    sourceVideo,
+    status: "fail",
+    blockingEventCount: 1,
+    informationalEventCount: 0,
+    blockingEvents: [{
+      detectorPattern: "A-B-A",
+      classification: "blocking_single_frame_aba_layer_dropout",
+      frameA: 67,
+      frameB: 68,
+      frameC: 69
+    }],
+    automaticFrameRepairAttempted: false
+  };
+  const evidence = {
+    schemaVersion: "single-frame-aba-layer-dropout-evidence-plan-v1",
+    candidateVersion: 13,
+    sourceVideo,
+    totalBlockingEventCount: 1,
+    recordedBlockingEventCount: 1,
+    exactFrameNumbers: [67, 68, 69],
+    events: [{
+      eventIndex: 0,
+      classification: "blocking_single_frame_aba_layer_dropout",
+      centerFrame: 68,
+      exactFrames: [
+        { role: "A-before", frame: 67 },
+        { role: "B-dropout", frame: 68 },
+        { role: "A-after", frame: 69 }
+      ],
+      metrics: {}
+    }],
+    automaticFrameRepairAttempted: false
+  };
+  const summary = {
+    status: "blocking_visual_integrity_issue",
+    automatedChecks: {
+      singleFrameAbaLayerDropout: {
+        status: "fail",
+        blockingEventCount: 1,
+        informationalEventCount: 0
+      }
+    }
+  };
+  try {
+    await mkdir(qaDirectory, { recursive: true });
+    const payloads = new Map([
+      ["single-frame-aba-layer-dropout.json", analysis],
+      ["single-frame-aba-layer-dropout-evidence-plan.json", evidence],
+      ["qa-summary.json", summary]
+    ]);
+    await Promise.all([...payloads].map(([name, payload]) => writeFile(
+      resolve(qaDirectory, name),
+      `${JSON.stringify(payload, null, 2)}\n`,
+      "utf8"
+    )));
+    const artifacts = [];
+    for (const name of payloads.keys()) {
+      artifacts.push({ name, ...await fileIntegrity(resolve(qaDirectory, name)) });
+    }
+    await writeFile(
+      resolve(qaDirectory, "artifact-index.json"),
+      `${JSON.stringify({
+        schemaVersion: "fixture-artifact-index-v1",
+        artifacts: artifacts.map(({ name, ...integrity }) => ({
+          path: name,
+          ...integrity
+        }))
+      }, null, 2)}\n`,
+      "utf8"
+    );
+    const indexedFiles = [...payloads.keys(), "artifact-index.json"];
+    const integrityBefore = new Map();
+    for (const name of indexedFiles) {
+      integrityBefore.set(name, await fileIntegrity(resolve(qaDirectory, name)));
+    }
+    await writeFile(
+      resolve(qaDirectory, "qa-artifacts.sha256"),
+      `${indexedFiles.map((name) =>
+        `${integrityBefore.get(name).sha256}  ${name}`
+      ).join("\n")}\n`,
+      "utf8"
+    );
+    integrityBefore.set(
+      "qa-artifacts.sha256",
+      await fileIntegrity(resolve(qaDirectory, "qa-artifacts.sha256"))
+    );
+
+    await assert.rejects(
+      execFileAsync(process.execPath, [
+        resolve(
+          STUDIO_ROOT,
+          "tests/helpers/long-review-layer-dropout-cli-fixture.mjs"
+        ),
+        qaDirectory
+      ]),
+      (error) => {
+        assert.equal(error.code, 1);
+        assert.match(error.stderr, /single-frame A-B-A layer-dropout gate failed/u);
+        return true;
+      }
+    );
+    for (const [name, expected] of integrityBefore) {
+      assert.deepEqual(
+        await fileIntegrity(resolve(qaDirectory, name)),
+        expected,
+        `${name} must remain unchanged after the blocking CLI exit`
+      );
+    }
+    assert.equal(
+      (await readdir(qaDirectory)).some((name) => name.endsWith(".incomplete.json")),
+      false
+    );
+  } finally {
+    await rm(qaDirectory, { recursive: true, force: true });
+  }
 });

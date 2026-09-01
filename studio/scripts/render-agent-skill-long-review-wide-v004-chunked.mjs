@@ -26,6 +26,7 @@ import {bundle} from "@remotion/bundler";
 import {
   RenderInternals,
   makeCancelSignal,
+  openBrowser,
   renderMedia,
   selectComposition,
 } from "@remotion/renderer";
@@ -116,6 +117,10 @@ const RUN_MANIFEST_PATH = resolve(WORK_DIRECTORY, "render-manifest.json");
 const CHROME_EXECUTABLE =
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 export const CHUNKED_REMOTION_TIMEOUT_MS = 180_000;
+export const CHUNKED_CHROMIUM_OPTIONS = Object.freeze({
+  headless: true,
+  darkMode: false,
+});
 
 export const CHUNKED_V004_CONTRACT = Object.freeze({
   schemaVersion: CONFIGURED_RENDER_JOB
@@ -135,6 +140,11 @@ export const CHUNKED_V004_CONTRACT = Object.freeze({
   remotionTimeoutMs: CHUNKED_REMOTION_TIMEOUT_MS,
   fontAssetDelivery: "bundled-resource",
   fontReadiness: "remotion-document-fonts-ready",
+  renderBrowserExecutable: "system-google-chrome",
+  renderChromeMode: "chrome-for-testing",
+  renderBrowserSession: "one-worker-one-reused-browser",
+  renderBrowserCapture: "from-surface",
+  wallpaperCompositorPolicy: "no-viewport-filter-no-viewport-will-change",
   codec: "h264",
   pixelFormat: "yuv420p",
   crf: 22,
@@ -224,8 +234,10 @@ export const CHUNKED_LONG_REVIEW_SCHEMAS = Object.freeze({
 const HASH_PATTERN = /^[a-f0-9]{64}$/u;
 const activePartPaths = new Map();
 const activeCancellations = new Set();
+const activeBrowsers = new Set();
 let activeWorker = null;
 let activeAttemptCapability = null;
+let browserOpening = false;
 let terminating = false;
 let terminationSignal = null;
 
@@ -965,6 +977,11 @@ async function cleanupActiveParts(capability) {
   }
 }
 
+async function closeTrackedBrowser(browser) {
+  if (!activeBrowsers.delete(browser)) return;
+  await browser.close({silent: true});
+}
+
 function deactivateAttempt(capability) {
   if (activeAttemptCapability !== capability) {
     throw new Error("Cannot deactivate a different render attempt");
@@ -978,8 +995,21 @@ async function terminate(signal) {
   terminationSignal = signal;
   for (const cancel of activeCancellations) cancel();
   if (activeWorker && !activeWorker.killed) activeWorker.kill(signal);
+  const browserClosures = [...activeBrowsers].map(async (browser) => {
+    try {
+      await closeTrackedBrowser(browser);
+    } catch (error) {
+      process.stderr.write(`browser cleanup failed: ${error.stack ?? error}\n`);
+    }
+  });
+  await Promise.all(browserClosures);
   process.exitCode = signal === "SIGINT" ? 130 : 143;
-  if (activeCancellations.size === 0 && activeWorker === null) {
+  if (
+    activeCancellations.size === 0 &&
+    activeWorker === null &&
+    activeBrowsers.size === 0 &&
+    !browserOpening
+  ) {
     try {
       if (activeAttemptCapability) await cleanupActiveParts(activeAttemptCapability);
     } catch (error) {
@@ -987,6 +1017,14 @@ async function terminate(signal) {
     } finally {
       process.exit(process.exitCode);
     }
+  }
+}
+
+export function assertLongReviewFromSurfaceEnvironment(environment = process.env) {
+  if (environment.DISABLE_FROM_SURFACE) {
+    throw new Error(
+      "DISABLE_FROM_SURFACE is incompatible with the immutable from-surface render contract",
+    );
   }
 }
 
@@ -1610,6 +1648,7 @@ async function renderChunkWorker(options) {
 }
 
 async function renderBoundChunkWorker(options, attemptToken, parentBinding) {
+  assertLongReviewFromSurfaceEnvironment();
   const rawManifest = await readFile(RUN_MANIFEST_PATH);
   if (sha256Text(rawManifest) !== options.expectedManifestSha256) {
     throw new Error("Worker run manifest changed after parent validation");
@@ -1639,66 +1678,91 @@ async function renderBoundChunkWorker(options, attemptToken, parentBinding) {
 
   const episode = JSON.parse(await readFile(EPISODE_PATH, "utf8"));
   const inputProps = {episode};
-  const composition = await selectComposition({
-    serveUrl: BUNDLE_DIRECTORY,
-    id: CHUNKED_V004_CONTRACT.compositionId,
-    inputProps,
-    browserExecutable: CHROME_EXECUTABLE,
-    chromeMode: "chrome-for-testing",
-    timeoutInMilliseconds: CHUNKED_REMOTION_TIMEOUT_MS,
-    onBrowserDownload: () => {
-      throw new Error("Browser download is disabled; local Chrome is required");
-    },
-    logLevel: "warn",
-  });
-  const compositionContract = {
-    id: composition.id,
-    width: composition.width,
-    height: composition.height,
-    fps: composition.fps,
-    durationInFrames: composition.durationInFrames,
-  };
-  const expectedComposition = {
-    id: CHUNKED_V004_CONTRACT.compositionId,
-    width: CHUNKED_V004_CONTRACT.width,
-    height: CHUNKED_V004_CONTRACT.height,
-    fps: CHUNKED_V004_CONTRACT.fps,
-    durationInFrames: CHUNKED_V004_CONTRACT.durationInFrames,
-  };
-  if (stableStringify(compositionContract) !== stableStringify(expectedComposition)) {
-    throw new Error(`Composition contract changed: ${JSON.stringify(compositionContract)}`);
-  }
-
-  const {cancel, cancelSignal} = makeCancelSignal();
-  activeCancellations.add(cancel);
+  browserOpening = true;
+  let browser;
   try {
-    parentBinding.assertConnected();
-    await renderMedia({
-      composition,
+    browser = await openBrowser("chrome", {
+      browserExecutable: CHROME_EXECUTABLE,
+      chromeMode: "chrome-for-testing",
+      chromiumOptions: CHUNKED_CHROMIUM_OPTIONS,
+      logLevel: "warn",
+    });
+    activeBrowsers.add(browser);
+  } finally {
+    browserOpening = false;
+  }
+  try {
+    if (terminating) {
+      throw new Error(`Render worker interrupted by ${terminationSignal ?? "signal"}`);
+    }
+    const composition = await selectComposition({
       serveUrl: BUNDLE_DIRECTORY,
-      outputLocation: paths.part,
+      id: CHUNKED_V004_CONTRACT.compositionId,
       inputProps,
       browserExecutable: CHROME_EXECUTABLE,
       chromeMode: "chrome-for-testing",
+      chromiumOptions: CHUNKED_CHROMIUM_OPTIONS,
+      puppeteerInstance: browser,
       timeoutInMilliseconds: CHUNKED_REMOTION_TIMEOUT_MS,
       onBrowserDownload: () => {
         throw new Error("Browser download is disabled; local Chrome is required");
       },
-      codec: "h264",
-      pixelFormat: "yuv420p",
-      crf: CHUNKED_V004_CONTRACT.crf,
-      concurrency: 1,
-      frameRange: [range.start, range.end],
-      imageFormat: "png",
-      muted: true,
-      enforceAudioTrack: false,
-      onDownload: assertLocalMediaDownload,
-      overwrite: false,
       logLevel: "warn",
-      cancelSignal,
     });
+    const compositionContract = {
+      id: composition.id,
+      width: composition.width,
+      height: composition.height,
+      fps: composition.fps,
+      durationInFrames: composition.durationInFrames,
+    };
+    const expectedComposition = {
+      id: CHUNKED_V004_CONTRACT.compositionId,
+      width: CHUNKED_V004_CONTRACT.width,
+      height: CHUNKED_V004_CONTRACT.height,
+      fps: CHUNKED_V004_CONTRACT.fps,
+      durationInFrames: CHUNKED_V004_CONTRACT.durationInFrames,
+    };
+    if (stableStringify(compositionContract) !== stableStringify(expectedComposition)) {
+      throw new Error(`Composition contract changed: ${JSON.stringify(compositionContract)}`);
+    }
+
+    const {cancel, cancelSignal} = makeCancelSignal();
+    activeCancellations.add(cancel);
+    try {
+      parentBinding.assertConnected();
+      await renderMedia({
+        composition,
+        serveUrl: BUNDLE_DIRECTORY,
+        outputLocation: paths.part,
+        inputProps,
+        browserExecutable: CHROME_EXECUTABLE,
+        chromeMode: "chrome-for-testing",
+        chromiumOptions: CHUNKED_CHROMIUM_OPTIONS,
+        puppeteerInstance: browser,
+        timeoutInMilliseconds: CHUNKED_REMOTION_TIMEOUT_MS,
+        onBrowserDownload: () => {
+          throw new Error("Browser download is disabled; local Chrome is required");
+        },
+        codec: "h264",
+        pixelFormat: "yuv420p",
+        crf: CHUNKED_V004_CONTRACT.crf,
+        concurrency: 1,
+        frameRange: [range.start, range.end],
+        imageFormat: "png",
+        hardwareAcceleration: "disable",
+        muted: true,
+        enforceAudioTrack: false,
+        onDownload: assertLocalMediaDownload,
+        overwrite: false,
+        logLevel: "warn",
+        cancelSignal,
+      });
+    } finally {
+      activeCancellations.delete(cancel);
+    }
   } finally {
-    activeCancellations.delete(cancel);
+    await closeTrackedBrowser(browser);
   }
 
   parentBinding.assertConnected();
@@ -2518,6 +2582,7 @@ export async function renderAgentSkillLongReviewWideV004Chunked(options = {}) {
       `long-review renderer does not accept dependency injection: ${unsupportedOption}`,
     );
   }
+  assertLongReviewFromSurfaceEnvironment();
   const {
     chunkFrames = CHUNKED_V004_CONTRACT.defaultChunkFrames,
     interChunkPauseMs = CHUNKED_V004_CONTRACT.defaultInterChunkPauseMs,
