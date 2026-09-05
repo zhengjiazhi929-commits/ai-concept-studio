@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "long-review-render-job-v1",
+  "jobId": "agent-skill-20260806-current-visual-upgrade-v014-v004b-no-box-formal-v001",
+  "episodeId": "agent-skill-20260806",
+  "candidateVersion": 1,
+  "compositionId": "AgentSkillLongReview",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "durationInFrames": 18000,
+  "paths": {
+    "runner": "studio/scripts/rebind-agent-skill-v004b-no-box-formal-v001.mjs",
+    "entryPoint": "studio/src/video/agent-skill-long-review-index.jsx",
+    "episode": "studio/data/render-inputs/full-v004b-attempt-001/episode.json",
+    "voice": "studio/public/episodes/agent-skill-20260806/voice-natural-technical-v004-full.wav",
+    "finalDirectory": "outputs/studio/agent-skill-20260806/review-candidates/full-video-current-visual-upgrade-v014-natural-technical-v004b-no-box-formal-v001",
+    "workDirectory": "outputs/studio/agent-skill-20260806/review-candidates/.full-video-current-visual-upgrade-v014-natural-technical-v004b-no-box-formal-v001-work"
+  },
+  "protectedArtifacts": [],
+  "temporaryVoice": true,
+  "temporaryVoiceIsFinalHumanRecording": false
+}

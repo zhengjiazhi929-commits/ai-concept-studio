@@ -1182,6 +1182,14 @@ function sceneSpec({
     if (group.boundsMode != null && !["stable-members", "visible-members"].includes(group.boundsMode)) {
       throw new Error(`${id}/${group.id} 使用了不支持的分组边界模式：${group.boundsMode}`);
     }
+    if (group.label) {
+      if (group.visualForm !== "full-outline") {
+        throw new Error(`${id}/${group.id} 带标题的语义分组必须显式声明 full-outline`);
+      }
+      if (typeof group.semanticMeaning !== "string" || group.semanticMeaning.length === 0) {
+        throw new Error(`${id}/${group.id} 带标题的语义分组必须声明 semanticMeaning`);
+      }
+    }
   }
   const visualIntent = longReviewVisualIntent({ id, kind, title, deck, material, nodes, edges });
   const visualPlan = resolveVisualExpressionPlan({
@@ -1892,8 +1900,28 @@ export const AGENT_SKILL_LONG_REVIEW_SCENE_SPECS = Object.freeze([
       })
     ],
     groups: [
-      { id: "method", label: "方法与判断", x: 132, y: 92, width: 216, height: 220, nodeIds: ["skill", "agent"] },
-      { id: "execution", label: "动作、连接与结果", x: 4, y: 334, width: 472, height: 228, nodeIds: ["tool", "mcp", "external", "result"] }
+      {
+        id: "method",
+        label: "方法与判断",
+        visualForm: "full-outline",
+        semanticMeaning: "process-or-relationship-group-boundary",
+        x: 132,
+        y: 92,
+        width: 216,
+        height: 220,
+        nodeIds: ["skill", "agent"]
+      },
+      {
+        id: "execution",
+        label: "动作、连接与结果",
+        visualForm: "full-outline",
+        semanticMeaning: "process-or-relationship-group-boundary",
+        x: 4,
+        y: 334,
+        width: 472,
+        height: 228,
+        nodeIds: ["tool", "mcp", "external", "result"]
+      }
     ],
     stages: [
       stage("task", 336, "用户先提出一个周报任务", ["user"], [], {

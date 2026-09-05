@@ -634,15 +634,20 @@ test("仓库提供的版本化 render-job 示例与当前 schema 一致", async 
 
   const configDirectory = resolve(process.cwd(), "config", "render-jobs");
   const configFiles = (await readdir(configDirectory))
-    .filter((name) => name.endsWith(".json"))
+    .filter((name) =>
+      name.startsWith("full-video-current-visual-upgrade") &&
+      name.endsWith(".json")
+    )
     .sort();
   assert.deepEqual(configFiles, [
+    "full-video-current-visual-upgrade-render-base-v014.json",
     "full-video-current-visual-upgrade-v008.json",
     "full-video-current-visual-upgrade-v009.json",
     "full-video-current-visual-upgrade-v010.json",
     "full-video-current-visual-upgrade-v011.json",
     "full-video-current-visual-upgrade-v012.json",
-    "full-video-current-visual-upgrade-v013.json"
+    "full-video-current-visual-upgrade-v013.json",
+    "full-video-current-visual-upgrade-v014-natural-technical-v004b-no-box-formal-v001.json"
   ]);
   const jobs = await Promise.all(configFiles.map(async (name) =>
     validateLongReviewRenderJob(
@@ -650,7 +655,10 @@ test("仓库提供的版本化 render-job 示例与当前 schema 一致", async 
       {workspaceRoot: resolve(process.cwd(), "..")}
     )
   ));
-  assert.deepEqual(jobs.map((job) => job.candidateVersion), [8, 9, 10, 11, 12, 13]);
+  assert.deepEqual(
+    jobs.map((job) => job.candidateVersion),
+    [14, 8, 9, 10, 11, 12, 13, 1]
+  );
   for (const job of jobs) {
     assert.equal(job.schemaVersion, LONG_REVIEW_RENDER_JOB_SCHEMA_VERSION);
     assert.equal(job.temporaryVoice, true);

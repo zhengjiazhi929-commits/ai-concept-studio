@@ -121,3 +121,27 @@ test("技术工件组件无场景硬编码、图标堆叠或 CSS 时间轴，并
   assert.doesNotMatch(source, /M 34 24 H 94|M 34 36 H 72/u);
   assert.doesNotMatch(source, /transition:\s*|animation(?:Name)?:|@keyframes|setTimeout|Math\.random/u);
 });
+
+test("带区名的技术工件 zone 使用公共完整分组边框，开放轨道不会伪装成卡片", async () => {
+  const source = await readFile(COMPONENT_PATH, "utf8");
+  const zoneOutlines = [...source.matchAll(
+    /<rect[\s\S]*?data-technical-artifact-role="zone-outline"[\s\S]*?\/>/gu
+  )].map((match) => match[0]);
+  assert.equal(zoneOutlines.length, 5);
+  for (const outline of zoneOutlines) {
+    assert.match(outline, /data-visual-system-group-border=\{zoneBorderLabel\}/u);
+    assert.match(outline, /stroke=\{zoneBorder\.contextualColor\}/u);
+    assert.match(outline, /strokeWidth=\{zoneBorder\.widthPx\}/u);
+    assert.doesNotMatch(outline, /quietRailStroke|railStroke|rgba\(/u);
+  }
+  const rails = [...source.matchAll(
+    /<line[\s\S]*?data-technical-artifact-role="rail"[\s\S]*?\/>/gu
+  )].map((match) => match[0]);
+  assert.equal(rails.length, 4);
+  for (const rail of rails) {
+    assert.match(rail, /stroke=\{(?:quietRailStroke|railStroke)\}/u);
+    assert.doesNotMatch(rail, /data-visual-system-group-border/u);
+  }
+  assert.match(source, /data-technical-artifact-role="rail-anchor"/u);
+  assert.doesNotMatch(source, /const (?:stroke|quietStroke) =/u);
+});

@@ -35,6 +35,13 @@ import {
   validateLongReviewPublicationDurableReceipt
 } from "../src/server/production/long-review-qa.mjs";
 import {
+  isV004bFormalQaJob,
+  V004B_FORMAL_QA_PROFILE,
+  validateV004bFormalCandidateManifest,
+  validateV004bFormalQaSourceBinding,
+  validateV004bFormalPublicationDurableReceipt
+} from "../src/server/production/long-review-v004b-qa.mjs";
+import {
   analyzeLongReviewSingleFrameLayerDropout,
   LONG_REVIEW_SINGLE_FRAME_LAYER_DROPOUT_SCAN
 } from "../src/server/production/long-review-single-frame-layer-dropout-qa.mjs";
@@ -68,6 +75,7 @@ const CONFIGURED_RENDER_JOB = await (async () => {
   });
   return job;
 })();
+const IS_V004B_FORMAL_QA_JOB = isV004bFormalQaJob(CONFIGURED_RENDER_JOB);
 const REVIEW_CANDIDATES_ROOT = resolve(
   CONFIGURED_RENDER_JOB
     ? dirname(CONFIGURED_RENDER_JOB.resolvedPaths.finalDirectory)
@@ -86,6 +94,10 @@ const GENERIC_QA_SCRIPT_PATH = resolve(
 const LONG_REVIEW_QA_BINDING_PATH = resolve(
   STUDIO_ROOT,
   "src/server/production/long-review-qa.mjs"
+);
+const V004B_QA_BINDING_PATH = resolve(
+  STUDIO_ROOT,
+  "src/server/production/long-review-v004b-qa.mjs"
 );
 const QA_MEDIA_INSPECTOR_PATH = resolve(STUDIO_ROOT, "src/server/qa.mjs");
 const FLICKER_QA_PATH = resolve(
@@ -130,6 +142,9 @@ export const WIDE_V004_QA_CONTRACT = Object.freeze({
   schemaVersion: CONFIGURED_RENDER_JOB
     ? LONG_REVIEW_QA_SCHEMA_VERSION
     : "agent-skill-long-review-wide-v004-qa-pipeline-v2",
+  qaProfile: IS_V004B_FORMAL_QA_JOB
+    ? V004B_FORMAL_QA_PROFILE.schemaVersion
+    : null,
   candidateVersion: CONFIGURED_RENDER_JOB?.candidateVersion ?? 4,
   expectedMedia: Object.freeze({
     width: 1920,
@@ -144,9 +159,59 @@ export const WIDE_V004_QA_CONTRACT = Object.freeze({
   scenes: SCENES,
   representativeFrameFraction: 0.5,
   boundaryOffsetsInFrames: Object.freeze([-8, -1, 0, 1, 8]),
+  titleFirstOffsetsInFrames: Object.freeze(
+    IS_V004B_FORMAL_QA_JOB
+      ? [...V004B_FORMAL_QA_PROFILE.titleFirstOffsetsInFrames]
+      : []
+  ),
+  chunkDurationInFrames: IS_V004B_FORMAL_QA_JOB
+    ? V004B_FORMAL_QA_PROFILE.chunkDurationInFrames
+    : null,
+  chunkSeamOffsetsInFrames: Object.freeze(
+    IS_V004B_FORMAL_QA_JOB
+      ? [...V004B_FORMAL_QA_PROFILE.chunkSeamOffsetsInFrames]
+      : []
+  ),
+  watermarkCycleInFrames: IS_V004B_FORMAL_QA_JOB
+    ? V004B_FORMAL_QA_PROFILE.watermarkCycleInFrames
+    : null,
+  watermarkCadenceId: IS_V004B_FORMAL_QA_JOB
+    ? V004B_FORMAL_QA_PROFILE.watermarkCadenceId
+    : null,
+  watermarkMotionSampleOffsetsInFrames: Object.freeze(
+    IS_V004B_FORMAL_QA_JOB
+      ? [...V004B_FORMAL_QA_PROFILE.watermarkMotionSampleOffsetsInFrames]
+      : []
+  ),
+  watermarkCropPixels: IS_V004B_FORMAL_QA_JOB
+    ? V004B_FORMAL_QA_PROFILE.watermarkCropPixels
+    : null,
+  watermarkMotionProof: IS_V004B_FORMAL_QA_JOB
+    ? Object.freeze({
+        schemaVersion: V004B_FORMAL_QA_PROFILE.watermarkMotionProofSchemaVersion,
+        minimumDistinctCropHashCount:
+          V004B_FORMAL_QA_PROFILE.watermarkMinimumDistinctCropHashCount,
+        minimumMateriallyChangedPhaseCount:
+          V004B_FORMAL_QA_PROFILE.watermarkMinimumMateriallyChangedPhaseCount,
+        materialChangeDhashHammingMinimum:
+          V004B_FORMAL_QA_PROFILE.watermarkMaterialChangeDhashHammingMinimum,
+        cycleReturnDhashHammingMaximum:
+          V004B_FORMAL_QA_PROFILE.watermarkCycleReturnDhashHammingMaximum
+      })
+    : null,
+  finalTailOffsetsInFrames: Object.freeze(
+    IS_V004B_FORMAL_QA_JOB
+      ? [...V004B_FORMAL_QA_PROFILE.finalTailOffsetsInFrames]
+      : []
+  ),
   periodicIntervalSeconds: 2,
   periodicWidth: 480,
-  frameExtractionStrategy: "sequential-decode-split-trim-by-frame-index",
+  frameExtractionStrategy: IS_V004B_FORMAL_QA_JOB
+    ? "batched-sequential-decode-no-seek"
+    : "sequential-decode-split-trim-by-frame-index",
+  sequentialExtractionBatchSize: IS_V004B_FORMAL_QA_JOB
+    ? V004B_FORMAL_QA_PROFILE.sequentialExtractionBatchSize
+    : null,
   fullFrameExtractionConcurrency: 1,
   periodicExtractionConcurrency: 1,
   singleFrameAbaLayerDropout: Object.freeze({
@@ -615,6 +680,30 @@ export async function captureQaSourceIdentity() {
     ...(CONFIGURED_RENDER_JOB
       ? [GENERIC_QA_SCRIPT_PATH, LONG_REVIEW_QA_BINDING_PATH, QA_JOB_CONFIG_PATH]
       : []),
+    ...(IS_V004B_FORMAL_QA_JOB
+      ? [
+          V004B_QA_BINDING_PATH,
+          CONFIGURED_RENDER_JOB.resolvedPaths.runner,
+          resolve(
+            WORKSPACE_ROOT,
+            "outputs/studio/agent-skill-20260806/review-candidates",
+            V004B_FORMAL_QA_PROFILE.sourceCandidateDirectoryName,
+            "review-10m.mp4"
+          ),
+          resolve(
+            WORKSPACE_ROOT,
+            "outputs/studio/agent-skill-20260806/review-candidates",
+            V004B_FORMAL_QA_PROFILE.sourceCandidateDirectoryName,
+            "review-manifest.json"
+          ),
+          resolve(
+            WORKSPACE_ROOT,
+            "outputs/studio/agent-skill-20260806/review-candidates",
+            V004B_FORMAL_QA_PROFILE.sourceCandidateDirectoryName,
+            "publication-durable-receipt.json"
+          )
+        ]
+      : []),
     ANALYZER_PATH,
     QA_MEDIA_INSPECTOR_PATH,
     FLICKER_QA_PATH,
@@ -769,7 +858,7 @@ function frameForSecond(second) {
   );
 }
 
-function buildFramePlan() {
+export function buildFramePlan() {
   const fullByFrame = new Map();
   const periodicByFrame = new Map();
   const add = (map, rawFrame, tag) => {
@@ -793,6 +882,13 @@ function buildFramePlan() {
     const representativeSecond = scene.startSecond +
       (scene.endSecond - scene.startSecond) * WIDE_V004_QA_CONTRACT.representativeFrameFraction;
     add(fullByFrame, frameForSecond(representativeSecond), `representative:${scene.id}`);
+    for (const offset of WIDE_V004_QA_CONTRACT.titleFirstOffsetsInFrames) {
+      add(
+        fullByFrame,
+        frameForSecond(scene.startSecond) + offset,
+        `title-first:${scene.id}:offset:${offset}`
+      );
+    }
   }
 
   for (let index = 1; index < SCENES.length; index += 1) {
@@ -802,6 +898,47 @@ function buildFramePlan() {
     for (const offset of WIDE_V004_QA_CONTRACT.boundaryOffsetsInFrames) {
       add(fullByFrame, boundaryFrame + offset, `boundary:${previous.id}>${next.id}:offset:${offset}`);
     }
+  }
+
+  if (Number.isSafeInteger(WIDE_V004_QA_CONTRACT.chunkDurationInFrames)) {
+    for (
+      let seamFrame = WIDE_V004_QA_CONTRACT.chunkDurationInFrames;
+      seamFrame < WIDE_V004_QA_CONTRACT.expectedMedia.durationInFrames;
+      seamFrame += WIDE_V004_QA_CONTRACT.chunkDurationInFrames
+    ) {
+      const leftChunk = seamFrame / WIDE_V004_QA_CONTRACT.chunkDurationInFrames;
+      const transition =
+        `${String(leftChunk).padStart(2, "0")}>` +
+        `${String(leftChunk + 1).padStart(2, "0")}`;
+      for (const offset of WIDE_V004_QA_CONTRACT.chunkSeamOffsetsInFrames) {
+        add(
+          fullByFrame,
+          seamFrame + offset,
+          `chunk-seam:${transition}:offset:${offset}`
+        );
+      }
+    }
+
+    for (
+      let chunkStartFrame = 0;
+      chunkStartFrame < WIDE_V004_QA_CONTRACT.expectedMedia.durationInFrames;
+      chunkStartFrame += WIDE_V004_QA_CONTRACT.chunkDurationInFrames
+    ) {
+      const chunkNumber =
+        chunkStartFrame / WIDE_V004_QA_CONTRACT.chunkDurationInFrames + 1;
+      for (const offset of WIDE_V004_QA_CONTRACT.watermarkMotionSampleOffsetsInFrames) {
+        add(
+          fullByFrame,
+          chunkStartFrame + offset,
+          `watermark-motion-sample:chunk-${String(chunkNumber).padStart(2, "0")}:offset:${offset}`
+        );
+      }
+    }
+  }
+
+  const finalFrame = WIDE_V004_QA_CONTRACT.expectedMedia.durationInFrames - 1;
+  for (const offset of WIDE_V004_QA_CONTRACT.finalTailOffsetsInFrames) {
+    add(fullByFrame, finalFrame + offset, `final-tail:offset:${offset}`);
   }
 
   for (
@@ -843,6 +980,43 @@ function buildFramePlan() {
     WIDE_V004_QA_CONTRACT.boundaryOffsetsInFrames.length;
   if (boundaryCount !== expectedBoundaryCount) {
     throw new Error(`边界帧计划错误：expected=${expectedBoundaryCount} actual=${boundaryCount}`);
+  }
+  if (IS_V004B_FORMAL_QA_JOB) {
+    const countTags = (prefix) => fullSamples.reduce(
+      (count, item) => count + item.tags.filter((tag) => tag.startsWith(prefix)).length,
+      0
+    );
+    const expectedTitleFirstCount =
+      SCENES.length * WIDE_V004_QA_CONTRACT.titleFirstOffsetsInFrames.length;
+    const expectedChunkSeamCount =
+      19 * WIDE_V004_QA_CONTRACT.chunkSeamOffsetsInFrames.length;
+    const expectedWatermarkMotionSampleCount =
+      20 * WIDE_V004_QA_CONTRACT.watermarkMotionSampleOffsetsInFrames.length;
+    const expectedTagCounts = [
+      ["title-first:", expectedTitleFirstCount, "标题优先"],
+      ["chunk-seam:", expectedChunkSeamCount, "分段边界"],
+      ["watermark-motion-sample:", expectedWatermarkMotionSampleCount, "动态水印运动证明"],
+      ["final-tail:", WIDE_V004_QA_CONTRACT.finalTailOffsetsInFrames.length, "末尾完成态"]
+    ];
+    for (const [prefix, expectedCount, label] of expectedTagCounts) {
+      const actualCount = countTags(prefix);
+      if (actualCount !== expectedCount) {
+        throw new Error(
+          `${label}帧计划错误：expected=${expectedCount} actual=${actualCount}`
+        );
+      }
+    }
+    if (
+      fullSamples.length !== V004B_FORMAL_QA_PROFILE.expectedFullSampleCount ||
+      periodicSamples.length !== V004B_FORMAL_QA_PROFILE.expectedPeriodicSampleCount ||
+      fullSamples.length + periodicSamples.length !==
+        V004B_FORMAL_QA_PROFILE.expectedEvidenceFrameCount
+    ) {
+      throw new Error(
+        `v004b QA 证据帧数量错误：full=${fullSamples.length} ` +
+        `periodic=${periodicSamples.length}`
+      );
+    }
   }
   return { fullSamples, periodicSamples };
 }
@@ -891,7 +1065,139 @@ export function buildExactFrameExtractionArgs({
   return args;
 }
 
+export function buildSequentialExtractionFfmpegArgs({
+  samples,
+  videoPath,
+  outputPaths,
+  periodic = false
+}) {
+  if (
+    !Array.isArray(samples) ||
+    samples.length === 0 ||
+    !Array.isArray(outputPaths) ||
+    outputPaths.length !== samples.length ||
+    samples.length > V004B_FORMAL_QA_PROFILE.sequentialExtractionBatchSize
+  ) {
+    throw new Error("顺序解码提取必须包含 1..24 个样本及等量输出路径");
+  }
+  const inputLabel = periodic ? "scaled" : "source";
+  const filterSteps = [];
+  if (periodic) {
+    filterSteps.push(
+      `[0:v:0]scale=${WIDE_V004_QA_CONTRACT.periodicWidth}:-2:flags=lanczos[${inputLabel}]`
+    );
+  } else {
+    filterSteps.push(`[0:v:0]null[${inputLabel}]`);
+  }
+  if (samples.length === 1) {
+    const sample = samples[0];
+    filterSteps.push(
+      `[${inputLabel}]trim=start_frame=${sample.frame}:end_frame=${sample.frame + 1}[o000]`
+    );
+  } else {
+    const labels = samples
+      .map((_, index) => `[s${String(index).padStart(3, "0")}]`)
+      .join("");
+    filterSteps.push(`[${inputLabel}]split=${samples.length}${labels}`);
+    for (const [index, sample] of samples.entries()) {
+      const label = String(index).padStart(3, "0");
+      filterSteps.push(
+        `[s${label}]trim=start_frame=${sample.frame}:end_frame=${sample.frame + 1}` +
+        `[o${label}]`
+      );
+    }
+  }
+  const args = [
+    "-nostdin",
+    "-hide_banner",
+    "-loglevel", "error",
+    "-n",
+    "-i", videoPath,
+    "-an",
+    "-filter_complex_threads", "1",
+    "-filter_complex", filterSteps.join(";")
+  ];
+  for (const [index, outputPath] of outputPaths.entries()) {
+    args.push(
+      "-map", `[o${String(index).padStart(3, "0")}]`,
+      "-frames:v", "1",
+      "-c:v", "png",
+      "-threads:v", "1",
+      outputPath
+    );
+  }
+  return args;
+}
+
+export function partitionSequentialExtractionBatches({
+  samples,
+  outputPaths,
+  batchSize = V004B_FORMAL_QA_PROFILE.sequentialExtractionBatchSize
+}) {
+  if (
+    !Array.isArray(samples) ||
+    samples.length === 0 ||
+    !Array.isArray(outputPaths) ||
+    outputPaths.length !== samples.length
+  ) {
+    throw new Error("顺序解码批次必须包含等量的样本与输出路径");
+  }
+  if (
+    !Number.isSafeInteger(batchSize) ||
+    batchSize < 1 ||
+    batchSize > V004B_FORMAL_QA_PROFILE.sequentialExtractionBatchSize
+  ) {
+    throw new Error("顺序解码批次大小必须在 1..24 之间");
+  }
+  for (const [index, sample] of samples.entries()) {
+    if (!Number.isSafeInteger(sample?.frame) || sample.frame < 0) {
+      throw new Error(`顺序解码样本 ${index + 1} 的 frame 必须是非负整数`);
+    }
+    if (index > 0 && sample.frame <= samples[index - 1].frame) {
+      throw new Error("顺序解码样本必须按全局 frame 严格递增且不能重复");
+    }
+  }
+  const batches = [];
+  for (let start = 0; start < samples.length; start += batchSize) {
+    const end = Math.min(samples.length, start + batchSize);
+    batches.push({
+      samples: samples.slice(start, end),
+      outputPaths: outputPaths.slice(start, end)
+    });
+  }
+  return batches;
+}
+
 export async function extractSamples({ samples, videoPath, qaDirectory, ffmpeg, env, periodic }) {
+  if (IS_V004B_FORMAL_QA_JOB) {
+    const outputPaths = samples.map((sample) => resolve(qaDirectory, sample.filename));
+    for (const outputPath of outputPaths) {
+      if (await pathExists(outputPath)) {
+        throw new Error(`目标提取帧已存在；拒绝覆盖：${workspaceRelative(outputPath)}`);
+      }
+    }
+    const batches = partitionSequentialExtractionBatches({ samples, outputPaths });
+    for (const [batchIndex, batch] of batches.entries()) {
+      await runProcess(ffmpeg, buildSequentialExtractionFfmpegArgs({
+        samples: batch.samples,
+        videoPath,
+        outputPaths: batch.outputPaths,
+        periodic
+      }), { env });
+      for (const outputPath of batch.outputPaths) {
+        await assertPlainFile(outputPath, "提取帧");
+      }
+      process.stdout.write(
+        `${periodic ? "周期" : "全分辨率"}帧批次：${batchIndex + 1}/` +
+        `${batches.length}（${batch.samples.length} 帧，无 seek 顺序解码）\n`
+      );
+    }
+    process.stdout.write(
+      `${periodic ? "周期" : "全分辨率"}帧：${samples.length}/` +
+      `${samples.length}（每批最多 24 路，严格串行）\n`
+    );
+    return;
+  }
   const args = buildExactFrameExtractionArgs({
     samples,
     videoPath,
@@ -907,15 +1213,65 @@ export async function extractSamples({ samples, videoPath, qaDirectory, ffmpeg, 
   );
 }
 
-export function evaluateWideV004MediaProbe(raw) {
-  const video = raw.streams?.find((stream) => stream.codec_type === "video") ?? null;
-  const audio = raw.streams?.find((stream) => stream.codec_type === "audio") ?? null;
+export function requiredLongReviewContactSheets({ formalV004b = IS_V004B_FORMAL_QA_JOB } = {}) {
+  if (!formalV004b) {
+    return [
+      "contact-scenes-overview.png",
+      "contact-periodic-overview.png",
+      "contact-static-candidates.png",
+      "contact-low-information-candidates.png"
+    ];
+  }
+  return [
+    "contact-scenes-overview.png",
+    ...Array.from({ length: 3 }, (_, index) =>
+      `contact-title-first-${String(index + 1).padStart(2, "0")}.png`
+    ),
+    ...Array.from({ length: 3 }, (_, index) =>
+      `contact-scene-boundaries-${String(index + 1).padStart(2, "0")}.png`
+    ),
+    ...Array.from({ length: 5 }, (_, index) =>
+      `contact-chunk-seams-${String(index + 1).padStart(2, "0")}.png`
+    ),
+    "contact-final-tail.png",
+    ...Array.from({ length: 5 }, (_, index) =>
+      `contact-watermark-motion-${String(index + 1).padStart(2, "0")}.png`
+    ),
+    "contact-periodic-overview.png",
+    ...Array.from({ length: 11 }, (_, index) =>
+      `contact-periodic-2s-${String(index + 1).padStart(2, "0")}.png`
+    ),
+    "contact-static-candidates.png",
+    "contact-low-information-candidates.png"
+  ];
+}
+
+function evaluateLongReviewMediaProbe(raw, { strictFormalV004b = false } = {}) {
+  const videoStreams = raw.streams?.filter((stream) => stream.codec_type === "video") ?? [];
+  const audioStreams = raw.streams?.filter((stream) => stream.codec_type === "audio") ?? [];
+  const video = videoStreams[0] ?? null;
+  const audio = audioStreams[0] ?? null;
   const actualFps = rationalToNumber(video?.avg_frame_rate);
   const actualFrames = decodedVideoFrameCount(video);
   const duration = Number(raw.format?.duration);
+  const formatStartTime = Number(raw.format?.start_time);
+  const videoStartTime = Number(video?.start_time);
+  const audioStartTime = Number(audio?.start_time);
+  const audioDuration = Number(audio?.duration);
   const expected = WIDE_V004_QA_CONTRACT.expectedMedia;
   const checks = {
     mp4Container: raw.format?.format_name?.split(",").includes("mp4") === true,
+    ...(strictFormalV004b
+      ? {
+          exactlyOneVideoTrack: videoStreams.length === 1,
+          formatStartsAtZero:
+            Number.isFinite(formatStartTime) && Math.abs(formatStartTime) < 0.001,
+          videoStartsAtZero:
+            Number.isFinite(videoStartTime) && Math.abs(videoStartTime) < 0.001,
+          audioStartsAtZero:
+            Number.isFinite(audioStartTime) && Math.abs(audioStartTime) < 0.001
+        }
+      : {}),
     width1920: video?.width === expected.width,
     height1080: video?.height === expected.height,
     fps30: Math.abs(actualFps - expected.fps) < 0.0001,
@@ -925,11 +1281,38 @@ export function evaluateWideV004MediaProbe(raw) {
     h264Video: video?.codec_name === "h264",
     yuv420p: video?.pix_fmt === "yuv420p",
     exactlyOneAudioTrack:
-      raw.streams?.filter((stream) => stream.codec_type === "audio").length === 1,
+      audioStreams.length === 1,
     aacAudio: audio?.codec_name === expected.audioCodec,
-    audioSampleRate48k: Number(audio?.sample_rate) === expected.audioSampleRate
+    audioSampleRate48k: Number(audio?.sample_rate) === expected.audioSampleRate,
+    ...(strictFormalV004b
+      ? {
+          monoAudio: Number(audio?.channels) === 1,
+          durationExactly600Seconds:
+            Number.isFinite(duration) && Math.abs(duration - 600) <= 0.02,
+          audioDurationExactly600Seconds:
+            Number.isFinite(audioDuration) && Math.abs(audioDuration - 600) <= 0.02
+        }
+      : {})
   };
-  return { video, audio, actualFps, actualFrames, duration, expected, checks };
+  return {
+    video,
+    audio,
+    actualFps,
+    actualFrames,
+    duration,
+    expected,
+    checks,
+    normalizedStarts: { formatStartTime, videoStartTime, audioStartTime },
+    audioDuration
+  };
+}
+
+export function evaluateWideV004MediaProbe(raw) {
+  return evaluateLongReviewMediaProbe(raw);
+}
+
+export function evaluateV004bFormalMediaProbe(raw) {
+  return evaluateLongReviewMediaProbe(raw, { strictFormalV004b: true });
 }
 
 export function validateWideV004CandidateManifest(manifest, videoIntegrity, videoPath) {
@@ -972,6 +1355,14 @@ export function validateConfiguredLongReviewCandidateManifest(
   if (!CONFIGURED_RENDER_JOB) {
     return validateWideV004CandidateManifest(manifest, videoIntegrity, videoPath);
   }
+  if (IS_V004B_FORMAL_QA_JOB) {
+    return validateV004bFormalCandidateManifest({
+      manifest,
+      job: CONFIGURED_RENDER_JOB,
+      videoIntegrity,
+      videoPath
+    });
+  }
   return validateLongReviewCandidateManifest({
     manifest,
     job: CONFIGURED_RENDER_JOB,
@@ -997,8 +1388,18 @@ export async function probeMedia({ videoPath, manifestPath, ffprobe, env }) {
     videoPath
   ], { env });
   const raw = JSON.parse(stdout);
-  const { video, actualFps, actualFrames, duration, expected, checks } =
-    evaluateWideV004MediaProbe(raw);
+  const {
+    video,
+    actualFps,
+    actualFrames,
+    duration,
+    expected,
+    checks,
+    normalizedStarts,
+    audioDuration
+  } = IS_V004B_FORMAL_QA_JOB
+    ? evaluateV004bFormalMediaProbe(raw)
+    : evaluateWideV004MediaProbe(raw);
   return {
     schemaVersion: CONFIGURED_RENDER_JOB
       ? "agent-skill-long-review-media-metadata-v1"
@@ -1018,7 +1419,9 @@ export async function probeMedia({ videoPath, manifestPath, ffprobe, env }) {
       readVideoPacketCount: Number(video?.nb_read_packets),
       videoFps: actualFps,
       width: video?.width ?? null,
-      height: video?.height ?? null
+      height: video?.height ?? null,
+      audioDurationSeconds: audioDuration,
+      ...normalizedStarts
     },
     checks,
     status: Object.values(checks).every(Boolean) ? "pass" : "review_required"
@@ -1074,6 +1477,8 @@ export async function validateLongReviewAnalyzerArtifacts({
   publicationReceiptBinding = null
 }) {
   const generic = contract.schemaVersion === LONG_REVIEW_QA_SCHEMA_VERSION;
+  const formalV004b =
+    contract.qaProfile === V004B_FORMAL_QA_PROFILE.schemaVersion;
   const expected = {
     summary: generic
       ? "agent-skill-long-review-qa-summary-v1"
@@ -1090,6 +1495,7 @@ export async function validateLongReviewAnalyzerArtifacts({
     layerDropoutEvidence,
     metrics,
     summary,
+    watermarkMotionProof,
     reportBytes
   ] =
     await Promise.all([
@@ -1109,10 +1515,28 @@ export async function validateLongReviewAnalyzerArtifacts({
       ),
       readStableJsonArtifact(resolve(qaDirectory, "frame-metrics.json"), "帧指标"),
       readStableJsonArtifact(resolve(qaDirectory, "qa-summary.json"), "QA summary"),
+      formalV004b
+        ? readStableJsonArtifact(
+            resolve(qaDirectory, "watermark-motion-proof.json"),
+            "动态水印运动证明"
+          )
+        : Promise.resolve(null),
       readStableArtifact(resolve(qaDirectory, "QA-REPORT.md"), "QA 报告")
     ]);
   const categories = summary?.manualReview?.categories;
+  const categoryIds = Array.isArray(categories)
+    ? new Set(categories.map((category) => category?.id))
+    : new Set();
+  const requiredFormalCategoryIds = [
+    "title-first",
+    "transitions",
+    "watermark-continuity",
+    "continuous-watch"
+  ];
   const report = reportBytes.toString("utf8");
+  const expectedFormalContactSheets = requiredLongReviewContactSheets({
+    formalV004b: true
+  });
   const expectedLayerDropoutEvidence =
     buildSingleFrameAbaLayerDropoutEvidencePlan(layerDropout);
   const checks = {
@@ -1136,12 +1560,90 @@ export async function validateLongReviewAnalyzerArtifacts({
         runManifest?.sourcePublicationReceipt == null,
     runManifestManualPending:
       runManifest?.guarantees?.manualVisualJudgmentsRemainPending === true,
+    formalV004bRunGuarantees: !formalV004b || (
+      runManifest?.guarantees?.formalCandidateVersionIsOne === true &&
+      runManifest?.guarantees
+        ?.visualSourceAndRenderBaseVersionsAreProvenanceOnly === true &&
+      runManifest?.guarantees
+        ?.temporaryV004FullVoiceIsNotFinalHumanRecording === true &&
+      runManifest?.guarantees
+        ?.evidenceFramesExtractedInSequentialBatchesOfAtMost24 === true &&
+      runManifest?.guarantees?.watermarkContinuousMotionMachineGateRequired === true &&
+      runManifest?.guarantees?.uninterruptedOneXPlaybackStillRequired === true
+    ),
     mediaEvidenceMachineOnly:
       mediaEvidence?.machineOnly === true &&
       mediaEvidence?.manualPlaybackRequired === true &&
       mediaEvidence?.passed === true,
     frameIndexCandidateVersion:
       frameIndex?.candidateVersion === contract.candidateVersion,
+    formalV004bFrameCoverage: !formalV004b || (
+      frameIndex?.titleFirstSceneCount === 18 &&
+      frameIndex?.chunkCount === 20 &&
+      frameIndex?.chunkSeamCount === 19 &&
+      frameIndex?.watermarkCadenceId === "continuous" &&
+      frameIndex?.watermarkCycleInFrames === 120 &&
+      JSON.stringify(frameIndex?.watermarkMotionSampleOffsetsInFrames) ===
+        JSON.stringify(V004B_FORMAL_QA_PROFILE.watermarkMotionSampleOffsetsInFrames) &&
+      JSON.stringify(frameIndex?.watermarkCropPixels) ===
+        JSON.stringify(V004B_FORMAL_QA_PROFILE.watermarkCropPixels) &&
+      JSON.stringify(frameIndex?.watermarkMotionProof) === JSON.stringify({
+        schemaVersion: V004B_FORMAL_QA_PROFILE.watermarkMotionProofSchemaVersion,
+        minimumDistinctCropHashCount:
+          V004B_FORMAL_QA_PROFILE.watermarkMinimumDistinctCropHashCount,
+        minimumMateriallyChangedPhaseCount:
+          V004B_FORMAL_QA_PROFILE.watermarkMinimumMateriallyChangedPhaseCount,
+        materialChangeDhashHammingMinimum:
+          V004B_FORMAL_QA_PROFILE.watermarkMaterialChangeDhashHammingMinimum,
+        cycleReturnDhashHammingMaximum:
+          V004B_FORMAL_QA_PROFILE.watermarkCycleReturnDhashHammingMaximum
+      }) &&
+      frameIndex?.extractionMode === "batched-sequential-decode-no-seek" &&
+      frameIndex?.sequentialExtractionBatchSize === 24 &&
+      frameIndex?.fullSamples?.length ===
+        V004B_FORMAL_QA_PROFILE.expectedFullSampleCount &&
+      frameIndex?.periodicSamples?.length ===
+        V004B_FORMAL_QA_PROFILE.expectedPeriodicSampleCount &&
+      frameIndex.fullSamples.length + frameIndex.periodicSamples.length ===
+        V004B_FORMAL_QA_PROFILE.expectedEvidenceFrameCount
+    ),
+    formalV004bWatermarkMotionProof: !formalV004b || (
+      watermarkMotionProof?.schemaVersion ===
+        V004B_FORMAL_QA_PROFILE.watermarkMotionProofSchemaVersion &&
+      watermarkMotionProof?.candidateVersion === contract.candidateVersion &&
+      JSON.stringify(watermarkMotionProof?.sourceVideo) === JSON.stringify(sourceVideo) &&
+      watermarkMotionProof?.status === "pass" &&
+      watermarkMotionProof?.cadenceId === "continuous" &&
+      watermarkMotionProof?.cycleInFrames === 120 &&
+      JSON.stringify(watermarkMotionProof?.sampleOffsetsInFrames) ===
+        JSON.stringify(V004B_FORMAL_QA_PROFILE.watermarkMotionSampleOffsetsInFrames) &&
+      JSON.stringify(watermarkMotionProof?.cropPixels) ===
+        JSON.stringify(V004B_FORMAL_QA_PROFILE.watermarkCropPixels) &&
+      watermarkMotionProof?.thresholds?.minimumDistinctCropHashCount ===
+        V004B_FORMAL_QA_PROFILE.watermarkMinimumDistinctCropHashCount &&
+      watermarkMotionProof?.thresholds?.minimumMateriallyChangedPhaseCount ===
+        V004B_FORMAL_QA_PROFILE.watermarkMinimumMateriallyChangedPhaseCount &&
+      watermarkMotionProof?.thresholds?.materialChangeDhashHammingMinimum ===
+        V004B_FORMAL_QA_PROFILE.watermarkMaterialChangeDhashHammingMinimum &&
+      watermarkMotionProof?.thresholds?.cycleReturnDhashHammingMaximum ===
+        V004B_FORMAL_QA_PROFILE.watermarkCycleReturnDhashHammingMaximum &&
+      watermarkMotionProof?.checks?.multipleDecodedCropHashesChanged === true &&
+      watermarkMotionProof?.checks?.multipleMaterialMotionPhasesDetected === true &&
+      watermarkMotionProof?.checks?.fullCycleReturned === true &&
+      Array.isArray(watermarkMotionProof?.chunks) &&
+      watermarkMotionProof.chunks.length === 20 &&
+      watermarkMotionProof.chunks.every((chunk) =>
+        chunk?.status === "pass" &&
+        chunk?.distinctCropHashCount >=
+          V004B_FORMAL_QA_PROFILE.watermarkMinimumDistinctCropHashCount &&
+        chunk?.materiallyChangedPhaseCount >=
+          V004B_FORMAL_QA_PROFILE.watermarkMinimumMateriallyChangedPhaseCount &&
+        chunk?.cycleReturnDhashHammingDistance <=
+          V004B_FORMAL_QA_PROFILE.watermarkCycleReturnDhashHammingMaximum &&
+        chunk?.samples?.length ===
+          V004B_FORMAL_QA_PROFILE.watermarkMotionSampleOffsetsInFrames.length
+      )
+    ),
     layerDropoutSchema:
       layerDropout?.schemaVersion ===
         SINGLE_FRAME_ABA_LAYER_DROPOUT_SCHEMA_VERSION,
@@ -1173,6 +1675,15 @@ export async function validateLongReviewAnalyzerArtifacts({
         layerDropout?.blockingEventCount &&
       summary?.automatedChecks?.singleFrameAbaLayerDropout
         ?.informationalEventCount === layerDropout?.informationalEventCount,
+    watermarkMotionSummaryBinding: !formalV004b || (
+      summary?.automatedChecks?.watermarkContinuousMotion?.status === "pass" &&
+      summary?.automatedChecks?.watermarkContinuousMotion?.artifact ===
+        "watermark-motion-proof.json" &&
+      summary?.automatedChecks?.watermarkContinuousMotion?.cadenceId === "continuous" &&
+      summary?.automatedChecks?.watermarkContinuousMotion?.chunkCount === 20 &&
+      JSON.stringify(summary?.automatedChecks?.watermarkContinuousMotion?.checks) ===
+        JSON.stringify(watermarkMotionProof?.checks)
+    ),
     summarySchema: summary?.schemaVersion === expected.summary,
     summaryCandidateVersion: summary?.candidateVersion === contract.candidateVersion,
     summarySource:
@@ -1187,10 +1698,19 @@ export async function validateLongReviewAnalyzerArtifacts({
           ? "blocking_visual_integrity_issue"
           : "pending_manual_visual_review"
       ) && summary?.manualReview?.status === "pending",
+    formalV004bContactSheets: !formalV004b || (
+      Array.isArray(summary?.contactSheets) &&
+      summary.contactSheets.length ===
+        V004B_FORMAL_QA_PROFILE.expectedContactSheetCount &&
+      JSON.stringify([...summary.contactSheets].sort()) ===
+        JSON.stringify([...expectedFormalContactSheets].sort())
+    ),
     categoriesPending:
       Array.isArray(categories) &&
       categories.length > 0 &&
       categories.every((category) => category?.status === "pending"),
+    formalV004bManualCategories: !formalV004b ||
+      requiredFormalCategoryIds.every((categoryId) => categoryIds.has(categoryId)),
     metricsSchema: metrics?.schemaVersion === expected.metrics,
     metricsCandidateVersion: metrics?.candidateVersion === contract.candidateVersion,
     reportCandidateVersion:
@@ -1439,13 +1959,21 @@ export async function runAgentSkillLongReviewQa(
     }
   }
   const publicationReceiptBinding = CONFIGURED_RENDER_JOB
-    ? validateLongReviewPublicationDurableReceipt({
+    ? (IS_V004B_FORMAL_QA_JOB
+      ? validateV004bFormalPublicationDurableReceipt({
+          receipt: publicationReceipt,
+          manifest: candidateManifest,
+          manifestIntegrity: candidateManifestIntegrityBefore,
+          videoIntegrity: candidateVideoIntegrityBefore,
+          job: CONFIGURED_RENDER_JOB
+        })
+      : validateLongReviewPublicationDurableReceipt({
         receipt: publicationReceipt,
         manifest: candidateManifest,
         manifestIntegrity: candidateManifestIntegrityBefore,
         videoIntegrity: candidateVideoIntegrityBefore,
         job: CONFIGURED_RENDER_JOB
-      })
+      }))
     : null;
   let pathGuards = await captureQaCandidatePathGuards({
     reviewCandidatesRoot: REVIEW_CANDIDATES_ROOT,
@@ -1488,14 +2016,14 @@ export async function runAgentSkillLongReviewQa(
 
   await assertPathsCurrent("after-initial-candidate-validation");
 
-  const candidateInputIdentityBefore = CONFIGURED_RENDER_JOB
+  const candidateInputIdentityBefore = CONFIGURED_RENDER_JOB && !IS_V004B_FORMAL_QA_JOB
     ? await captureLongReviewCandidateSourceIdentity({
         job: CONFIGURED_RENDER_JOB,
         jobConfigPath: QA_JOB_CONFIG_PATH,
         workspaceRoot: WORKSPACE_ROOT
       })
     : null;
-  if (CONFIGURED_RENDER_JOB) {
+  if (CONFIGURED_RENDER_JOB && !IS_V004B_FORMAL_QA_JOB) {
     candidateManifestBinding = validateConfiguredLongReviewCandidateManifest(
       candidateManifest,
       candidateVideoIntegrityBefore,
@@ -1520,6 +2048,16 @@ export async function runAgentSkillLongReviewQa(
     toolVersion(ffmpeg, mediaToolEnv),
     toolVersion(ffprobe, mediaToolEnv)
   ]);
+  if (IS_V004B_FORMAL_QA_JOB) {
+    candidateManifestBinding = {
+      ...candidateManifestBinding,
+      qaSourceBinding: validateV004bFormalQaSourceBinding({
+        manifest: candidateManifest,
+        job: CONFIGURED_RENDER_JOB,
+        qaSourceIdentity: qaSourceIdentityBefore
+      })
+    };
+  }
   await assertPlainFile(ANALYZER_PATH, "QA 分析脚本");
 
   await assertPathsCurrent("before-temporary-directory-create");
@@ -1664,6 +2202,42 @@ export async function runAgentSkillLongReviewQa(
       representativeFrameCount: SCENES.length,
       boundaryTransitionCount: SCENES.length - 1,
       boundaryOffsetsInFrames: WIDE_V004_QA_CONTRACT.boundaryOffsetsInFrames,
+      ...(IS_V004B_FORMAL_QA_JOB
+        ? {
+            titleFirstSceneCount: SCENES.length,
+            titleFirstOffsetsInFrames:
+              WIDE_V004_QA_CONTRACT.titleFirstOffsetsInFrames,
+            chunkCount: 20,
+            chunkSeamCount: 19,
+            chunkDurationInFrames:
+              WIDE_V004_QA_CONTRACT.chunkDurationInFrames,
+            chunkSeamOffsetsInFrames:
+              WIDE_V004_QA_CONTRACT.chunkSeamOffsetsInFrames,
+            watermarkCycleInFrames:
+              WIDE_V004_QA_CONTRACT.watermarkCycleInFrames,
+            watermarkCadenceId:
+              WIDE_V004_QA_CONTRACT.watermarkCadenceId,
+            watermarkMotionSampleOffsetsInFrames:
+              WIDE_V004_QA_CONTRACT.watermarkMotionSampleOffsetsInFrames,
+            watermarkCropPixels:
+              WIDE_V004_QA_CONTRACT.watermarkCropPixels,
+            watermarkMotionProof:
+              WIDE_V004_QA_CONTRACT.watermarkMotionProof,
+            finalTailOffsetsInFrames:
+              WIDE_V004_QA_CONTRACT.finalTailOffsetsInFrames,
+            extractionMode: "batched-sequential-decode-no-seek",
+            sequentialExtractionBatchSize:
+              WIDE_V004_QA_CONTRACT.sequentialExtractionBatchSize,
+            expectedFullSampleCount:
+              V004B_FORMAL_QA_PROFILE.expectedFullSampleCount,
+            expectedPeriodicSampleCount:
+              V004B_FORMAL_QA_PROFILE.expectedPeriodicSampleCount,
+            expectedEvidenceFrameCount:
+              V004B_FORMAL_QA_PROFILE.expectedEvidenceFrameCount,
+            expectedContactSheetCount:
+              V004B_FORMAL_QA_PROFILE.expectedContactSheetCount
+          }
+        : {}),
       periodicIntervalSeconds: WIDE_V004_QA_CONTRACT.periodicIntervalSeconds,
       fullSamples: framePlan.fullSamples,
       periodicSamples: framePlan.periodicSamples
@@ -1732,7 +2306,17 @@ export async function runAgentSkillLongReviewQa(
         sourceCodeMutated: false,
         singleFrameAbaLayerDropoutScanIsReadOnly: true,
         automaticFrameRepairAttempted: false,
-        manualVisualJudgmentsRemainPending: true
+        manualVisualJudgmentsRemainPending: true,
+        ...(IS_V004B_FORMAL_QA_JOB
+          ? {
+              formalCandidateVersionIsOne: true,
+              visualSourceAndRenderBaseVersionsAreProvenanceOnly: true,
+              temporaryV004FullVoiceIsNotFinalHumanRecording: true,
+              evidenceFramesExtractedInSequentialBatchesOfAtMost24: true,
+              watermarkContinuousMotionMachineGateRequired: true,
+              uninterruptedOneXPlaybackStillRequired: true
+            }
+          : {})
       }
     };
     await assertPathsCurrent("before-run-manifest-write");
@@ -1753,10 +2337,8 @@ export async function runAgentSkillLongReviewQa(
       "frame-metrics.json",
       "qa-summary.json",
       "QA-REPORT.md",
-      "contact-scenes-overview.png",
-      "contact-periodic-overview.png",
-      "contact-static-candidates.png",
-      "contact-low-information-candidates.png"
+      ...(IS_V004B_FORMAL_QA_JOB ? ["watermark-motion-proof.json"] : []),
+      ...requiredLongReviewContactSheets()
     ]) {
       await assertPlainFile(resolve(temporaryQaDirectory, required), `必需 QA 产物 ${required}`);
     }
@@ -1793,7 +2375,7 @@ export async function runAgentSkillLongReviewQa(
     if (JSON.stringify(qaSourceIdentityAfter) !== JSON.stringify(qaSourceIdentityBefore)) {
       throw new Error("QA 驱动、分析器、运行时锁或 Git HEAD 在 QA 期间发生变化；拒绝发布");
     }
-    if (CONFIGURED_RENDER_JOB) {
+    if (CONFIGURED_RENDER_JOB && !IS_V004B_FORMAL_QA_JOB) {
       const candidateInputIdentityAfter = await captureLongReviewCandidateSourceIdentity({
         job: CONFIGURED_RENDER_JOB,
         jobConfigPath: QA_JOB_CONFIG_PATH,
@@ -1833,6 +2415,8 @@ export async function runAgentSkillLongReviewQa(
       representativeScenes: SCENES.length,
       sceneTransitions: SCENES.length - 1,
       periodicSamples: framePlan.periodicSamples.length,
+      fullResolutionSamples: framePlan.fullSamples.length,
+      contactSheets: requiredLongReviewContactSheets().length,
       singleFrameAbaLayerDropout: {
         status: layerDropoutAnalysis.status,
         blockingEventCount: layerDropoutAnalysis.blockingEventCount,

@@ -43,7 +43,7 @@ import {
   longReviewVisualSceneCopy
 } from "./agent-skill-long-review-plan.mjs";
 
-const { palette, typography } = VISUAL_SYSTEM_V1;
+const { palette, typography, surfaceBorder } = VISUAL_SYSTEM_V1;
 
 const humanNodePattern = /(?:\bhuman\b|人工(?:决定|确认)|等待人工)/iu;
 const WIDE_BACKDROP_LOOP_SECONDS = 25;
@@ -191,23 +191,25 @@ function AdaptiveSemanticGroups({ spec, layout }) {
   const labelledGroups = (spec.groups ?? []).filter((group) => group.label);
   if (labelledGroups.length === 0) return null;
   return labelledGroups.map((group) => {
-    const isCompleteBoundary = group.visualForm === "full-outline";
+    const isCompleteObjectBoundary = group.semanticMeaning === "complete-object-or-boundary";
     const groupProgress = longReviewSemanticGroupProgress(layout.state, group.nodeIds);
     if (groupProgress <= 0) return null;
     const bounds = longReviewResolvedSemanticGroupBounds(group, layout);
     if (!bounds) return null;
     const { left, right, top, bottom } = bounds;
+    const groupBorderColor = isCompleteObjectBoundary
+      ? surfaceBorder.semanticGroup.completeBoundaryColor
+      : surfaceBorder.semanticGroup.contextualColor;
     return (
       <div
         key={group.id}
         data-semantic-group-id={group.id}
-        data-semantic-group-role={isCompleteBoundary ? "complete-boundary" : "open-swimlane"}
-        data-shape-grammar-role={isCompleteBoundary ? "complete-object" : "open-canvas-group"}
-        data-shape-grammar-form={isCompleteBoundary ? "full-outline" : "open-node"}
+        data-semantic-group-role={isCompleteObjectBoundary ? "complete-boundary" : "contextual-boundary"}
+        data-shape-grammar-role={isCompleteObjectBoundary ? "complete-object" : "semantic-group"}
+        data-shape-grammar-form={group.visualForm}
+        data-visual-system-group-border={`${surfaceBorder.semanticGroup.mode}-${surfaceBorder.semanticGroup.widthPx}px`}
         data-shape-grammar-meaning={
-          group.semanticMeaning ?? (isCompleteBoundary
-            ? "complete-object-or-boundary"
-            : "process-or-relationship-anchor")
+          group.semanticMeaning
         }
         style={{
           position: "absolute",
@@ -216,8 +218,7 @@ function AdaptiveSemanticGroups({ spec, layout }) {
           width: right - left,
           height: bottom - top,
           boxSizing: "border-box",
-          border: isCompleteBoundary ? `2px solid ${palette.lineStrong}` : "none",
-          borderTop: isCompleteBoundary ? undefined : `2px solid ${palette.lineStrong}`,
+          border: `${surfaceBorder.semanticGroup.widthPx}px solid ${groupBorderColor}`,
           background: "linear-gradient(180deg, rgba(216, 243, 232, 0.28) 0%, rgba(216, 243, 232, 0) 42%)",
           borderRadius: 18,
           opacity: groupProgress,
@@ -778,7 +779,11 @@ function subtitleCaptions(episode, activeSubtitle = null) {
   }));
 }
 
-export function AgentSkillLongReview({ episode }) {
+export function AgentSkillLongReview({
+  episode,
+  burnInSubtitle = true,
+  renderAudio = true
+}) {
   const frame = useCurrentFrame();
   const layers = longReviewSceneLayersAtFrame(frame);
   const subtitleGate = longReviewSubtitleGateAtFrame(episode?.subtitles ?? [], frame);
@@ -803,7 +808,9 @@ export function AgentSkillLongReview({ episode }) {
       }}
     >
       <WideMovingBackdrop frameOverride={backdropFrame} />
-      {episode?.voice?.publicPath ? <Audio src={staticFile(episode.voice.publicPath)} /> : null}
+      {renderAudio && episode?.voice?.publicPath
+        ? <Audio src={staticFile(episode.voice.publicPath)} />
+        : null}
       <div
         data-visual-system="visual-system-v1"
         data-visual-system-content="open-canvas"
@@ -823,6 +830,7 @@ export function AgentSkillLongReview({ episode }) {
       </div>
       <VisualSystemV1WideBrandLayer
         tone="quiet"
+        motionCadence="continuous"
         transitionFrames={AGENT_SKILL_LONG_REVIEW_SCENE_START_FRAMES}
       />
       <div
@@ -837,7 +845,7 @@ export function AgentSkillLongReview({ episode }) {
             : subtitleGate.opacity * subtitleGate.presentationOpacity
         }}
       >
-        {subtitleGate.renderSubtitle ? (
+        {burnInSubtitle && subtitleGate.renderSubtitle ? (
           <VisualSystemV1PlainSubtitle
             captions={captions}
             visualWeight={subtitleGate.visualWeight ?? "primary"}

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import statistics
@@ -353,6 +354,158 @@ def tag_items(
     return result
 
 
+def watermark_crop_hashes(
+    qa_dir: Path,
+    sample: dict[str, Any],
+    crop_pixels: dict[str, int],
+) -> dict[str, str]:
+    left = int(crop_pixels["left"])
+    top = int(crop_pixels["top"])
+    width = int(crop_pixels["width"])
+    height = int(crop_pixels["height"])
+    if min(left, top) < 0 or min(width, height) <= 0:
+        raise ValueError("Watermark crop geometry is invalid")
+    with image_for(qa_dir, sample) as source:
+        if left + width > source.width or top + height > source.height:
+            raise ValueError("Watermark crop escapes the decoded frame")
+        crop = source.crop((left, top, left + width, top + height))
+        rgb_bytes = crop.tobytes()
+        gray = np.asarray(
+            crop.convert("L").resize((33, 32), Image.Resampling.LANCZOS),
+            dtype=np.float32,
+        )
+    difference_bits = np.packbits(gray[:, 1:] > gray[:, :-1]).tobytes()
+    return {
+        "rgbSha256": hashlib.sha256(rgb_bytes).hexdigest(),
+        "perceptualDhash32": difference_bits.hex(),
+    }
+
+
+def hexadecimal_hamming_distance(left: str, right: str) -> int:
+    if len(left) != len(right):
+        raise ValueError("Watermark perceptual hashes have different lengths")
+    return (int(left, 16) ^ int(right, 16)).bit_count()
+
+
+def analyze_watermark_continuous_motion(
+    qa_dir: Path,
+    frame_index: dict[str, Any],
+) -> dict[str, Any]:
+    cadence_id = frame_index.get("watermarkCadenceId")
+    cycle_frames = int(frame_index.get("watermarkCycleInFrames", 0))
+    offsets = frame_index.get("watermarkMotionSampleOffsetsInFrames", [])
+    crop_pixels = frame_index.get("watermarkCropPixels")
+    proof_contract = frame_index.get("watermarkMotionProof")
+    if cadence_id != "continuous":
+        raise ValueError("Formal watermark motion proof requires continuous cadence")
+    if cycle_frames <= 0 or offsets[0:1] != [0] or offsets[-1:] != [cycle_frames]:
+        raise ValueError("Watermark motion samples must include zero and the full-cycle return")
+    if len(offsets) != len(set(offsets)) or offsets != sorted(offsets):
+        raise ValueError("Watermark motion sample offsets must be sorted and unique")
+    if not isinstance(crop_pixels, dict) or not isinstance(proof_contract, dict):
+        raise ValueError("Watermark motion proof contract is incomplete")
+
+    expected_chunks = int(frame_index.get("chunkCount", 0))
+    chunk_frames = int(frame_index.get("chunkDurationInFrames", 0))
+    tagged = tag_items(frame_index["fullSamples"], "watermark-motion-sample:")
+    grouped: dict[str, dict[int, dict[str, Any]]] = {}
+    for sample, tag in tagged:
+        _, chunk_id, _, raw_offset = tag.split(":")
+        offset = int(raw_offset)
+        if offset in grouped.setdefault(chunk_id, {}):
+            raise ValueError(f"Duplicate watermark motion sample: {chunk_id} offset {offset}")
+        grouped[chunk_id][offset] = sample
+
+    threshold = int(proof_contract["materialChangeDhashHammingMinimum"])
+    return_maximum = int(proof_contract["cycleReturnDhashHammingMaximum"])
+    minimum_distinct = int(proof_contract["minimumDistinctCropHashCount"])
+    minimum_changed = int(proof_contract["minimumMateriallyChangedPhaseCount"])
+    chunks = []
+    for chunk_number in range(1, expected_chunks + 1):
+        chunk_id = f"chunk-{chunk_number:02d}"
+        samples_by_offset = grouped.get(chunk_id, {})
+        if sorted(samples_by_offset) != offsets:
+            raise ValueError(f"Watermark motion samples are incomplete for {chunk_id}")
+        phase_samples = []
+        expected_chunk_start = (chunk_number - 1) * chunk_frames
+        for offset in offsets:
+            sample = samples_by_offset[offset]
+            if sample["frame"] != expected_chunk_start + offset:
+                raise ValueError(f"Watermark motion sample frame is misbound for {chunk_id}")
+            phase_samples.append(
+                {
+                    "offsetInFrames": offset,
+                    "frame": sample["frame"],
+                    "filename": sample["filename"],
+                    **watermark_crop_hashes(qa_dir, sample, crop_pixels),
+                }
+            )
+        anchor_hash = phase_samples[0]["perceptualDhash32"]
+        for phase_sample in phase_samples:
+            phase_sample["anchorDhashHammingDistance"] = hexadecimal_hamming_distance(
+                anchor_hash, phase_sample["perceptualDhash32"]
+            )
+        distinct_crop_hash_count = len(
+            {sample["rgbSha256"] for sample in phase_samples}
+        )
+        materially_changed_phase_count = sum(
+            1
+            for sample in phase_samples[1:-1]
+            if sample["anchorDhashHammingDistance"] >= threshold
+        )
+        return_distance = phase_samples[-1]["anchorDhashHammingDistance"]
+        checks = {
+            "multipleDecodedCropHashesChanged":
+                distinct_crop_hash_count >= minimum_distinct,
+            "multipleMaterialMotionPhasesDetected":
+                materially_changed_phase_count >= minimum_changed,
+            "fullCycleReturned": return_distance <= return_maximum,
+        }
+        chunks.append(
+            {
+                "chunkId": chunk_id,
+                "startFrame": expected_chunk_start,
+                "distinctCropHashCount": distinct_crop_hash_count,
+                "materiallyChangedPhaseCount": materially_changed_phase_count,
+                "cycleReturnDhashHammingDistance": return_distance,
+                "checks": checks,
+                "status": "pass" if all(checks.values()) else "fail",
+                "samples": phase_samples,
+            }
+        )
+
+    checks = {
+        "continuousCadenceDeclared": cadence_id == "continuous",
+        "allChunksSampled": len(chunks) == expected_chunks,
+        "multipleDecodedCropHashesChanged": all(
+            chunk["checks"]["multipleDecodedCropHashesChanged"] for chunk in chunks
+        ),
+        "multipleMaterialMotionPhasesDetected": all(
+            chunk["checks"]["multipleMaterialMotionPhasesDetected"] for chunk in chunks
+        ),
+        "fullCycleReturned": all(
+            chunk["checks"]["fullCycleReturned"] for chunk in chunks
+        ),
+    }
+    return {
+        "schemaVersion": proof_contract["schemaVersion"],
+        "status": "pass" if all(checks.values()) else "fail",
+        "cadenceId": cadence_id,
+        "cycleInFrames": cycle_frames,
+        "sampleOffsetsInFrames": offsets,
+        "cropPixels": crop_pixels,
+        "hashAlgorithm": "decoded-rgb-sha256-and-32x32-dhash",
+        "thresholds": {
+            "minimumDistinctCropHashCount": minimum_distinct,
+            "minimumMateriallyChangedPhaseCount": minimum_changed,
+            "materialChangeDhashHammingMinimum": threshold,
+            "cycleReturnDhashHammingMaximum": return_maximum,
+        },
+        "checks": checks,
+        "chunks": chunks,
+    }
+
+
 def labeled_contact_sheet(
     qa_dir: Path,
     items: list[tuple[dict[str, Any], str]],
@@ -361,6 +514,7 @@ def labeled_contact_sheet(
     columns: int,
     thumb_size: tuple[int, int],
     empty_note: str | None = None,
+    crop_box_normalized: tuple[float, float, float, float] | None = None,
 ) -> None:
     output_path = qa_dir / output_name
     title_height = 72
@@ -397,6 +551,16 @@ def labeled_contact_sheet(
         x = margin + column * (thumb_size[0] + gap)
         y = margin + title_height + row * (thumb_size[1] + label_height + gap)
         with image_for(qa_dir, sample) as source:
+            if crop_box_normalized is not None:
+                left, top, right, bottom = crop_box_normalized
+                source = source.crop(
+                    (
+                        round(source.width * left),
+                        round(source.height * top),
+                        round(source.width * right),
+                        round(source.height * bottom),
+                    )
+                )
             thumbnail = ImageOps.fit(
                 source,
                 thumb_size,
@@ -446,6 +610,34 @@ def build_contact_sheets(
     )
     outputs.append("contact-scenes-overview.png")
 
+    title_offsets = frame_index.get("titleFirstOffsetsInFrames", [])
+    if title_offsets:
+        title_items = []
+        for sample, tag in tag_items(full_samples, "title-first:"):
+            _, scene_id, _, offset = tag.split(":")
+            title_items.append(
+                (
+                    sample,
+                    f"{scene_id} · {int(offset):+d}f · {format_time(sample['second'])}",
+                )
+            )
+        title_items.sort(key=lambda pair: pair[0]["frame"])
+        title_frames_per_scene = len(title_offsets)
+        title_chunk_size = 6 * title_frames_per_scene
+        for part, start in enumerate(
+            range(0, len(title_items), title_chunk_size), start=1
+        ):
+            name = f"contact-title-first-{part:02d}.png"
+            labeled_contact_sheet(
+                qa_dir,
+                title_items[start : start + title_chunk_size],
+                name,
+                f"TITLE-FIRST ENTRANCE ORDER · PART {part:02d}",
+                columns=title_frames_per_scene,
+                thumb_size=(300, 169),
+            )
+            outputs.append(name)
+
     boundary_items = []
     for sample, tag in tag_items(full_samples, "boundary:"):
         _, transition, _, offset = tag.split(":")
@@ -471,6 +663,53 @@ def build_contact_sheets(
         )
         outputs.append(name)
 
+    chunk_offsets = frame_index.get("chunkSeamOffsetsInFrames", [])
+    if chunk_offsets:
+        chunk_items = []
+        for sample, tag in tag_items(full_samples, "chunk-seam:"):
+            _, transition, _, offset = tag.split(":")
+            chunk_items.append(
+                (
+                    sample,
+                    f"chunk {transition.replace('>', '→')} · {int(offset):+d}f · {format_time(sample['second'])}",
+                )
+            )
+        chunk_items.sort(key=lambda pair: pair[0]["frame"])
+        chunk_frames_per_seam = len(chunk_offsets)
+        chunk_sheet_size = 4 * chunk_frames_per_seam
+        for part, start in enumerate(
+            range(0, len(chunk_items), chunk_sheet_size), start=1
+        ):
+            name = f"contact-chunk-seams-{part:02d}.png"
+            labeled_contact_sheet(
+                qa_dir,
+                chunk_items[start : start + chunk_sheet_size],
+                name,
+                f"20-CHUNK CONCAT SEAMS · PART {part:02d}",
+                columns=chunk_frames_per_seam,
+                thumb_size=(300, 169),
+            )
+            outputs.append(name)
+
+    final_tail_offsets = frame_index.get("finalTailOffsetsInFrames", [])
+    if final_tail_offsets:
+        final_tail_items = []
+        for sample, tag in tag_items(full_samples, "final-tail:"):
+            _, _, offset = tag.split(":")
+            final_tail_items.append(
+                (sample, f"tail {int(offset):+d}f · {format_time(sample['second'])}")
+            )
+        final_tail_items.sort(key=lambda pair: pair[0]["frame"])
+        labeled_contact_sheet(
+            qa_dir,
+            final_tail_items,
+            "contact-final-tail.png",
+            "FINAL TAIL · LAST FOUR SECONDS",
+            columns=len(final_tail_offsets),
+            thumb_size=(300, 169),
+        )
+        outputs.append("contact-final-tail.png")
+
     periodic_overview = []
     for sample in periodic_samples:
         rounded_second = round(sample["second"])
@@ -488,6 +727,57 @@ def build_contact_sheets(
         thumb_size=(288, 162),
     )
     outputs.append("contact-periodic-overview.png")
+
+    if frame_index.get("expectedPeriodicSampleCount"):
+        periodic_items = [
+            (
+                sample,
+                f"{scene_for_second(frame_index['scenes'], sample['second'])} · {format_time(sample['second'])}",
+            )
+            for sample in periodic_samples
+        ]
+        periodic_per_sheet = 30
+        for part, start in enumerate(
+            range(0, len(periodic_items), periodic_per_sheet), start=1
+        ):
+            name = f"contact-periodic-2s-{part:02d}.png"
+            labeled_contact_sheet(
+                qa_dir,
+                periodic_items[start : start + periodic_per_sheet],
+                name,
+                f"FULL VIDEO · EVERY 2 SECONDS · PART {part:02d}",
+                columns=6,
+                thumb_size=(240, 135),
+            )
+            outputs.append(name)
+
+    watermark_offsets = frame_index.get("watermarkMotionSampleOffsetsInFrames", [])
+    if watermark_offsets:
+        watermark_items = []
+        for sample, tag in tag_items(full_samples, "watermark-motion-sample:"):
+            _, chunk_id, _, offset = tag.split(":")
+            watermark_items.append(
+                (
+                    sample,
+                    f"{chunk_id} · offset {int(offset):03d}f · {format_time(sample['second'])}",
+                )
+            )
+        watermark_items.sort(key=lambda pair: pair[0]["frame"])
+        watermark_sheet_size = 4 * len(watermark_offsets)
+        for part, start in enumerate(
+            range(0, len(watermark_items), watermark_sheet_size), start=1
+        ):
+            name = f"contact-watermark-motion-{part:02d}.png"
+            labeled_contact_sheet(
+                qa_dir,
+                watermark_items[start : start + watermark_sheet_size],
+                name,
+                f"TOP-RIGHT v013 WATERMARK · CONTINUOUS MOTION PROOF · PART {part:02d}",
+                columns=len(watermark_offsets),
+                thumb_size=(260, 260),
+                crop_box_normalized=(1740 / 1920, 20 / 1080, 1900 / 1920, 180 / 1080),
+            )
+            outputs.append(name)
 
     periodic_by_frame = {item["frame"]: item for item in periodic_samples}
     static_frames: dict[int, tuple[dict[str, Any], str]] = {}
@@ -548,6 +838,7 @@ def build_summary(
     frame_index: dict[str, Any],
     layer_dropout_analysis: dict[str, Any],
     metrics: dict[str, Any],
+    watermark_motion_proof: dict[str, Any] | None,
     contact_sheets: list[str],
     write_scope: str,
     candidate_version: int,
@@ -574,6 +865,22 @@ def build_summary(
     informational_layer_dropout_count = int(
         layer_dropout_analysis["informationalEventCount"]
     )
+    watermark_motion_failed = (
+        watermark_motion_proof is not None
+        and watermark_motion_proof.get("status") != "pass"
+    )
+    if watermark_motion_failed:
+        automated_findings.append(
+            {
+                "severity": "blocking",
+                "category": "watermark-motion",
+                "id": "continuous-watermark-motion-proof",
+                "message": (
+                    "Decoded watermark crops did not prove multiple material motion phases "
+                    "and a full 120-frame cycle return."
+                ),
+            }
+        )
     if blocking_layer_dropout_count:
         first_frames = [
             str(event["frameB"])
@@ -651,6 +958,27 @@ def build_summary(
             "字幕安全区",
             "检查纯黑字幕是否平稳、最多两行，并与底部章节进度条及画面主体保持安全距离。",
         ),
+        *(
+            [
+                (
+                    "title-first",
+                    "标题先于正文与字幕",
+                    "逐场景检查入场前两秒：大标题应先建立层级，小字、正文和字幕不能抢先出现。",
+                ),
+                (
+                    "icons-illustrations",
+                    "图标与图案表达",
+                    "检查图标是否独立展示、语义对应、比例克制；卡片文本内不应逐项附图标，插画必须帮助理解。",
+                ),
+                (
+                    "cards-connectors",
+                    "卡片边框与连接线",
+                    "检查同一组卡片边界一致、文字不溢出，箭头只走横竖和直角转弯且关系清楚。",
+                ),
+            ]
+            if frame_index.get("titleFirstOffsetsInFrames")
+            else []
+        ),
         (
             "visual-consistency",
             "视觉一致性",
@@ -658,8 +986,12 @@ def build_summary(
         ),
         (
             "transitions",
-            "转场连续性",
-            "检查 17 个场景边界的空白闪帧、双重曝光、跳变、断线和不合理停顿。",
+            "场景与分段连续性",
+            (
+                "检查 17 个场景边界和 19 个分段拼接点的空白闪帧、双重曝光、跳变、断线和不合理停顿。"
+                if frame_index.get("chunkSeamCount")
+                else "检查 17 个场景边界的空白闪帧、双重曝光、跳变、断线和不合理停顿。"
+            ),
         ),
         (
             "rhythm",
@@ -670,6 +1002,22 @@ def build_summary(
             "brand-aesthetic",
             "审美与品牌感",
             "按克制、轻薄、统一、专业、非模板化的标准检查层级、留白和强调方式。",
+        ),
+        *(
+            [
+                (
+                    "watermark-continuity",
+                    "动态水印连续性",
+                    "复核机器门禁并检查右上角 v013 水印全片持续转动、尺寸一致，没有在场景或分段边界突然消失或变小。",
+                ),
+                (
+                    "continuous-watch",
+                    "实际 MP4 1× 连续观看",
+                    "从头到尾以 1× 播放完整 10 分钟 MP4，检查图像、配音、字幕同步和联系表无法覆盖的动态问题。",
+                ),
+            ]
+            if frame_index.get("watermarkMotionSampleOffsetsInFrames")
+            else []
         ),
     ]
     return {
@@ -690,7 +1038,7 @@ def build_summary(
             if media_failures
             else (
                 "blocking_visual_integrity_issue"
-                if blocking_layer_dropout_count
+                if blocking_layer_dropout_count or watermark_motion_failed
                 else "pending_manual_visual_review"
             )
         ),
@@ -701,6 +1049,29 @@ def build_summary(
             "boundaryOffsetsInFrames": frame_index["boundaryOffsetsInFrames"],
             "periodicIntervalSeconds": frame_index["periodicIntervalSeconds"],
             "periodicSampleCount": len(frame_index["periodicSamples"]),
+            **(
+                {
+                    "titleFirstSceneCount": frame_index["titleFirstSceneCount"],
+                    "titleFirstOffsetsInFrames": frame_index["titleFirstOffsetsInFrames"],
+                    "chunkCount": frame_index["chunkCount"],
+                    "chunkSeamCount": frame_index["chunkSeamCount"],
+                    "chunkSeamOffsetsInFrames": frame_index["chunkSeamOffsetsInFrames"],
+                    "watermarkCadenceId": frame_index["watermarkCadenceId"],
+                    "watermarkCycleInFrames": frame_index["watermarkCycleInFrames"],
+                    "watermarkMotionSampleOffsetsInFrames": frame_index[
+                        "watermarkMotionSampleOffsetsInFrames"
+                    ],
+                    "finalTailOffsetsInFrames": frame_index["finalTailOffsetsInFrames"],
+                    "fullResolutionSampleCount": len(frame_index["fullSamples"]),
+                    "totalEvidenceFrameCount": (
+                        len(frame_index["fullSamples"])
+                        + len(frame_index["periodicSamples"])
+                    ),
+                    "contactSheetCount": len(contact_sheets),
+                }
+                if frame_index.get("titleFirstOffsetsInFrames")
+                else {}
+            ),
         },
         "automatedChecks": {
             "media": {
@@ -721,6 +1092,19 @@ def build_summary(
                 "evidencePlanArtifact":
                     "single-frame-aba-layer-dropout-evidence-plan.json",
             },
+            **(
+                {
+                    "watermarkContinuousMotion": {
+                        "status": watermark_motion_proof["status"],
+                        "artifact": "watermark-motion-proof.json",
+                        "cadenceId": watermark_motion_proof["cadenceId"],
+                        "chunkCount": len(watermark_motion_proof["chunks"]),
+                        "checks": watermark_motion_proof["checks"],
+                    }
+                }
+                if watermark_motion_proof is not None
+                else {}
+            ),
             "findings": automated_findings,
             "interpretationBoundary": (
                 "Frame metrics are candidate detectors only. They cannot approve composition, typography, "
@@ -765,6 +1149,17 @@ def markdown_report(summary: dict[str, Any], metrics: dict[str, Any]) -> str:
         f"- 场景代表帧：{coverage['representativeFrameCount']}/{coverage['sceneCount']}",
         f"- 场景转场：{coverage['sceneTransitionCount']} 个，每个采样 {len(coverage['boundaryOffsetsInFrames'])} 帧位置",
         f"- 节奏采样：每 {coverage['periodicIntervalSeconds']} 秒一次，共 {coverage['periodicSampleCount']} 张",
+        *(
+            [
+                f"- 标题优先：{coverage['titleFirstSceneCount']} 场，每场 {len(coverage['titleFirstOffsetsInFrames'])} 个入场帧",
+                f"- 30 秒分段拼接：{coverage['chunkSeamCount']} 个，每个采样 {len(coverage['chunkSeamOffsetsInFrames'])} 帧位置",
+                f"- 动态水印：{coverage['chunkCount']} 段，每段 {len(coverage['watermarkMotionSampleOffsetsInFrames'])} 个运动/回返样本；机器门禁见 `watermark-motion-proof.json`",
+                f"- 精确证据帧：全分辨率 {coverage['fullResolutionSampleCount']} + 周期 {coverage['periodicSampleCount']} = {coverage['totalEvidenceFrameCount']}",
+                f"- 联系表：{coverage['contactSheetCount']} 张；仍需连续 1× 观看实际 MP4",
+            ]
+            if "titleFirstSceneCount" in coverage
+            else []
+        ),
         (
             "- 单帧 A-B-A layer-dropout：连续扫描 "
             f"{summary['automatedChecks']['singleFrameAbaLayerDropout']['analyzedTripleCount']} 个三帧窗口；"
@@ -866,6 +1261,25 @@ def main() -> None:
         raise ValueError("Representative-frame coverage is incomplete")
     if frame_index.get("boundaryTransitionCount") != 17:
         raise ValueError("Scene-transition coverage is incomplete")
+    if frame_index.get("titleFirstOffsetsInFrames"):
+        if frame_index.get("titleFirstSceneCount") != 18:
+            raise ValueError("Title-first scene coverage is incomplete")
+        if frame_index.get("chunkCount") != 20 or frame_index.get("chunkSeamCount") != 19:
+            raise ValueError("20-chunk seam coverage is incomplete")
+        if frame_index.get("watermarkCycleInFrames") != 120:
+            raise ValueError("Watermark cycle coverage is not bound to 120 frames")
+        if frame_index.get("watermarkCadenceId") != "continuous":
+            raise ValueError("Formal v004b watermark cadence must be continuous")
+        if frame_index.get("extractionMode") != "batched-sequential-decode-no-seek":
+            raise ValueError("Formal v004b extraction mode is not sequential/no-seek")
+        if frame_index.get("sequentialExtractionBatchSize") != 24:
+            raise ValueError("Formal v004b extraction batch size must be 24")
+        full_sample_count = len(frame_index.get("fullSamples", []))
+        periodic_sample_count = len(frame_index.get("periodicSamples", []))
+        if full_sample_count != 441 or periodic_sample_count != 301:
+            raise ValueError("Formal v004b evidence must contain 441 + 301 frames")
+        if full_sample_count + periodic_sample_count != 742:
+            raise ValueError("Formal v004b evidence total must be 742 frames")
     if layer_dropout_analysis.get("candidateVersion") != candidate_version:
         raise ValueError("Single-frame A-B-A layer-dropout candidateVersion is not bound")
     if layer_dropout_analysis.get("automaticFrameRepairAttempted") is not False:
@@ -890,6 +1304,15 @@ def main() -> None:
         raise ValueError("Single-frame A-B-A layer-dropout evidence source video is not bound")
     if layer_dropout_evidence.get("totalBlockingEventCount") != layer_dropout_analysis.get("blockingEventCount"):
         raise ValueError("Single-frame A-B-A layer-dropout evidence count is inconsistent")
+
+    watermark_motion_proof = None
+    if frame_index.get("watermarkCadenceId") is not None:
+        watermark_motion_proof = {
+            **analyze_watermark_continuous_motion(qa_dir, frame_index),
+            "candidateVersion": candidate_version,
+            "sourceVideo": media_metadata.get("source", {}).get("video"),
+        }
+        write_json(qa_dir / "watermark-motion-proof.json", watermark_motion_proof)
 
     periodic_samples = frame_index["periodicSamples"]
     sample_stats = [
@@ -936,11 +1359,18 @@ def main() -> None:
     }
     write_json(qa_dir / "frame-metrics.json", metrics)
     contact_sheets = build_contact_sheets(qa_dir, frame_index, runs, low_information)
+    expected_contact_sheet_count = frame_index.get("expectedContactSheetCount")
+    if expected_contact_sheet_count and len(contact_sheets) != expected_contact_sheet_count:
+        raise ValueError(
+            "Formal v004b contact-sheet count is incomplete: "
+            f"expected={expected_contact_sheet_count} actual={len(contact_sheets)}"
+        )
     summary = build_summary(
         media_metadata,
         frame_index,
         layer_dropout_analysis,
         metrics,
+        watermark_motion_proof,
         contact_sheets,
         f"candidate v{candidate_version:03d}/{qa_dir.name} only",
         candidate_version,
@@ -950,6 +1380,10 @@ def main() -> None:
     (qa_dir / "QA-REPORT.md").write_text(
         markdown_report(summary, metrics), encoding="utf-8"
     )
+    if watermark_motion_proof is not None and watermark_motion_proof["status"] != "pass":
+        raise ValueError(
+            "Formal watermark motion gate failed: decoded crops did not prove continuous motion"
+        )
     print(
         json.dumps(
             {

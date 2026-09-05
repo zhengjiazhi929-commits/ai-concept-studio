@@ -456,10 +456,11 @@ test("长片用多种可复用图解叙事承载内容，并在 S04 一次性教
   assert.match(component, /data-shape-grammar-boundary-wrapper/u);
   assert.match(component, /data-shape-grammar-form=\{surfacePlan\?\.shapeGrammarVisualForm\}/u);
   assert.match(component, /data-narrative-treatment=\{spec\.narrativeTreatment\}/u);
-  assert.match(component, /data-semantic-group-role=\{isCompleteBoundary/u);
+  assert.match(component, /data-semantic-group-role=\{isCompleteObjectBoundary/u);
   assert.match(contrastGeometry, /layout\.fullGeometryById \?\? layout\.geometryById/u);
-  assert.match(component, /border: isCompleteBoundary \? `2px solid/u);
-  assert.match(component, /borderTop: isCompleteBoundary \? undefined/u);
+  assert.match(component, /data-visual-system-group-border/u);
+  assert.match(component, /surfaceBorder\.semanticGroup\.widthPx/u);
+  assert.doesNotMatch(component, /borderTop: isCompleteBoundary/u);
 });
 
 test("图解构建期间只保留一个降权短提示，建立前和安静终帧恢复完整字幕", async () => {
@@ -1886,7 +1887,7 @@ test("同阶段关系默认等待端点；渐进目录先完成边框和结构�
   assert.doesNotMatch(component, /semanticRelation\?\.semanticType === "contrasts-with"/u);
 });
 
-test("S14 使用精确 sequence-critical 连线 tone，长片品牌层按 18 个真实切场帧短暂运动", async () => {
+test("S14 使用精确 sequence-critical 连线 tone，长片品牌层保持quiet透明度并持续运动", async () => {
   assert.equal(sceneById("S14").connectorTone, "sequence-critical");
   assert.deepEqual(AGENT_SKILL_LONG_REVIEW_CONNECTOR_TONES["sequence-critical"], {
     strokeWidthPx: 2.6,
@@ -1908,7 +1909,7 @@ test("S14 使用精确 sequence-critical 连线 tone，长片品牌层按 18 个
   const component = await readFile(COMPONENT_PATH, "utf8");
   assert.match(
     component,
-    /<VisualSystemV1WideBrandLayer[\s\S]*?tone="quiet"[\s\S]*?transitionFrames=\{AGENT_SKILL_LONG_REVIEW_SCENE_START_FRAMES\}[\s\S]*?\/>/u
+    /<VisualSystemV1WideBrandLayer[\s\S]*?tone="quiet"[\s\S]*?motionCadence="continuous"[\s\S]*?transitionFrames=\{AGENT_SKILL_LONG_REVIEW_SCENE_START_FRAMES\}[\s\S]*?\/>/u
   );
 });
 
@@ -1960,6 +1961,13 @@ test("完整长片用内容驱动宽度、纯文字卡片和开放图解打破�
     { id: "method", label: "方法与判断" },
     { id: "execution", label: "动作、连接与结果" }
   ]);
+  assert.equal(s11.groups.every((group) => group.visualForm === "full-outline"), true);
+  assert.equal(
+    s11.groups.every(
+      (group) => group.semanticMeaning === "process-or-relationship-group-boundary"
+    ),
+    true
+  );
   assert.equal(new Set(s11.layoutSamples[0].elements.map((element) => element.bounds.y)).size, 2);
   assert.deepEqual(
     Object.fromEntries(s11.layoutSamples[0].elements.map((element) => [element.id, element.surfaceRole])),

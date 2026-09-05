@@ -4,9 +4,13 @@ import { readFile, readdir } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { publicRoot } from "../src/shared/paths.mjs";
+import { currentGateArtifactHash } from "../src/shared/workflow.mjs";
+import { subtitleBoundaryIssues, subtitleDurationIssues } from
+  "../src/server/production/quality.mjs";
 import {
   fixtureAssetFileDependencies,
-  readFixtureEpisode
+  readFixtureEpisode,
+  readPacedFixtureEpisode
 } from "./episode-fixture.mjs";
 
 const STORE_MODULE_IMPORT =
@@ -110,6 +114,44 @@ test("Episode 测试夹具拒绝未知 ID", async () => {
     readFixtureEpisode("missing-episode"),
     /Unknown episode fixture/u
   );
+});
+
+test("短字幕合成夹具保留历史文本时间轴并使用独立测试审批绑定", async () => {
+  const historical = await readFixtureEpisode();
+  const paced = await readPacedFixtureEpisode();
+  assert.ok(historical.subtitles.some((cue) => cue.end - cue.start > 5.5));
+  assert.ok(paced.subtitles.every((cue) => cue.end - cue.start <= 5.5));
+  assert.equal(
+    paced.subtitles.map((cue) => cue.text).join(""),
+    historical.subtitles.map((cue) => cue.text).join("")
+  );
+  assert.equal(paced.subtitles[0].start, historical.subtitles[0].start);
+  assert.equal(paced.subtitles.at(-1).end, historical.subtitles.at(-1).end);
+  for (let index = 1; index < paced.subtitles.length; index += 1) {
+    assert.equal(paced.subtitles[index].start, paced.subtitles[index - 1].end);
+  }
+  assert.deepEqual(subtitleBoundaryIssues(paced.subtitles), []);
+  assert.deepEqual(subtitleDurationIssues(paced.subtitles), []);
+  const {subtitles: _historicalSubtitles, ...historicalFields} = historical;
+  const {subtitles: _pacedSubtitles, ...pacedFields} = paced;
+  assert.deepEqual({
+    ...pacedFields,
+    approvals: {
+      ...pacedFields.approvals,
+      storyboard: historical.approvals.storyboard
+    },
+    reviews: {
+      ...pacedFields.reviews,
+      storyboard: historical.reviews.storyboard
+    }
+  }, historicalFields);
+  assert.equal(paced.approvals.storyboard.artifactHash, currentGateArtifactHash(paced, "storyboard"));
+  assert.equal(paced.reviews.storyboard.reports[0].artifactHash, paced.approvals.storyboard.artifactHash);
+  assert.notEqual(paced.approvals.storyboard.reviewReportId, historical.approvals.storyboard.reviewReportId);
+  assert.match(paced.approvals.storyboard.note, /Synthetic test-only/u);
+  paced.subtitles[0].text = "mutated-synthetic-cue";
+  assert.deepEqual(await readFixtureEpisode(), historical);
+  assert.notEqual((await readPacedFixtureEpisode()).subtitles[0].text, "mutated-synthetic-cue");
 });
 
 test("Episode 素材夹具通过严格内存文件表提供存在性与完整性", async () => {

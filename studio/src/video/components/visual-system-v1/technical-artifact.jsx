@@ -8,12 +8,14 @@ import {
 } from "../../../shared/technical-artifact-profile.mjs";
 import { VISUAL_SYSTEM_V1 } from "./tokens.mjs";
 
-const { palette, typography } = VISUAL_SYSTEM_V1;
+const { palette, typography, surfaceBorder } = VISUAL_SYSTEM_V1;
 
-const stroke = "rgba(23,121,93,.24)";
-const quietStroke = "rgba(23,121,93,.13)";
+const railStroke = "rgba(23,121,93,.24)";
+const quietRailStroke = "rgba(23,121,93,.13)";
 const quietFill = "rgba(90,196,163,.045)";
 const focusFill = "rgba(90,196,163,.075)";
+const zoneBorder = surfaceBorder.semanticGroup;
+const zoneBorderLabel = `${zoneBorder.mode}-${zoneBorder.widthPx}px`;
 
 function BoundedResourceArtifact({ width, height, layout, zoneProgresses }) {
   const bandBoundaries = [2, ...layout.rowDividers, height - 2];
@@ -25,14 +27,16 @@ function BoundedResourceArtifact({ width, height, layout, zoneProgresses }) {
         return (
           <rect
             key={zone.id}
+            data-technical-artifact-role="zone-outline"
+            data-visual-system-group-border={zoneBorderLabel}
             x="2"
             y={y}
             width={width - 4}
             height={bandHeight}
             rx="18"
             fill={quietFill}
-            stroke={index === 0 ? stroke : quietStroke}
-            strokeWidth="2"
+            stroke={zoneBorder.contextualColor}
+            strokeWidth={zoneBorder.widthPx}
             opacity={zoneProgresses[index]}
           />
         );
@@ -51,14 +55,16 @@ function LayeredRuntimeMap({ width, height, layout, zoneProgresses }) {
         return (
           <g key={zone.id} opacity={zoneProgresses[index]}>
             <rect
+              data-technical-artifact-role="zone-outline"
+              data-visual-system-group-border={zoneBorderLabel}
               x="2"
               y={y}
               width={width - 4}
               height={bandHeight}
               rx="18"
               fill={index === 1 ? focusFill : quietFill}
-              stroke={quietStroke}
-              strokeWidth="2"
+              stroke={zoneBorder.contextualColor}
+              strokeWidth={zoneBorder.widthPx}
             />
           </g>
         );
@@ -78,14 +84,16 @@ function DecisionField({ width, height, layout, zoneProgresses }) {
         return (
           <rect
             key={zone.id}
+            data-technical-artifact-role="zone-outline"
+            data-visual-system-group-border={zoneBorderLabel}
             x={x}
             y="2"
             width={zoneWidth}
             height={height - 4}
             rx="18"
             fill={index === 1 ? focusFill : quietFill}
-            stroke={quietStroke}
-            strokeWidth="2"
+            stroke={zoneBorder.contextualColor}
+            strokeWidth={zoneBorder.widthPx}
             opacity={zoneProgresses[index]}
           />
         );
@@ -108,49 +116,81 @@ function EvidenceLifecycleLedger({ width, height, layout, zoneProgresses }) {
   return (
     <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} aria-hidden="true">
       <g opacity={zoneProgresses[0]}>
-        <rect x="2" y="2" width={width - 4} height={lifecycleZone.bounds.bottom + 18} rx="20" fill={quietFill} />
+        <rect
+          data-technical-artifact-role="zone-outline"
+          data-visual-system-group-border={zoneBorderLabel}
+          x="2"
+          y="2"
+          width={width - 4}
+          height={lifecycleZone.bounds.bottom + 18}
+          rx="20"
+          fill={quietFill}
+          stroke={zoneBorder.contextualColor}
+          strokeWidth={zoneBorder.widthPx}
+        />
         <line
+          data-technical-artifact-role="rail"
           x1={lifecycleRailStartX}
           y1={lifecycleRailY}
           x2={Math.max(...lifecycleStepXs)}
           y2={lifecycleRailY}
-          stroke={stroke}
+          stroke={railStroke}
           strokeWidth="3"
         />
         {lifecycleStepXs.map((x) => (
           <g key={x}>
-            <circle cx={x} cy={lifecycleRailY} r="8" fill={palette.paper} stroke={palette.mintDeep} strokeWidth="3" />
-            <line x1={x} y1={lifecycleRailY + 8} x2={x} y2={lifecycleZone.bounds.top - 14} stroke={quietStroke} strokeWidth="2" />
+            <circle
+              data-technical-artifact-role="rail-anchor"
+              cx={x}
+              cy={lifecycleRailY}
+              r="8"
+              fill={palette.paper}
+              stroke={palette.mintDeep}
+              strokeWidth="3"
+            />
+            <line
+              data-technical-artifact-role="rail"
+              x1={x}
+              y1={lifecycleRailY + 8}
+              x2={x}
+              y2={lifecycleZone.bounds.top - 14}
+              stroke={quietRailStroke}
+              strokeWidth="2"
+            />
           </g>
         ))}
       </g>
       <g opacity={zoneProgresses[1]}>
         <rect
+          data-technical-artifact-role="zone-outline"
+          data-visual-system-group-border={zoneBorderLabel}
           x="2"
           y={evidenceRailY - 18}
           width={width - 4}
           height={height - evidenceRailY + 16}
           rx="20"
           fill={focusFill}
-          stroke={quietStroke}
-          strokeWidth="2"
+          stroke={zoneBorder.contextualColor}
+          strokeWidth={zoneBorder.widthPx}
         />
         <line
+          data-technical-artifact-role="rail"
           x1={Math.min(...evidenceStepXs)}
           y1={evidenceRailY}
           x2={Math.max(...evidenceStepXs)}
           y2={evidenceRailY}
-          stroke={stroke}
+          stroke={railStroke}
           strokeWidth="3"
         />
         {evidenceStepXs.map((x) => (
           <line
             key={x}
+            data-technical-artifact-role="rail"
             x1={x}
             y1={evidenceRailY + 2}
             x2={x}
             y2={evidenceZone.bounds.top - 14}
-            stroke={quietStroke}
+            stroke={quietRailStroke}
             strokeWidth="2"
           />
         ))}

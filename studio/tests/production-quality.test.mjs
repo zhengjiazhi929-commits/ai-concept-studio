@@ -1,14 +1,32 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFixtureEpisode } from "./episode-fixture.mjs";
-import { evaluateProductionQuality } from "../src/server/production/quality.mjs";
+import {
+  evaluateProductionQuality,
+  subtitleBoundaryIssues,
+  subtitleDurationIssues,
+  SUBTITLE_QA_MAXIMUM_CUE_DURATION_SECONDS
+} from "../src/server/production/quality.mjs";
 
-test("黄金样例通过内容质量门槛，并明确标记无旁白预览", async () => {
+test("旧黄金样例的6–7秒字幕在新节奏合同下必须过期", async () => {
   const episode = await readFixtureEpisode();
   const quality = evaluateProductionQuality(episode, { stage: "qa" });
-  assert.equal(quality.passed, true);
-  assert.ok(quality.score >= 90);
+  assert.equal(quality.passed, false);
+  assert.equal(
+    quality.checks.find((item) => item.id === "subtitle-max-duration").passed,
+    false
+  );
   assert.ok(quality.warnings.some((warning) => warning.includes("旁白")));
+});
+
+test("字幕非法时间值不能绕过连续时间轴门禁", async () => {
+  for (const invalid of [Number.NaN, Number.POSITIVE_INFINITY, -0.1, null, "0"]) {
+    const episode = structuredClone(await readFixtureEpisode());
+    episode.subtitles[0].start = invalid;
+    const quality = evaluateProductionQuality(episode, {stage: "qa"});
+    assert.equal(quality.checks.find((item) => item.id === "subtitle-timeline").passed, false);
+    assert.equal(quality.passed, false);
+  }
 });
 
 test("字幕断层和未绑定证据素材会阻止最终 QA", async () => {
@@ -50,6 +68,107 @@ test("过短尾句和字幕开头空格必须退回 Storyboard Agent", async () 
     quality.checks.find((item) => item.id === "subtitle-min-duration").ownerAgentId,
     "storyboard-agent"
   );
+});
+
+test("字幕节奏的5.5秒边界通过但超过0.1毫秒即退回", async () => {
+  assert.equal(SUBTITLE_QA_MAXIMUM_CUE_DURATION_SECONDS, 5.5);
+  assert.deepEqual(
+    subtitleDurationIssues([
+      {text: "5.5秒合同边界", start: 0, end: 5.5},
+      {text: "提前显示过长后文", start: 6, end: 11.5001}
+    ]),
+    [{index: 1, durationSeconds: 5.5001, reasons: ["too-long"]}]
+  );
+
+  const episode = structuredClone(await readFixtureEpisode());
+  episode.subtitles[0].end = episode.subtitles[0].start + 5.5001;
+  const quality = evaluateProductionQuality(episode, {stage: "qa"});
+  const maximumDuration = quality.checks.find(
+    (item) => item.id === "subtitle-max-duration"
+  );
+  assert.equal(maximumDuration.passed, false);
+  assert.equal(maximumDuration.severity, "error");
+  assert.equal(maximumDuration.ownerAgentId, "storyboard-agent");
+});
+
+test("伪造 sourceText 不能掩盖实际错误字幕", async () => {
+  const episode = structuredClone(await readFixtureEpisode());
+  episode.subtitles = Array.from({length: 9}, (_, index) => ({
+    text: index % 2 === 0 ? "资料被" : "，忽略原文",
+    sourceText: index === 8 ? "工具执行任务。" : "模型读取资料，",
+    start: index * 4,
+    end: (index + 1) * 4
+  }));
+  episode.production.scriptDraft.content = {
+    hook: "",
+    sections: [{
+      narration: episode.subtitles.map((cue) => cue.sourceText).join(""),
+      evidenceRefs: ["source-1"]
+    }],
+    closing: ""
+  };
+  const quality = evaluateProductionQuality(episode, {stage: "storyboard"});
+  assert.equal(quality.passed, false);
+  assert.equal(quality.checks.find((item) => item.id === "subtitle-source-integrity").passed, false);
+});
+
+test("rolling 累计显示不重复计入语义边界和脚本覆盖率", async () => {
+  const rolling = [
+    {
+      text: "前一完整语义，",
+      sourceText: "前一完整语义，",
+      start: 0,
+      end: 1
+    },
+    {
+      text: "前一完整语义，后一完整语义。",
+      sourceText: "后一完整语义。",
+      start: 1,
+      end: 2
+    }
+  ];
+  assert.deepEqual(subtitleBoundaryIssues(rolling), []);
+
+  const episode = structuredClone(await readFixtureEpisode());
+  episode.render = {...episode.render, durationSeconds: 2};
+  episode.production.scriptDraft.content = {
+    hook: "",
+    sections: [{narration: "甲乙丙丁", evidenceRefs: ["source-1"]}],
+    closing: ""
+  };
+  episode.subtitles = [
+    {text: "甲乙", sourceText: "甲乙", start: 0, end: 1},
+    {text: "甲乙丙丁", sourceText: "丙丁", start: 1, end: 2}
+  ];
+  const rollingQuality = evaluateProductionQuality(episode, {
+    stage: "storyboard"
+  });
+  const rollingCoverage = rollingQuality.checks.find(
+    (item) => item.id === "storyboard-script-coverage"
+  );
+  assert.equal(rollingCoverage.actual, 1);
+  assert.equal(rollingCoverage.passed, true);
+  assert.equal(
+    rollingQuality.checks.find((item) => item.id === "subtitle-source-integrity").passed,
+    true
+  );
+  assert.equal(
+    rollingQuality.checks.find((item) => item.id === "subtitle-rate").actual,
+    4
+  );
+
+  episode.subtitles = [
+    {text: "甲乙", start: 0, end: 1},
+    {text: "丙丁", start: 1, end: 2}
+  ];
+  const ordinaryQuality = evaluateProductionQuality(episode, {
+    stage: "storyboard"
+  });
+  const ordinaryCoverage = ordinaryQuality.checks.find(
+    (item) => item.id === "storyboard-script-coverage"
+  );
+  assert.equal(ordinaryCoverage.actual, 1);
+  assert.equal(ordinaryCoverage.passed, true);
 });
 
 test("结构完整但旁白量不足的十分钟脚本不能通过机器审核", async () => {

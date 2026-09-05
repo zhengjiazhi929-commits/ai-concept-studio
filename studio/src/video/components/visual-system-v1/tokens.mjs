@@ -18,6 +18,26 @@ export const VISUAL_SYSTEM_V1_FONT_WEIGHTS = Object.freeze({
   navigation: 500
 });
 
+export const VISUAL_SYSTEM_V1_SURFACE_BORDER = Object.freeze({
+  minimumContrastRatio: 3,
+  informationCard: Object.freeze({
+    mode: "full-outline",
+    widthPx: 3,
+    restingColor: "#5A8A77",
+    mintFocusColor: "#17795D",
+    purpleFocusColor: "#5B45AA",
+    flatSurfaceAlpha: 0.76,
+    semanticSurfaceAlpha: 0.92,
+    semanticBorderFocusScale: 0.82
+  }),
+  semanticGroup: Object.freeze({
+    mode: "full-outline",
+    widthPx: 2,
+    contextualColor: "#5F927D",
+    completeBoundaryColor: "#17795D"
+  })
+});
+
 export const VISUAL_SYSTEM_V1 = Object.freeze({
   schemaVersion: "visual-system-v1",
   status: "review-candidate",
@@ -181,6 +201,7 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
       detailLineHeight: 1.26
     })
   }),
+  surfaceBorder: VISUAL_SYSTEM_V1_SURFACE_BORDER,
   palette: Object.freeze({
     paper: "#F2F6F3",
     paperWarm: "#F8FAF8",
@@ -246,7 +267,8 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
       contentPaddingX: 54,
       contentPaddingY: 68
     }),
-    border: "rgba(95, 126, 113, 0.22)",
+    border: VISUAL_SYSTEM_V1_SURFACE_BORDER.semanticGroup.contextualColor,
+    borderWidthPx: VISUAL_SYSTEM_V1_SURFACE_BORDER.semanticGroup.widthPx,
     shadow: "0 28px 72px rgba(40, 76, 62, 0.13), inset 0 1px 0 rgba(255,255,255,0.92)"
   }),
   depth: Object.freeze({

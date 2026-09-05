@@ -25,6 +25,7 @@ import {
   visualSystemV1WallpaperMotionAtFrame
 } from "./motion.mjs";
 import { VISUAL_SYSTEM_V1, VISUAL_SYSTEM_V1_DEPTH_ROLES } from "./tokens.mjs";
+import { visualSystemV1InformationCardSurfaceAtFocus } from "./surface-border.mjs";
 import { VisualSystemV1AiTechIcon } from "./icons/ai-tech-icon.jsx";
 import {
   aiTechIconMotionStateAtProgress,
@@ -32,7 +33,7 @@ import {
   assertAiTechIconProductionPresentation
 } from "../../../shared/ai-tech-icon-contract.mjs";
 
-const { palette, typography, semanticNode } = VISUAL_SYSTEM_V1;
+const { palette, typography, semanticNode, surfaceBorder } = VISUAL_SYSTEM_V1;
 const SceneOpacityContext = React.createContext(1);
 
 function colorWithAlpha(color, opacity) {
@@ -43,23 +44,6 @@ function colorWithAlpha(color, opacity) {
   const green = (value >> 8) & 255;
   const blue = value & 255;
   return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
-}
-
-function mixHexColors(from, to, progress, alpha = 1) {
-  const parse = (color) => {
-    const match = /^#([0-9a-f]{6})$/iu.exec(color);
-    if (!match) return null;
-    const value = Number.parseInt(match[1], 16);
-    return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
-  };
-  const fromRgb = parse(from);
-  const toRgb = parse(to);
-  if (!fromRgb || !toRgb) return from;
-  const normalizedProgress = Math.max(0, Math.min(1, progress));
-  const mixed = fromRgb.map((channel, index) =>
-    Math.round(channel + (toRgb[index] - channel) * normalizedProgress)
-  );
-  return `rgba(${mixed[0]}, ${mixed[1]}, ${mixed[2]}, ${alpha})`;
 }
 
 function assertDepthRole(role) {
@@ -157,6 +141,7 @@ export function VisualSystemV1SingleContentWindow({
   return (
     <div
       data-visual-system-window="single-content-window"
+      data-visual-system-group-border={`${surfaceBorder.semanticGroup.mode}-${surfaceBorder.semanticGroup.widthPx}px`}
       style={{
         position: "absolute",
         left: geometry.x,
@@ -165,7 +150,7 @@ export function VisualSystemV1SingleContentWindow({
         height: geometry.height,
         overflow: "hidden",
         borderRadius: geometry.borderRadius,
-        border: `1px solid ${VISUAL_SYSTEM_V1.window.border}`,
+        border: `${surfaceBorder.semanticGroup.widthPx}px solid ${surfaceBorder.semanticGroup.contextualColor}`,
         backgroundColor: palette.window,
         boxShadow: VISUAL_SYSTEM_V1.window.shadow,
         backdropFilter: "blur(22px) saturate(112%)",
@@ -286,8 +271,11 @@ export function VisualSystemV1FlatNode({
   const accentColor = accent === "purple" ? palette.purpleDeep : palette.mintDeep;
   const dotColor = accent === "purple" ? palette.purple : palette.mint;
   const normalizedFocus = Math.max(0, Math.min(1, focusProgress));
-  const focusSurface = accent === "purple" ? palette.purpleSoft : palette.mintSoft;
-  const focusBorder = accent === "purple" ? palette.purple : palette.mint;
+  const cardSurface = visualSystemV1InformationCardSurfaceAtFocus({
+    accent,
+    focusProgress: normalizedFocus,
+    variant: "flat"
+  });
   const fillsSafeViewport = layoutMode === "fill-safe-viewport";
   if (!fillsSafeViewport && layoutMode !== "content-sized") {
     throw new TypeError(`未知平面卡片布局模式：${layoutMode}`);
@@ -316,7 +304,7 @@ export function VisualSystemV1FlatNode({
       data-visual-system-card-layout={layoutMode}
       data-visual-system-card-typography={cardTypography?.mode ?? "legacy-content-sized"}
       data-visual-system-card-text-wrap={textWrapMode}
-      data-visual-system-card-border="full-outline-3px"
+      data-visual-system-card-border={`${surfaceBorder.informationCard.mode}-${surfaceBorder.informationCard.widthPx}px`}
       data-semantic-id={nodeId}
       data-semantic-group-id={semanticGroupId ?? undefined}
       data-semantic-role={semanticRole ?? undefined}
@@ -327,13 +315,13 @@ export function VisualSystemV1FlatNode({
       style={{
         position: "absolute",
         boxSizing: "border-box",
-        border: `3px solid ${mixHexColors(palette.lineStrong, focusBorder, normalizedFocus)}`,
         borderRadius: 18,
-        backgroundColor: mixHexColors(palette.paperWarm, focusSurface, normalizedFocus, 0.76),
+        backgroundColor: cardSurface.backgroundColor,
         backgroundImage: "none",
         boxShadow: "none",
         filter: "none",
         ...style,
+        border: `${surfaceBorder.informationCard.widthPx}px solid ${cardSurface.borderColor}`,
         top: animatedTop,
         padding: `${paddingY}px ${paddingX}px`,
         display: fillsSafeViewport ? "flex" : "block",
@@ -412,7 +400,13 @@ export function VisualSystemV1FlatNode({
   );
 }
 
-function semanticPrimitiveSurface(primitive, accentColor, focusColor, focusProgress, surfaceRole) {
+function semanticPrimitiveSurface(primitive, accent, focusProgress, surfaceRole) {
+  const accentColor = accent === "purple" ? palette.purpleDeep : palette.mintDeep;
+  const cardSurface = visualSystemV1InformationCardSurfaceAtFocus({
+    accent,
+    focusProgress,
+    variant: "semantic"
+  });
   const openDiagram = {
     border: "none",
     borderRadius: 0,
@@ -420,18 +414,9 @@ function semanticPrimitiveSurface(primitive, accentColor, focusColor, focusProgr
     boxShadow: "none"
   };
   const fullOutline = {
-    border: `3px solid ${mixHexColors(
-      palette.lineStrong,
-      accentColor,
-      Math.min(1, focusProgress * 0.82)
-    )}`,
+    border: `${surfaceBorder.informationCard.widthPx}px solid ${cardSurface.borderColor}`,
     borderRadius: 18,
-    backgroundColor: mixHexColors(
-      palette.paperWarm,
-      focusColor,
-      focusProgress,
-      0.92
-    ),
+    backgroundColor: cardSurface.backgroundColor,
     boxShadow: "none"
   };
   if (surfaceRole === "information-card") return fullOutline;
@@ -580,7 +565,6 @@ export function VisualSystemV1SemanticNode({
   const normalizedVisibility = Math.max(0, Math.min(1, visibilityProgress));
   const normalizedContentOpacity = Math.max(0, Math.min(1, contentOpacity));
   const accentColor = accent === "purple" ? palette.purpleDeep : palette.mintDeep;
-  const focusColor = accent === "purple" ? palette.purpleSoft : palette.mintSoft;
   const width = Number.isFinite(style.width) ? style.width : 320;
   const height = Number.isFinite(style.height) ? style.height : 140;
   if (surfaceRole != null && !["information-card", "open-canvas"].includes(surfaceRole)) {
@@ -629,8 +613,7 @@ export function VisualSystemV1SemanticNode({
     height >= semanticNode.marker.minimumContainerHeightPx;
   const surface = semanticPrimitiveSurface(
     primitive,
-    accentColor,
-    focusColor,
+    accent,
     normalizedFocus,
     resolvedSurfaceRole
   );
@@ -759,6 +742,9 @@ function VisualSystemV1ShallowDepthObject({
   const face = secondary ? palette.purpleSoft : palette.mintSoft;
   const side = secondary ? palette.purpleSide : palette.mintSide;
   const ink = secondary ? palette.purpleDeep : palette.mintDeep;
+  const depthBorderColor = secondary
+    ? surfaceBorder.informationCard.purpleFocusColor
+    : surfaceBorder.informationCard.mintFocusColor;
   return (
     <div
       data-visual-system-surface="shallow-depth"
@@ -788,22 +774,24 @@ function VisualSystemV1ShallowDepthObject({
       />
       <div
         aria-hidden="true"
+        data-visual-system-depth-side-border={`${surfaceBorder.semanticGroup.mode}-${surfaceBorder.semanticGroup.widthPx}px`}
         style={{
           position: "absolute",
           inset: 0,
           borderRadius: 22,
           backgroundColor: side,
-          border: `1px solid ${secondary ? "rgba(91,69,170,.22)" : "rgba(23,121,93,.22)"}`,
+          border: `${surfaceBorder.semanticGroup.widthPx}px solid ${depthBorderColor}`,
           translate: `0 ${state.depthPx}px`
         }}
       />
       <div
+        data-visual-system-card-border={`${surfaceBorder.informationCard.mode}-${surfaceBorder.informationCard.widthPx}px`}
         style={{
           position: "absolute",
           inset: 0,
           boxSizing: "border-box",
           borderRadius: 22,
-          border: `1px solid ${secondary ? "rgba(91,69,170,.25)" : "rgba(23,121,93,.27)"}`,
+          border: `${surfaceBorder.informationCard.widthPx}px solid ${depthBorderColor}`,
           background: `linear-gradient(145deg, rgba(255,255,255,.78), ${face})`,
           boxShadow: `inset 0 1px 0 ${palette.whiteHighlight}, ${VISUAL_SYSTEM_V1.depth.surfaceShadow}`,
           padding: "22px 24px"

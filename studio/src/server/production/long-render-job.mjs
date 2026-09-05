@@ -10,6 +10,9 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const HASH_PATTERN = /^[a-f0-9]{64}$/u;
 const JOB_ID_PATTERN = /^[a-z0-9][a-z0-9-]{2,79}$/u;
+const VISUAL_SOURCE_PATTERN = /^v\d{3}@[a-f0-9]{40}$/u;
+const VERSIONED_PROFILE_LABEL_PATTERN = /^v\d{3}[a-z]?-[a-z0-9][a-z0-9-]*$/u;
+const RENDER_PROFILE_SCHEMA_VERSION = "long-review-render-profile-v1";
 const longReviewRenderJobLockStates = new WeakMap();
 
 export const LONG_REVIEW_RENDER_JOB_SCHEMA_VERSION = "long-review-render-job-v1";
@@ -740,6 +743,124 @@ function positiveInteger(value, label) {
   return value;
 }
 
+function pathIsInside(parent, candidate) {
+  const resolvedParent = resolve(parent);
+  const resolvedCandidate = resolve(candidate);
+  return resolvedCandidate === resolvedParent ||
+    resolvedCandidate.startsWith(`${resolvedParent}${sep}`);
+}
+
+function validateLongReviewRenderProfile(profile) {
+  if (profile === undefined) return null;
+  if (!profile || typeof profile !== "object" || Array.isArray(profile)) {
+    throw new TypeError("renderProfile must be an object when provided");
+  }
+  const allowedKeys = new Set([
+    "schemaVersion",
+    "artifactRole",
+    "formalCandidate",
+    "visualSource",
+    "voice",
+    "subtitleStyle",
+    "subtitleDelivery",
+    "burnInSubtitle",
+    "chunkFrames",
+    "interChunkPauseMs",
+    "concurrency"
+  ]);
+  const unknownKey = Object.keys(profile).find((key) => !allowedKeys.has(key));
+  if (unknownKey) {
+    throw new TypeError(`renderProfile does not support ${unknownKey}`);
+  }
+  if (profile.schemaVersion !== RENDER_PROFILE_SCHEMA_VERSION) {
+    throw new Error(
+      `unsupported long-review render profile schema: ${profile.schemaVersion ?? "missing"}`
+    );
+  }
+  if (!new Set(["render-base", "formal-candidate"]).has(profile.artifactRole)) {
+    throw new TypeError("renderProfile.artifactRole must be render-base or formal-candidate");
+  }
+  if (typeof profile.formalCandidate !== "boolean") {
+    throw new TypeError("renderProfile.formalCandidate must be explicit");
+  }
+  if (
+    typeof profile.visualSource !== "string" ||
+    !VISUAL_SOURCE_PATTERN.test(profile.visualSource)
+  ) {
+    throw new TypeError("renderProfile.visualSource must bind vNNN@40-char-commit");
+  }
+  if (
+    typeof profile.voice !== "string" ||
+    !VERSIONED_PROFILE_LABEL_PATTERN.test(profile.voice)
+  ) {
+    throw new TypeError("renderProfile.voice must be a versioned profile label");
+  }
+  if (
+    typeof profile.subtitleStyle !== "string" ||
+    !VERSIONED_PROFILE_LABEL_PATTERN.test(profile.subtitleStyle)
+  ) {
+    throw new TypeError("renderProfile.subtitleStyle must be a versioned profile label");
+  }
+  if (
+    !new Set(["remotion-burn-in", "external-overlay-required"]).has(
+      profile.subtitleDelivery
+    )
+  ) {
+    throw new TypeError(
+      "renderProfile.subtitleDelivery must be remotion-burn-in or external-overlay-required"
+    );
+  }
+  if (typeof profile.burnInSubtitle !== "boolean") {
+    throw new TypeError("renderProfile.burnInSubtitle must be explicit");
+  }
+  const chunkFrames = positiveInteger(
+    profile.chunkFrames,
+    "renderProfile.chunkFrames"
+  );
+  const interChunkPauseMs = positiveInteger(
+    profile.interChunkPauseMs,
+    "renderProfile.interChunkPauseMs"
+  );
+  const concurrency = positiveInteger(
+    profile.concurrency,
+    "renderProfile.concurrency"
+  );
+  if (18_000 % chunkFrames !== 0) {
+    throw new Error("renderProfile.chunkFrames must divide 18000 exactly");
+  }
+  if (
+    profile.subtitleDelivery === "external-overlay-required" &&
+    profile.burnInSubtitle
+  ) {
+    throw new Error("external subtitle overlay requires burnInSubtitle=false");
+  }
+  if (
+    profile.subtitleDelivery === "remotion-burn-in" &&
+    !profile.burnInSubtitle
+  ) {
+    throw new Error("Remotion subtitle delivery requires burnInSubtitle=true");
+  }
+  if (profile.artifactRole === "render-base" && profile.formalCandidate) {
+    throw new Error("render-base cannot be declared a formal candidate");
+  }
+  if (profile.artifactRole === "formal-candidate" && !profile.formalCandidate) {
+    throw new Error("formal-candidate must set formalCandidate=true");
+  }
+  return Object.freeze({
+    schemaVersion: profile.schemaVersion,
+    artifactRole: profile.artifactRole,
+    formalCandidate: profile.formalCandidate,
+    visualSource: profile.visualSource,
+    voice: profile.voice,
+    subtitleStyle: profile.subtitleStyle,
+    subtitleDelivery: profile.subtitleDelivery,
+    burnInSubtitle: profile.burnInSubtitle,
+    chunkFrames,
+    interChunkPauseMs,
+    concurrency
+  });
+}
+
 function parseIntegerOption(name, rawValue, { minimum, maximum }) {
   const value = Number(rawValue);
   if (
@@ -838,17 +959,50 @@ export function validateLongReviewRenderJob(job, options = {}) {
       resolveWorkspacePath(workspaceRoot, job.paths[key], `paths.${key}`)
     ])
   );
+  if (job.paths.runner !== undefined) {
+    resolvedPaths.runner = resolveWorkspacePath(
+      workspaceRoot,
+      job.paths.runner,
+      "paths.runner"
+    );
+  }
   ensureInside(resolve(workspaceRoot, "studio", "src", "video"), resolvedPaths.entryPoint, "paths.entryPoint");
-  ensureInside(
-    resolve(workspaceRoot, "studio", "data", "episodes", job.episodeId),
-    resolvedPaths.episode,
-    "paths.episode"
+  const liveEpisodeRoot = resolve(
+    workspaceRoot,
+    "studio",
+    "data",
+    "episodes",
+    job.episodeId
   );
+  const frozenRenderInputRoot = resolve(
+    workspaceRoot,
+    "studio",
+    "data",
+    "render-inputs"
+  );
+  if (
+    !pathIsInside(liveEpisodeRoot, resolvedPaths.episode) &&
+    !pathIsInside(frozenRenderInputRoot, resolvedPaths.episode)
+  ) {
+    throw new Error(
+      "paths.episode must stay inside the live episode or frozen render-inputs directory"
+    );
+  }
   ensureInside(
     resolve(workspaceRoot, "studio", "public", "episodes", job.episodeId),
     resolvedPaths.voice,
     "paths.voice"
   );
+  if (resolvedPaths.runner) {
+    ensureInside(
+      resolve(workspaceRoot, "studio", "scripts"),
+      resolvedPaths.runner,
+      "paths.runner"
+    );
+    if (!resolvedPaths.runner.endsWith(".mjs")) {
+      throw new Error("paths.runner must reference an .mjs script");
+    }
+  }
   const reviewRoot = resolve(
     workspaceRoot,
     "outputs",
@@ -899,6 +1053,10 @@ export function validateLongReviewRenderJob(job, options = {}) {
   if (job.temporaryVoice && job.temporaryVoiceIsFinalHumanRecording) {
     throw new Error("temporary voice cannot be declared a final human recording");
   }
+  const renderProfile = validateLongReviewRenderProfile(job.renderProfile);
+  if (renderProfile && !resolvedPaths.runner) {
+    throw new Error("renderProfile requires an explicitly bound paths.runner");
+  }
   const versionToken = `v${String(job.candidateVersion).padStart(3, "0")}`;
   const finalDirectoryName = basename(resolvedPaths.finalDirectory);
   const workDirectoryName = basename(resolvedPaths.workDirectory);
@@ -921,6 +1079,7 @@ export function validateLongReviewRenderJob(job, options = {}) {
     paths: structuredClone(job.paths),
     resolvedPaths,
     protectedArtifacts,
+    renderProfile,
     temporaryVoice: job.temporaryVoice,
     temporaryVoiceIsFinalHumanRecording: job.temporaryVoiceIsFinalHumanRecording
   };
@@ -956,6 +1115,13 @@ export async function assertLongReviewRenderJobFilesystemSafety(job, options = {
       expectedType: "directory",
       allowMissing: true
     },
+    ...(job.resolvedPaths.runner
+      ? [{
+          candidate: job.resolvedPaths.runner,
+          label: "paths.runner",
+          expectedType: "file"
+        }]
+      : []),
     ...job.protectedArtifacts.map((artifact, index) => ({
       candidate: artifact.path,
       label: `protectedArtifacts[${index}].path`,
@@ -982,6 +1148,7 @@ export function longReviewSourceInputs(job, options = {}) {
   return [
     scriptPath,
     jobConfigPath,
+    ...(job.resolvedPaths.runner ? [job.resolvedPaths.runner] : []),
     resolve(workspaceRoot, "studio", "src"),
     resolve(workspaceRoot, "studio", "public"),
     resolve(workspaceRoot, ".node-version"),

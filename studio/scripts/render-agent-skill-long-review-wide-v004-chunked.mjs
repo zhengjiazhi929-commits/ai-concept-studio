@@ -114,6 +114,7 @@ const STAGING_DIRECTORY = resolve(WORK_DIRECTORY, "staging");
 const LOGS_DIRECTORY = resolve(WORK_DIRECTORY, "logs");
 const BUNDLE_DIRECTORY = resolve(WORK_DIRECTORY, "bundle");
 const RUN_MANIFEST_PATH = resolve(WORK_DIRECTORY, "render-manifest.json");
+const FIRST_CHUNK_ETA_PATH = resolve(WORK_DIRECTORY, "first-chunk-eta.json");
 const CHROME_EXECUTABLE =
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 export const CHUNKED_REMOTION_TIMEOUT_MS = 180_000;
@@ -137,6 +138,19 @@ export const CHUNKED_V004_CONTRACT = Object.freeze({
   durationSeconds: 600,
   defaultChunkFrames: 900,
   defaultInterChunkPauseMs: 5_000,
+  ...(CONFIGURED_RENDER_JOB?.renderProfile
+    ? {
+        renderProfileSchemaVersion:
+          CONFIGURED_RENDER_JOB.renderProfile.schemaVersion,
+        artifactRole: CONFIGURED_RENDER_JOB.renderProfile.artifactRole,
+        formalCandidate: CONFIGURED_RENDER_JOB.renderProfile.formalCandidate,
+        visualSource: CONFIGURED_RENDER_JOB.renderProfile.visualSource,
+        voice: CONFIGURED_RENDER_JOB.renderProfile.voice,
+        subtitleStyle: CONFIGURED_RENDER_JOB.renderProfile.subtitleStyle,
+        subtitleDelivery: CONFIGURED_RENDER_JOB.renderProfile.subtitleDelivery,
+        burnInSubtitle: CONFIGURED_RENDER_JOB.renderProfile.burnInSubtitle,
+      }
+    : {burnInSubtitle: true}),
   remotionTimeoutMs: CHUNKED_REMOTION_TIMEOUT_MS,
   fontAssetDelivery: "bundled-resource",
   fontReadiness: "remotion-document-fonts-ready",
@@ -168,6 +182,7 @@ export const CHUNKED_V004_PATHS = Object.freeze({
   logsDirectory: LOGS_DIRECTORY,
   bundleDirectory: BUNDLE_DIRECTORY,
   runManifestPath: RUN_MANIFEST_PATH,
+  firstChunkEtaPath: FIRST_CHUNK_ETA_PATH,
   finalDirectory: FINAL_DIRECTORY,
   finalOutputPath: FINAL_OUTPUT_PATH,
   voicePath: VOICE_PATH,
@@ -691,6 +706,48 @@ export function parseCliArguments(argv) {
   return options;
 }
 
+export function assertConfiguredLongReviewRenderProfile({
+  chunkFrames,
+  interChunkPauseMs,
+} = {}) {
+  const profile = CONFIGURED_RENDER_JOB?.renderProfile;
+  if (!profile) return true;
+  if (chunkFrames !== profile.chunkFrames) {
+    throw new Error(
+      `render profile requires ${profile.chunkFrames}-frame chunks; single-pass or alternate chunking is forbidden`,
+    );
+  }
+  if (interChunkPauseMs !== profile.interChunkPauseMs) {
+    throw new Error(
+      `render profile requires an exact ${profile.interChunkPauseMs}ms inter-chunk pause`,
+    );
+  }
+  if (
+    profile.concurrency !== 1 ||
+    CHUNKED_V004_CONTRACT.concurrency !== 1
+  ) {
+    throw new Error("render profile requires concurrency=1");
+  }
+  return true;
+}
+
+export function buildLongReviewRenderInputProps(
+  episode,
+  burnInSubtitle = CHUNKED_V004_CONTRACT.burnInSubtitle,
+  renderAudio = !CHUNKED_V004_CONTRACT.muted,
+) {
+  if (!episode || typeof episode !== "object" || Array.isArray(episode)) {
+    throw new TypeError("episode render input must be an object");
+  }
+  if (typeof burnInSubtitle !== "boolean") {
+    throw new TypeError("burnInSubtitle render input must be boolean");
+  }
+  if (typeof renderAudio !== "boolean") {
+    throw new TypeError("renderAudio render input must be boolean");
+  }
+  return Object.freeze({episode, burnInSubtitle, renderAudio});
+}
+
 export function usageText() {
   return [
     "Low-memory resumable Remotion renderer for the 10-minute v004 review candidate.",
@@ -894,6 +951,10 @@ export function isChunkResumeEligible({
     record.file?.sha256 === integrity?.sha256 &&
     HASH_PATTERN.test(record.file?.sha256 ?? "") &&
     record.probeSha256 === validation.probeSha256 &&
+    record.decoding?.videoDecodedWithoutError === true &&
+    record.decoding?.mode === "sequential-rawvideo-null" &&
+    Number.isFinite(record.timing?.parentWorkerElapsedSeconds) &&
+    record.timing.parentWorkerElapsedSeconds > 0 &&
     sameCodecMetadata(record.codecMetadata, validation.media.codecMetadata) &&
     (expectedCodecMetadata === null ||
       sameCodecMetadata(record.codecMetadata, expectedCodecMetadata))
@@ -1080,6 +1141,60 @@ async function callBundledTool(bin, args, logPath = null) {
   }
 }
 
+export function buildVideoDecodeFfmpegArgs(filePath) {
+  return [
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-xerror",
+    "-i",
+    filePath,
+    "-map",
+    "0:v:0",
+    "-an",
+    "-c:v",
+    "rawvideo",
+    "-f",
+    "null",
+    "-",
+  ];
+}
+
+export function buildAudioDecodeFfmpegArgs(filePath) {
+  return [
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-xerror",
+    "-i",
+    filePath,
+    "-map",
+    "0:a:0",
+    "-vn",
+    "-c:a",
+    "pcm_s16le",
+    "-f",
+    "null",
+    "-",
+  ];
+}
+
+async function assertVideoFullyDecodable(filePath, logPath) {
+  await callBundledTool(
+    "ffmpeg",
+    buildVideoDecodeFfmpegArgs(filePath),
+    logPath,
+  );
+}
+
+async function assertAudioFullyDecodable(filePath, logPath) {
+  await callBundledTool(
+    "ffmpeg",
+    buildAudioDecodeFfmpegArgs(filePath),
+    logPath,
+  );
+}
+
 export async function probeMedia(filePath, logPath = null) {
   const {stdout} = await callBundledTool(
     "ffprobe",
@@ -1130,6 +1245,9 @@ async function captureRuntimeContext(renderConfig) {
             temporaryVoice: CONFIGURED_RENDER_JOB.temporaryVoice,
             temporaryVoiceIsFinalHumanRecording:
               CONFIGURED_RENDER_JOB.temporaryVoiceIsFinalHumanRecording,
+            ...(CONFIGURED_RENDER_JOB.renderProfile
+              ? {renderProfile: CONFIGURED_RENDER_JOB.renderProfile}
+              : {}),
           },
         }
       : {}),
@@ -1471,7 +1589,7 @@ async function inspectChunkForResume(
   }
 }
 
-function buildChunkRecord(manifest, range, integrity, validation) {
+function buildChunkRecord(manifest, range, integrity, validation, timing) {
   return {
     schemaVersion: CHUNK_RECORD_SCHEMA_VERSION,
     runFingerprint: manifest.runFingerprint,
@@ -1483,6 +1601,11 @@ function buildChunkRecord(manifest, range, integrity, validation) {
     },
     probeSha256: validation.probeSha256,
     codecMetadata: validation.media.codecMetadata,
+    decoding: {
+      videoDecodedWithoutError: true,
+      mode: "sequential-rawvideo-null",
+    },
+    timing,
     media: {
       durationSeconds: validation.media.durationSeconds,
       frameCount: validation.media.frameCount,
@@ -1504,6 +1627,8 @@ async function runChunkWorker(
   attemptToken,
   jobLock,
 ) {
+  const workerObservationStartedMs = Date.now();
+  const workerStartedAt = new Date(workerObservationStartedMs).toISOString();
   const paths = chunkPaths(range, attemptToken);
   await preserveStale(
     [paths.output, paths.metadata],
@@ -1585,8 +1710,16 @@ async function runChunkWorker(
       expectedCodecMetadata,
     );
     assertValidation(`Chunk ${range.index}`, validation);
+    await assertVideoFullyDecodable(paths.part, paths.log);
+    jobLock.assertOwned();
+    const decodedAtMs = Date.now();
     const integrity = await inspectFile(paths.part);
-    const record = buildChunkRecord(manifest, range, integrity, validation);
+    const record = buildChunkRecord(manifest, range, integrity, validation, {
+      workerStartedAt,
+      decodedAt: new Date(decodedAtMs).toISOString(),
+      parentWorkerElapsedSeconds:
+        (decodedAtMs - workerObservationStartedMs) / 1_000,
+    });
     await writeFile(paths.metadataPart, `${JSON.stringify(record, null, 2)}\n`, {
       encoding: "utf8",
       flag: "wx",
@@ -1677,7 +1810,7 @@ async function renderBoundChunkWorker(options, attemptToken, parentBinding) {
   parentBinding.assertConnected();
 
   const episode = JSON.parse(await readFile(EPISODE_PATH, "utf8"));
-  const inputProps = {episode};
+  const inputProps = buildLongReviewRenderInputProps(episode);
   browserOpening = true;
   let browser;
   try {
@@ -1872,6 +2005,8 @@ async function prepareConcatenatedVideo(
         record.file.sha256 === integrity.sha256 &&
         record.file.bytes === integrity.bytes &&
         record.probeSha256 === validation.probeSha256 &&
+        record.decoding?.videoDecodedWithoutError === true &&
+        record.decoding?.mode === "sequential-rawvideo-null" &&
         sameCodecMetadata(validation.media.codecMetadata, codecMetadata)
       ) {
         return {path: outputPath, integrity, validation, record};
@@ -1906,6 +2041,10 @@ async function prepareConcatenatedVideo(
   if (!sameCodecMetadata(validation.media.codecMetadata, codecMetadata)) {
     throw new Error("Concatenation changed H.264 codec metadata");
   }
+  await assertVideoFullyDecodable(
+    outputPartPath,
+    resolve(LOGS_DIRECTORY, "concat-decode.log"),
+  );
   await rename(outputPartPath, outputPath);
   unregisterActivePart(outputPartPath, attemptToken);
   const record = {
@@ -1915,6 +2054,10 @@ async function prepareConcatenatedVideo(
     file: {path: workspaceRelative(outputPath), ...integrity},
     probeSha256: validation.probeSha256,
     codecMetadata: validation.media.codecMetadata,
+    decoding: {
+      videoDecodedWithoutError: true,
+      mode: "sequential-rawvideo-null",
+    },
     validatedAt: new Date().toISOString(),
   };
   await writeJsonAtomically(
@@ -1949,7 +2092,11 @@ async function prepareMuxedVideo(manifest, concatenated, codecMetadata, attemptT
         record.voiceSha256 === manifest.voice.sha256 &&
         record.file.sha256 === integrity.sha256 &&
         record.file.bytes === integrity.bytes &&
-        record.probeSha256 === validation.probeSha256
+        record.probeSha256 === validation.probeSha256 &&
+        record.decoding?.videoDecodedWithoutError === true &&
+        record.decoding?.audioDecodedWithoutError === true &&
+        record.decoding?.videoMode === "sequential-rawvideo-null" &&
+        record.decoding?.audioMode === "sequential-pcm-s16le-null"
       ) {
         return {path: outputPath, integrity, validation, record};
       }
@@ -1973,6 +2120,14 @@ async function prepareMuxedVideo(manifest, concatenated, codecMetadata, attemptT
   ]);
   const validation = evaluateFinalProbe(rawProbe, codecMetadata);
   assertValidation("Final muxed video", validation);
+  await assertVideoFullyDecodable(
+    outputPartPath,
+    resolve(LOGS_DIRECTORY, "mux-video-decode.log"),
+  );
+  await assertAudioFullyDecodable(
+    outputPartPath,
+    resolve(LOGS_DIRECTORY, "mux-audio-decode.log"),
+  );
   await rename(outputPartPath, outputPath);
   unregisterActivePart(outputPartPath, attemptToken);
   const record = {
@@ -1984,6 +2139,12 @@ async function prepareMuxedVideo(manifest, concatenated, codecMetadata, attemptT
     probeSha256: validation.probeSha256,
     codecMetadata: validation.media.codecMetadata,
     audio: {codec: "aac", sampleRate: 48_000, bitrate: "192k"},
+    decoding: {
+      videoDecodedWithoutError: true,
+      audioDecodedWithoutError: true,
+      videoMode: "sequential-rawvideo-null",
+      audioMode: "sequential-pcm-s16le-null",
+    },
     validatedAt: new Date().toISOString(),
   };
   await writeJsonAtomically(
@@ -2566,6 +2727,88 @@ async function publishValidatedOutputAtomically(publicationOptions) {
   });
 }
 
+export function buildFirstChunkEta({
+  firstChunkElapsedSeconds,
+  totalChunks = 20,
+  completedChunks = 1,
+  interChunkPauseMs = 5_000,
+  calculatedAtMs = Date.now(),
+  runFingerprint = null,
+  observationSource = "fresh-parent-end-to-end",
+} = {}) {
+  if (!Number.isFinite(firstChunkElapsedSeconds) || firstChunkElapsedSeconds <= 0) {
+    throw new Error("firstChunkElapsedSeconds must be a positive finite number");
+  }
+  if (
+    !Number.isSafeInteger(totalChunks) ||
+    !Number.isSafeInteger(completedChunks) ||
+    totalChunks <= 0 ||
+    completedChunks < 1 ||
+    completedChunks > totalChunks
+  ) {
+    throw new Error("completedChunks must be within totalChunks");
+  }
+  if (!Number.isSafeInteger(interChunkPauseMs) || interChunkPauseMs < 0) {
+    throw new Error("interChunkPauseMs must be a non-negative integer");
+  }
+  const remainingChunks = totalChunks - completedChunks;
+  const remainingPauses = remainingChunks;
+  const estimatedRemainingSeconds = Math.ceil(
+    remainingChunks * firstChunkElapsedSeconds +
+      (remainingPauses * interChunkPauseMs) / 1_000,
+  );
+  return Object.freeze({
+    schemaVersion: "agent-skill-long-review-first-chunk-eta-v1",
+    runFingerprint,
+    calculatedAt: new Date(calculatedAtMs).toISOString(),
+    observationSource,
+    firstChunkElapsedSeconds,
+    completedChunks,
+    totalChunks,
+    remainingChunks,
+    remainingPauses,
+    interChunkPauseMs,
+    estimatedRemainingSeconds,
+    estimatedSegmentedRenderCompletionAt: new Date(
+      calculatedAtMs + estimatedRemainingSeconds * 1_000,
+    ).toISOString(),
+    scope:
+      "segmented render estimate only; concat, mux, subtitle overlay, machine QA, and visual review follow",
+    automaticContinuation: true,
+  });
+}
+
+async function writeFirstChunkEtaOnce(eta, attemptToken) {
+  if (await pathExists(FIRST_CHUNK_ETA_PATH)) {
+    await assertPlainFile(FIRST_CHUNK_ETA_PATH, "first-chunk ETA record");
+    const existing = JSON.parse(await readFile(FIRST_CHUNK_ETA_PATH, "utf8"));
+    const matchesRun =
+      existing.schemaVersion === eta.schemaVersion &&
+      existing.runFingerprint === eta.runFingerprint &&
+      existing.totalChunks === eta.totalChunks &&
+      existing.completedChunks === eta.completedChunks &&
+      existing.remainingChunks === eta.remainingChunks &&
+      existing.remainingPauses === eta.remainingPauses &&
+      existing.interChunkPauseMs === eta.interChunkPauseMs &&
+      existing.automaticContinuation === true &&
+      Number.isFinite(existing.firstChunkElapsedSeconds) &&
+      existing.firstChunkElapsedSeconds > 0 &&
+      Number.isSafeInteger(existing.estimatedRemainingSeconds) &&
+      existing.estimatedRemainingSeconds >= 0;
+    if (!matchesRun) {
+      throw new Error("Existing first-chunk ETA does not match this render run");
+    }
+    return existing;
+  }
+  await writeJsonAtomically(
+    FIRST_CHUNK_ETA_PATH,
+    eta,
+    attemptScopedPartPath(`${FIRST_CHUNK_ETA_PATH}.part`, attemptToken),
+    attemptToken,
+  );
+  return eta;
+}
+
 async function sleep(milliseconds) {
   if (milliseconds === 0) return;
   await new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds));
@@ -2592,6 +2835,10 @@ export async function renderAgentSkillLongReviewWideV004Chunked(options = {}) {
   parseIntegerOption("interChunkPauseMs", interChunkPauseMs, {
     minimum: 0,
     maximum: 60_000,
+  });
+  assertConfiguredLongReviewRenderProfile({
+    chunkFrames,
+    interChunkPauseMs,
   });
   installSignalHandlers();
   await mkdir(WORK_DIRECTORY, {recursive: true});
@@ -2627,11 +2874,14 @@ export async function renderAgentSkillLongReviewWideV004Chunked(options = {}) {
     }
     const manifest = await loadOrCreateRunManifest(renderConfig, attemptToken);
     let codecMetadata = null;
+    let firstChunkEta = null;
     const chunkRecords = [];
     for (const range of ranges) {
       if (terminating) throw new Error("Render interrupted");
       jobLock.assertOwned();
       await assertManifestStillCurrent(manifest);
+      const chunkObservationStartedMs = Date.now();
+      let renderedFresh = false;
       let inspected = await inspectChunkForResume(manifest, range, codecMetadata);
       if (!inspected.eligible) {
         process.stdout.write(
@@ -2644,6 +2894,7 @@ export async function renderAgentSkillLongReviewWideV004Chunked(options = {}) {
           attemptToken,
           jobLock,
         );
+        renderedFresh = true;
         inspected = await inspectChunkForResume(manifest, range, codecMetadata);
         if (!inspected.eligible) {
           throw new Error(`Freshly rendered chunk ${range.index} is not resumable`);
@@ -2658,6 +2909,31 @@ export async function renderAgentSkillLongReviewWideV004Chunked(options = {}) {
         throw new Error(`Chunk ${range.index} codec metadata differs from chunk 0`);
       }
       chunkRecords.push(inspected.record);
+      if (range.index === 0) {
+        const observedElapsedSeconds = renderedFresh
+          ? (Date.now() - chunkObservationStartedMs) / 1_000
+          : inspected.record.timing.parentWorkerElapsedSeconds;
+        jobLock.assertOwned();
+        firstChunkEta = await writeFirstChunkEtaOnce(
+          buildFirstChunkEta({
+            firstChunkElapsedSeconds: observedElapsedSeconds,
+            totalChunks: ranges.length,
+            completedChunks: 1,
+            interChunkPauseMs,
+            runFingerprint: manifest.runFingerprint,
+            observationSource: renderedFresh
+              ? "fresh-parent-end-to-end"
+              : "resumed-verified-chunk-metadata",
+          }),
+          attemptToken,
+        );
+        jobLock.assertOwned();
+        process.stdout.write(
+          `first chunk verified in ${observedElapsedSeconds.toFixed(1)}s; ` +
+            `estimated segmented-render ETA ${firstChunkEta.estimatedRemainingSeconds}s ` +
+            `(auto-continuing ${firstChunkEta.remainingChunks} chunks)\n`,
+        );
+      }
       if (range.index < ranges.length - 1) await sleep(interChunkPauseMs);
     }
     jobLock.assertOwned();
@@ -2687,8 +2963,16 @@ export async function renderAgentSkillLongReviewWideV004Chunked(options = {}) {
       ...manifest,
       schemaVersion: FINAL_MANIFEST_SCHEMA_VERSION,
       completedAt: new Date().toISOString(),
+      ...(CONFIGURED_RENDER_JOB?.renderProfile
+        ? {
+            reviewStatus: CONFIGURED_RENDER_JOB.renderProfile.formalCandidate
+              ? "formal-candidate-awaiting-machine-and-visual-qa"
+              : "render-base-requires-external-subtitle-overlay",
+          }
+        : {}),
       effectiveScheduleConfig: {interChunkPauseMs},
       chunks: chunkRecords,
+      firstChunkEta,
       concat: concatenated.record,
       finalMedia: muxed.record,
       publication: {

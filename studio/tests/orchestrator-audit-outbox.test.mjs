@@ -14,7 +14,8 @@ import { deliverWorkerAuditOutbox, enqueueWorkerAuditEvents } from
 import { writeVersionedJson } from "../src/shared/versioned-json-store.mjs";
 import {
   fixtureAssetFileDependencies,
-  readFixtureEpisode
+  readFixtureEpisode,
+  readPacedFixtureEpisode
 } from "./episode-fixture.mjs";
 
 function memoryStore(initialEpisode, appendEvent) {
@@ -32,7 +33,7 @@ function memoryStore(initialEpisode, appendEvent) {
 }
 
 test("机器审核审计暂时失败时保留成功 Worker 状态并可幂等补写", async () => {
-  const source = await readFixtureEpisode();
+  const source = await readPacedFixtureEpisode();
   const fixtureFiles = fixtureAssetFileDependencies(source);
   const delivered = new Map();
   let reviewAuditAttempts = 0;

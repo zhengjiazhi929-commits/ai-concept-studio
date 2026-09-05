@@ -471,6 +471,11 @@ test("resume binds media inputs and chunk size while scheduling pause may change
     file: integrity,
     probeSha256: validation.probeSha256,
     codecMetadata: validation.media.codecMetadata,
+    decoding: {
+      videoDecodedWithoutError: true,
+      mode: "sequential-rawvideo-null",
+    },
+    timing: {parentWorkerElapsedSeconds: 100},
   };
   const arguments_ = {
     record,

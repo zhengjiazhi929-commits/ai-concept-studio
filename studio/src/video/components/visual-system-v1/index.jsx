@@ -1,8 +1,13 @@
 export {
   VISUAL_SYSTEM_V1,
   VISUAL_SYSTEM_V1_DEPTH_ROLES,
-  VISUAL_SYSTEM_V1_FONT_WEIGHTS
+  VISUAL_SYSTEM_V1_FONT_WEIGHTS,
+  VISUAL_SYSTEM_V1_SURFACE_BORDER
 } from "./tokens.mjs";
+export {
+  visualSystemV1InformationCardSurfaceAtFocus,
+  visualSystemV1MixHexColors
+} from "./surface-border.mjs";
 export {
   VISUAL_SYSTEM_V1_COLOR_ROLE_TOKENS,
   VISUAL_SYSTEM_V1_LINE_ROLE_TOKENS,

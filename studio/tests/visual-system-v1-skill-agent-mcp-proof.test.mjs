@@ -970,13 +970,17 @@ test("统一平面节点使用清晰完整3px边框且没有阴影或伪立体�
     components.indexOf("export function VisualSystemV1FlatNode"),
     components.indexOf("function semanticPrimitiveSurface")
   );
-  assert.match(flatNode, /border: `3px solid \$\{mixHexColors\(palette\.lineStrong, focusBorder, normalizedFocus\)\}`/u);
-  assert.match(flatNode, /data-visual-system-card-border="full-outline-3px"/u);
+  assert.match(flatNode, /visualSystemV1InformationCardSurfaceAtFocus/u);
+  assert.match(flatNode, /surfaceBorder\.informationCard\.widthPx/u);
+  assert.match(
+    flatNode,
+    /data-visual-system-card-border=\{`\$\{surfaceBorder\.informationCard\.mode\}-\$\{surfaceBorder\.informationCard\.widthPx\}px`\}/u
+  );
   assert.match(flatNode, /borderRadius: 18/u);
   assert.match(flatNode, /boxShadow: "none"/u);
   assert.match(flatNode, /backgroundImage: "none"/u);
   assert.match(flatNode, /data-visual-system-focus=\{normalizedFocus >= 0\.5 \? "primary" : "context"\}/u);
-  assert.match(flatNode, /backgroundColor: mixHexColors\(palette\.paperWarm, focusSurface, normalizedFocus, 0\.76\)/u);
+  assert.match(flatNode, /backgroundColor: cardSurface\.backgroundColor/u);
   assert.match(flatNode, /data-visual-system-card-layout=\{layoutMode\}/u);
   assert.match(flatNode, /visualSystemV1AdaptiveCardTypography\(cardWidth, cardHeight\)/u);
   assert.match(flatNode, /data-visual-system-card-typography=\{cardTypography\?\.mode/u);
@@ -1000,8 +1004,8 @@ test("语义信息卡使用完整外框，时间锚点与数量条仍保留非�
     components.indexOf("export function VisualSystemV1SemanticNode")
   );
   assert.match(semanticSurface, /const fullOutline = \{/u);
-  assert.match(semanticSurface, /border: `3px solid \$\{mixHexColors\(/u);
-  assert.match(semanticSurface, /palette\.lineStrong/u);
+  assert.match(semanticSurface, /surfaceBorder\.informationCard\.widthPx/u);
+  assert.match(semanticSurface, /visualSystemV1InformationCardSurfaceAtFocus/u);
   assert.match(semanticSurface, /borderRadius: 18/u);
   assert.match(semanticSurface, /boxShadow: "none"/u);
   assert.match(semanticSurface, /if \(surfaceRole === "information-card"\) return fullOutline/u);

@@ -71,6 +71,7 @@ export const AGENT_CONTROL_IMPLEMENTATION_PATHS = Object.freeze([
   "src/server/production/short-asset-plan-adapter.mjs",
   "src/server/production/short-script-adapter.mjs",
   "src/server/production/short-storyboard-adapter.mjs",
+  "src/server/production/subtitle-segmentation.mjs",
   "src/server/production/upload-transaction.mjs",
   "src/server/production/voice.mjs",
   "src/server/production/worker-prompts.mjs",
