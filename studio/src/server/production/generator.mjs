@@ -30,6 +30,7 @@ import {
   SideEffectAuthorizationError
 } from "../security/side-effect-capability.mjs";
 import { buildWorkerPrompt } from "./worker-prompts.mjs";
+import { splitSubtitleTextSemantically } from "./subtitle-segmentation.mjs";
 
 const closedObject = (properties, required = Object.keys(properties)) => ({
   type: "object",
@@ -206,30 +207,8 @@ const subtitleSegmenter = new Intl.Segmenter("zh-CN", { granularity: "word" });
 const leadingClosingPunctuation = /^[，。！？；：、）》】,.!?;:)\]]/u;
 const trailingOpeningPunctuation = /[（《【(\[]$/u;
 
-function textLength(value) {
-  return Array.from(String(value ?? "")).length;
-}
-
 export function splitSubtitleText(value, maximumCharacters = 24) {
-  const source = String(value ?? "");
-  const tokens = [...subtitleSegmenter.segment(source)].map((item) => item.segment);
-  const chunks = [];
-  let current = "";
-  for (const token of tokens) {
-    const closingPunctuation = leadingClosingPunctuation.test(token.trimStart());
-    if (
-      current &&
-      !closingPunctuation &&
-      textLength(current) + textLength(token) > maximumCharacters
-    ) {
-      if (current.trim()) chunks.push(current);
-      current = token;
-      continue;
-    }
-    current += token;
-  }
-  if (current.trim()) chunks.push(current);
-  return chunks.length > 0 ? chunks : ["待补充"];
+  return splitSubtitleTextSemantically(value, maximumCharacters);
 }
 
 export function splitTextNearMiddle(value) {

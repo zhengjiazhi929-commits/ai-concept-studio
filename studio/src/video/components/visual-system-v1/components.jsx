@@ -14,6 +14,7 @@ import {
 } from "./content-layout.mjs";
 import { visualSystemV1ChapterDisplayLabel } from "./chapter-progress.mjs";
 import {
+  visualSystemV1ChapterRevealAtFrame,
   visualSystemV1ChapterProgressAtFrame,
   visualSystemV1ConnectorMotionAtFrame,
   visualSystemV1DepthMotionAtFrame,
@@ -24,6 +25,7 @@ import {
   visualSystemV1WallpaperMotionAtFrame
 } from "./motion.mjs";
 import { VISUAL_SYSTEM_V1, VISUAL_SYSTEM_V1_DEPTH_ROLES } from "./tokens.mjs";
+import { visualSystemV1InformationCardSurfaceAtFocus } from "./surface-border.mjs";
 import { VisualSystemV1AiTechIcon } from "./icons/ai-tech-icon.jsx";
 import {
   aiTechIconMotionStateAtProgress,
@@ -31,7 +33,7 @@ import {
   assertAiTechIconProductionPresentation
 } from "../../../shared/ai-tech-icon-contract.mjs";
 
-const { palette, typography, semanticNode } = VISUAL_SYSTEM_V1;
+const { palette, typography, semanticNode, surfaceBorder } = VISUAL_SYSTEM_V1;
 const SceneOpacityContext = React.createContext(1);
 
 function colorWithAlpha(color, opacity) {
@@ -42,23 +44,6 @@ function colorWithAlpha(color, opacity) {
   const green = (value >> 8) & 255;
   const blue = value & 255;
   return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
-}
-
-function mixHexColors(from, to, progress, alpha = 1) {
-  const parse = (color) => {
-    const match = /^#([0-9a-f]{6})$/iu.exec(color);
-    if (!match) return null;
-    const value = Number.parseInt(match[1], 16);
-    return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
-  };
-  const fromRgb = parse(from);
-  const toRgb = parse(to);
-  if (!fromRgb || !toRgb) return from;
-  const normalizedProgress = Math.max(0, Math.min(1, progress));
-  const mixed = fromRgb.map((channel, index) =>
-    Math.round(channel + (toRgb[index] - channel) * normalizedProgress)
-  );
-  return `rgba(${mixed[0]}, ${mixed[1]}, ${mixed[2]}, ${alpha})`;
 }
 
 function assertDepthRole(role) {
@@ -92,9 +77,7 @@ export function VisualSystemV1Canvas({ children }) {
           borderRadius: "50%",
           opacity: VISUAL_SYSTEM_V1.wallpaper.mintOpacity,
           background: `radial-gradient(ellipse at center, ${palette.mintSoft} 0%, rgba(216,243,232,.64) 38%, rgba(216,243,232,0) 74%)`,
-          filter: `blur(${VISUAL_SYSTEM_V1.wallpaper.blurPx}px)`,
-          translate: `${wallpaper.mint.x}px ${wallpaper.mint.y}px`,
-          willChange: "translate"
+          translate: `${wallpaper.mint.x}px ${wallpaper.mint.y}px`
         }}
       />
       <div
@@ -108,9 +91,7 @@ export function VisualSystemV1Canvas({ children }) {
           borderRadius: "50%",
           opacity: VISUAL_SYSTEM_V1.wallpaper.purpleOpacity,
           background: `radial-gradient(ellipse at center, ${palette.purpleSoft} 0%, rgba(232,224,255,.52) 42%, rgba(232,224,255,0) 76%)`,
-          filter: `blur(${VISUAL_SYSTEM_V1.wallpaper.blurPx}px)`,
-          translate: `${wallpaper.purple.x}px ${wallpaper.purple.y}px`,
-          willChange: "translate"
+          translate: `${wallpaper.purple.x}px ${wallpaper.purple.y}px`
         }}
       />
       {children}
@@ -134,7 +115,7 @@ export function VisualSystemV1OpenCanvasHeader({ title = "VISUAL SYSTEM V1" }) {
         borderBottom: `1px solid ${palette.line}`,
         color: palette.mintDeep,
         fontSize: 16,
-        fontWeight: 820,
+        fontWeight: typography.fontWeights.sectionLabel,
         letterSpacing: ".12em"
       }}
     >
@@ -160,6 +141,7 @@ export function VisualSystemV1SingleContentWindow({
   return (
     <div
       data-visual-system-window="single-content-window"
+      data-visual-system-group-border={`${surfaceBorder.semanticGroup.mode}-${surfaceBorder.semanticGroup.widthPx}px`}
       style={{
         position: "absolute",
         left: geometry.x,
@@ -168,7 +150,7 @@ export function VisualSystemV1SingleContentWindow({
         height: geometry.height,
         overflow: "hidden",
         borderRadius: geometry.borderRadius,
-        border: `1px solid ${VISUAL_SYSTEM_V1.window.border}`,
+        border: `${surfaceBorder.semanticGroup.widthPx}px solid ${surfaceBorder.semanticGroup.contextualColor}`,
         backgroundColor: palette.window,
         boxShadow: VISUAL_SYSTEM_V1.window.shadow,
         backdropFilter: "blur(22px) saturate(112%)",
@@ -187,7 +169,7 @@ export function VisualSystemV1SingleContentWindow({
           backgroundColor: palette.windowChrome,
           color: palette.mintDeep,
           fontSize: layout.vertical ? 18 : 16,
-          fontWeight: 820,
+          fontWeight: typography.fontWeights.sectionLabel,
           letterSpacing: ".12em"
         }}
       >
@@ -289,8 +271,11 @@ export function VisualSystemV1FlatNode({
   const accentColor = accent === "purple" ? palette.purpleDeep : palette.mintDeep;
   const dotColor = accent === "purple" ? palette.purple : palette.mint;
   const normalizedFocus = Math.max(0, Math.min(1, focusProgress));
-  const focusSurface = accent === "purple" ? palette.purpleSoft : palette.mintSoft;
-  const focusBorder = accent === "purple" ? palette.purple : palette.mint;
+  const cardSurface = visualSystemV1InformationCardSurfaceAtFocus({
+    accent,
+    focusProgress: normalizedFocus,
+    variant: "flat"
+  });
   const fillsSafeViewport = layoutMode === "fill-safe-viewport";
   if (!fillsSafeViewport && layoutMode !== "content-sized") {
     throw new TypeError(`未知平面卡片布局模式：${layoutMode}`);
@@ -319,7 +304,7 @@ export function VisualSystemV1FlatNode({
       data-visual-system-card-layout={layoutMode}
       data-visual-system-card-typography={cardTypography?.mode ?? "legacy-content-sized"}
       data-visual-system-card-text-wrap={textWrapMode}
-      data-visual-system-card-border="full-outline-3px"
+      data-visual-system-card-border={`${surfaceBorder.informationCard.mode}-${surfaceBorder.informationCard.widthPx}px`}
       data-semantic-id={nodeId}
       data-semantic-group-id={semanticGroupId ?? undefined}
       data-semantic-role={semanticRole ?? undefined}
@@ -330,13 +315,13 @@ export function VisualSystemV1FlatNode({
       style={{
         position: "absolute",
         boxSizing: "border-box",
-        border: `3px solid ${mixHexColors(palette.lineStrong, focusBorder, normalizedFocus)}`,
         borderRadius: 18,
-        backgroundColor: mixHexColors(palette.paperWarm, focusSurface, normalizedFocus, 0.76),
+        backgroundColor: cardSurface.backgroundColor,
         backgroundImage: "none",
         boxShadow: "none",
         filter: "none",
         ...style,
+        border: `${surfaceBorder.informationCard.widthPx}px solid ${cardSurface.borderColor}`,
         top: animatedTop,
         padding: `${paddingY}px ${paddingX}px`,
         display: fillsSafeViewport ? "flex" : "block",
@@ -366,7 +351,7 @@ export function VisualSystemV1FlatNode({
             style={{
               color: accentColor,
               fontSize: cardTypography?.markerFontSizePx ?? 13,
-              fontWeight: 900,
+              fontWeight: typography.fontWeights.sectionLabel,
               lineHeight: cardTypography?.marker.lineHeight ?? 1.2,
               letterSpacing: `${cardTypography?.marker.letterSpacingEm ?? 0.1}em`,
               whiteSpace: "nowrap"
@@ -383,7 +368,7 @@ export function VisualSystemV1FlatNode({
           marginTop: cardTypography?.markerTitleGapPx ?? 13,
           color: palette.ink,
           fontSize: cardTypography?.labelFontSizePx ?? 28,
-          fontWeight: 860,
+          fontWeight: typography.fontWeights.primaryLabel,
           lineHeight: cardTypography?.label.lineHeight ?? 1.12,
           letterSpacing: `${cardTypography?.label.letterSpacingEm ?? -0.025}em`,
           wordBreak: phraseSafe ? "keep-all" : "normal",
@@ -401,7 +386,7 @@ export function VisualSystemV1FlatNode({
             marginTop: cardTypography?.titleDetailGapPx ?? 7,
             color: palette.muted,
             fontSize: cardTypography?.detailFontSizePx ?? 18,
-            fontWeight: 620,
+            fontWeight: typography.fontWeights.detail,
             lineHeight: cardTypography?.detail.lineHeight ?? 1.35,
             wordBreak: phraseSafe ? "keep-all" : "normal",
             overflowWrap: phraseSafe ? "normal" : "break-word",
@@ -415,7 +400,13 @@ export function VisualSystemV1FlatNode({
   );
 }
 
-function semanticPrimitiveSurface(primitive, accentColor, focusColor, focusProgress, surfaceRole) {
+function semanticPrimitiveSurface(primitive, accent, focusProgress, surfaceRole) {
+  const accentColor = accent === "purple" ? palette.purpleDeep : palette.mintDeep;
+  const cardSurface = visualSystemV1InformationCardSurfaceAtFocus({
+    accent,
+    focusProgress,
+    variant: "semantic"
+  });
   const openDiagram = {
     border: "none",
     borderRadius: 0,
@@ -423,18 +414,9 @@ function semanticPrimitiveSurface(primitive, accentColor, focusColor, focusProgr
     boxShadow: "none"
   };
   const fullOutline = {
-    border: `3px solid ${mixHexColors(
-      palette.lineStrong,
-      accentColor,
-      Math.min(1, focusProgress * 0.82)
-    )}`,
+    border: `${surfaceBorder.informationCard.widthPx}px solid ${cardSurface.borderColor}`,
     borderRadius: 18,
-    backgroundColor: mixHexColors(
-      palette.paperWarm,
-      focusColor,
-      focusProgress,
-      0.92
-    ),
+    backgroundColor: cardSurface.backgroundColor,
     boxShadow: "none"
   };
   if (surfaceRole === "information-card") return fullOutline;
@@ -516,7 +498,9 @@ export function VisualSystemV1StandaloneIcon({
               : "100%",
             color: palette.ink,
             fontSize: semanticIconNode ? semanticIconNodeDefaults.labelFontSizePx : 22,
-            fontWeight: semanticIconNode ? 850 : 760,
+            fontWeight: semanticIconNode
+              ? typography.fontWeights.primaryLabel
+              : typography.fontWeights.sectionLabel,
             lineHeight: semanticIconNode ? semanticIconNodeDefaults.labelLineHeight : 1.08,
             letterSpacing: semanticIconNode
               ? semanticIconNodeDefaults.labelLetterSpacingPx
@@ -534,7 +518,7 @@ export function VisualSystemV1StandaloneIcon({
                 marginTop: semanticIconNodeDefaults.detailGapPx,
                 color: palette.muted,
                 fontSize: semanticIconNodeDefaults.detailFontSizePx,
-                fontWeight: 620,
+                fontWeight: typography.fontWeights.detail,
                 lineHeight: semanticIconNodeDefaults.detailLineHeight,
                 letterSpacing: semanticIconNodeDefaults.detailLetterSpacingPx,
                 whiteSpace: "nowrap"
@@ -581,7 +565,6 @@ export function VisualSystemV1SemanticNode({
   const normalizedVisibility = Math.max(0, Math.min(1, visibilityProgress));
   const normalizedContentOpacity = Math.max(0, Math.min(1, contentOpacity));
   const accentColor = accent === "purple" ? palette.purpleDeep : palette.mintDeep;
-  const focusColor = accent === "purple" ? palette.purpleSoft : palette.mintSoft;
   const width = Number.isFinite(style.width) ? style.width : 320;
   const height = Number.isFinite(style.height) ? style.height : 140;
   if (surfaceRole != null && !["information-card", "open-canvas"].includes(surfaceRole)) {
@@ -630,8 +613,7 @@ export function VisualSystemV1SemanticNode({
     height >= semanticNode.marker.minimumContainerHeightPx;
   const surface = semanticPrimitiveSurface(
     primitive,
-    accentColor,
-    focusColor,
+    accent,
     normalizedFocus,
     resolvedSurfaceRole
   );
@@ -691,7 +673,7 @@ export function VisualSystemV1SemanticNode({
           style={{
             color: accentColor,
             fontSize: semanticNode.marker.fontSizePx,
-            fontWeight: 850,
+            fontWeight: typography.fontWeights.sectionLabel,
             letterSpacing: ".08em",
             lineHeight: 1.1,
             opacity: normalizedContentOpacity * 0.76
@@ -712,7 +694,7 @@ export function VisualSystemV1SemanticNode({
             minWidth: 0,
             color: palette.ink,
             fontSize: labelFontSize,
-            fontWeight: 880,
+            fontWeight: typography.fontWeights.primaryLabel,
             lineHeight: 1.08,
             letterSpacing: `${semanticTypography.labelLetterSpacingPx}px`,
             whiteSpace: informationCard ? "nowrap" : undefined,
@@ -760,6 +742,9 @@ function VisualSystemV1ShallowDepthObject({
   const face = secondary ? palette.purpleSoft : palette.mintSoft;
   const side = secondary ? palette.purpleSide : palette.mintSide;
   const ink = secondary ? palette.purpleDeep : palette.mintDeep;
+  const depthBorderColor = secondary
+    ? surfaceBorder.informationCard.purpleFocusColor
+    : surfaceBorder.informationCard.mintFocusColor;
   return (
     <div
       data-visual-system-surface="shallow-depth"
@@ -789,35 +774,37 @@ function VisualSystemV1ShallowDepthObject({
       />
       <div
         aria-hidden="true"
+        data-visual-system-depth-side-border={`${surfaceBorder.semanticGroup.mode}-${surfaceBorder.semanticGroup.widthPx}px`}
         style={{
           position: "absolute",
           inset: 0,
           borderRadius: 22,
           backgroundColor: side,
-          border: `1px solid ${secondary ? "rgba(91,69,170,.22)" : "rgba(23,121,93,.22)"}`,
+          border: `${surfaceBorder.semanticGroup.widthPx}px solid ${depthBorderColor}`,
           translate: `0 ${state.depthPx}px`
         }}
       />
       <div
+        data-visual-system-card-border={`${surfaceBorder.informationCard.mode}-${surfaceBorder.informationCard.widthPx}px`}
         style={{
           position: "absolute",
           inset: 0,
           boxSizing: "border-box",
           borderRadius: 22,
-          border: `1px solid ${secondary ? "rgba(91,69,170,.25)" : "rgba(23,121,93,.27)"}`,
+          border: `${surfaceBorder.informationCard.widthPx}px solid ${depthBorderColor}`,
           background: `linear-gradient(145deg, rgba(255,255,255,.78), ${face})`,
           boxShadow: `inset 0 1px 0 ${palette.whiteHighlight}, ${VISUAL_SYSTEM_V1.depth.surfaceShadow}`,
           padding: "22px 24px"
         }}
       >
-        <div style={{ color: ink, fontSize: 13, fontWeight: 900, letterSpacing: ".12em" }}>
+        <div style={{ color: ink, fontSize: 13, fontWeight: typography.fontWeights.sectionLabel, letterSpacing: ".12em" }}>
           {eyebrow}
         </div>
-        <div style={{ marginTop: 15, color: palette.ink, fontSize: 30, fontWeight: 900, letterSpacing: "-.03em" }}>
+        <div style={{ marginTop: 15, color: palette.ink, fontSize: 30, fontWeight: typography.fontWeights.primaryLabel, letterSpacing: "-.03em" }}>
           {label}
         </div>
         {detail ? (
-          <div style={{ marginTop: 8, color: secondary ? "#6F6395" : palette.muted, fontSize: 18, fontWeight: 650, lineHeight: 1.35 }}>
+          <div style={{ marginTop: 8, color: secondary ? "#6F6395" : palette.muted, fontSize: 18, fontWeight: typography.fontWeights.detail, lineHeight: 1.35 }}>
             {detail}
           </div>
         ) : null}
@@ -915,17 +902,27 @@ export function VisualSystemV1DirectedConnector({
   );
 }
 
-export function VisualSystemV1ChapterProgress({ chapters }) {
+export function VisualSystemV1ChapterProgress({
+  chapters,
+  revealStartFrame = null,
+  revealDurationInFrames = 8
+}) {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
   const layout = visualSystemV1Layout(width, height);
   const state = visualSystemV1ChapterProgressAtFrame(frame, chapters);
+  const reveal = visualSystemV1ChapterRevealAtFrame(
+    frame,
+    revealStartFrame,
+    revealDurationInFrames
+  );
   const columns = chapters
     .map((chapter) => `${chapter.endFrame - chapter.startFrame}fr`)
     .join(" ");
   return (
     <div
       data-visual-system-chapter-progress="segmented"
+      data-chapter-reveal-progress={reveal.progress}
       style={{
         position: "absolute",
         left: layout.vertical ? 54 : 90,
@@ -934,7 +931,9 @@ export function VisualSystemV1ChapterProgress({ chapters }) {
         zIndex: 8,
         display: "grid",
         gridTemplateColumns: columns,
-        gap: layout.vertical ? 8 : 15
+        gap: layout.vertical ? 8 : 15,
+        opacity: reveal.opacity,
+        translate: `0 ${reveal.translateY}px`
       }}
     >
       {chapters.map((chapter, index) => {
@@ -946,7 +945,7 @@ export function VisualSystemV1ChapterProgress({ chapters }) {
                 marginBottom: layout.vertical ? 7 : 8,
                 color: palette.muted,
                 fontSize: layout.vertical ? 13 : 17,
-                fontWeight: 600,
+                fontWeight: typography.fontWeights.navigation,
                 lineHeight: "22px",
                 letterSpacing: ".02em",
                 whiteSpace: "nowrap"
@@ -1002,7 +1001,7 @@ export function VisualSystemV1PlainSubtitle({ captions, visualWeight = "primary"
         zIndex: 10,
         color: VISUAL_SYSTEM_V1.defaults.subtitleColor,
         fontSize,
-        fontWeight: 700,
+        fontWeight: typography.fontWeights.subtitle,
         lineHeight: typography.subtitleLineHeight,
         letterSpacing: "-.025em",
         textAlign: "center",

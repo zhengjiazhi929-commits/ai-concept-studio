@@ -1,13 +1,10 @@
-import { access, mkdir, readdir, rename, rm } from "node:fs/promises";
-import { relative, resolve } from "node:path";
+import { access, mkdir, mkdtemp, readdir, rename, rm } from "node:fs/promises";
+import { resolve } from "node:path";
 import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
 import {
   publicRoot,
-  studioOutputRoot,
-  studioRoot,
   videoRoot,
-  workspaceRoot,
   episodeOutputDirectory
 } from "../shared/paths.mjs";
 import { readConfig } from "../shared/store.mjs";
@@ -23,19 +20,18 @@ import {
 import {
   visualSystemV1GrammarLayout
 } from "../video/components/visual-system-v1/grammar-layout.mjs";
-
-let cachedBundle = null;
+import {
+  bundleVideoProjectForRenderCore,
+  createRendererService,
+  createVideoBundleSnapshotCore
+} from "./renderer-core.mjs";
 
 export function nextRenderFileName(files) {
   const highest = files.reduce((current, file) => {
-    const match = /^preview-v(\d{3})\.mp4$/u.exec(file);
+    const match = /^preview-v(\d{3})(?:\.rendering)?\.mp4$/u.exec(file);
     return Math.max(current, match ? Number(match[1]) : 0);
   }, 0);
   return `preview-v${String(highest + 1).padStart(3, "0")}.mp4`;
-}
-
-function renderVersionFromPath(outputPath) {
-  return Number(/preview-v(\d{3})\.mp4$/u.exec(outputPath)?.[1] ?? 0);
 }
 
 function usesVisualExpressionContract(episode) {
@@ -206,90 +202,73 @@ async function browserOptions(browserExecutable) {
   return detected ? { browserExecutable: detected } : {};
 }
 
-async function getBundle() {
-  if (cachedBundle) return cachedBundle;
-  cachedBundle = await bundle({
-    entryPoint: resolve(videoRoot, "index.jsx"),
-    publicDir: publicRoot,
-    onProgress: () => undefined
-  });
-  return cachedBundle;
+export async function bundleVideoProjectForRender(options = {}) {
+  assertNoDependencyInjection(options, ["bundleProject"], "bundleVideoProjectForRender");
+  return bundleVideoProjectForRenderCore({
+    entryPoint: options.entryPoint ?? resolve(videoRoot, "index.jsx"),
+    publicDirectory: options.publicDirectory ?? publicRoot,
+    ...(options.outDirectory ? { outDirectory: options.outDirectory } : {})
+  }, { bundleProject: bundle });
+}
+
+export async function createVideoBundleSnapshot(options = {}) {
+  // Remotion copies publicDir into the bundle by default. Reusing a process-wide
+  // bundle would therefore render stale voice or visual assets after an approved
+  // asset revision changes. A formal render gets a fresh immutable snapshot.
+  assertNoDependencyInjection(
+    options,
+    ["mkdtemp", "rm", "bundleProject"],
+    "createVideoBundleSnapshot"
+  );
+  return createVideoBundleSnapshotCore({
+    entryPoint: options.entryPoint ?? resolve(videoRoot, "index.jsx"),
+    publicDirectory: options.publicDirectory ?? publicRoot
+  }, { bundleProject: bundle, mkdtemp, rm });
+}
+
+const productionRenderer = createRendererService({
+  dependencies: {
+    backupRenderedFile,
+    browserOptions,
+    createVideoBundleSnapshot,
+    episodeOutputDirectory,
+    inspectFileIntegrity,
+    mkdir,
+    readConfig,
+    readdir,
+    rename,
+    renderMedia,
+    rm,
+    selectComposition
+  },
+  nextRenderFileName,
+  prepareDeterministicLayoutSamples,
+  finalizeDeterministicLayoutSampleSet
+});
+
+function hasProperty(value, property) {
+  return Boolean(
+    value != null &&
+    (typeof value === "object" || typeof value === "function") &&
+    Reflect.has(value, property)
+  );
+}
+
+function assertNoDependencyInjection(options, properties, entryPoint) {
+  if (properties.some((property) => hasProperty(options, property))) {
+    throw new TypeError(
+      `production ${entryPoint} does not accept dependency injection`
+    );
+  }
 }
 
 export async function renderPreview(episode, context = {}) {
-  const config = await readConfig();
-  const outputDirectory = episodeOutputDirectory(episode.id);
-  await mkdir(outputDirectory, { recursive: true });
-  const outputPath = resolve(outputDirectory, nextRenderFileName(await readdir(outputDirectory)));
-  const temporaryOutputPath = outputPath.replace(/\.mp4$/u, ".rendering.mp4");
-  const serveUrl = await getBundle();
-  const inputProps = { episode };
-  const browser = await browserOptions(config.browserExecutable);
-
-  const composition = await selectComposition({
-    serveUrl,
-    id: episode.render.compositionId,
-    inputProps,
-    ...browser,
-    logLevel: "warn"
-  });
-  const preparedDeterministicLayouts = prepareDeterministicLayoutSamples(episode, composition);
-
-  let lastReported = -1;
-  try {
-    await renderMedia({
-      composition,
-      serveUrl,
-      codec: config.render.codec,
-      outputLocation: temporaryOutputPath,
-      inputProps,
-      ...browser,
-      concurrency: config.render.concurrency,
-      crf: config.render.crf,
-      imageFormat: "png",
-      pixelFormat: "yuv420p",
-      enforceAudioTrack: true,
-      overwrite: false,
-      logLevel: "warn",
-      onProgress: ({ progress }) => {
-        const rounded = Math.floor(progress * 20) / 20;
-        if (rounded > lastReported) {
-          lastReported = rounded;
-          void context.onProgress?.(rounded, `正在生成预览 ${Math.round(rounded * 100)}%`);
-        }
-      }
-    });
-    await rename(temporaryOutputPath, outputPath);
-  } catch (error) {
-    await rm(temporaryOutputPath, { force: true }).catch(() => undefined);
-    throw error;
-  }
-
-  const integrity = await inspectFileIntegrity(outputPath);
-  const deterministicLayoutSampleSet = finalizeDeterministicLayoutSampleSet(
-    preparedDeterministicLayouts,
-    {
-      compositionId: composition.id,
-      renderVersion: renderVersionFromPath(outputPath),
-      renderedArtifactSha256: integrity.sha256
-    }
-  );
-  const cloudBackup = await backupRenderedFile(outputPath).catch((error) => ({
-    status: "failed",
-    error: error instanceof Error ? error.message : "云端备份失败"
-  }));
-
-  return {
-    outputPath,
-    relativeOutputPath: relative(workspaceRoot, outputPath).replaceAll("\\", "/"),
-    outputRoot: relative(workspaceRoot, studioOutputRoot).replaceAll("\\", "/"),
-    bytes: integrity.bytes,
-    sha256: integrity.sha256,
-    deterministicLayoutSampleSet,
-    cloudBackup
-  };
+  // This guard intentionally precedes readConfig, path resolution and all I/O.
+  assertNoDependencyInjection(context, ["dependencies"], "renderPreview");
+  return productionRenderer.renderPreview(episode, context);
 }
 
 export function clearBundleCache() {
-  cachedBundle = null;
+  // Kept as a compatibility hook for callers that used to clear the old cache.
+  // Formal renders no longer retain a process-wide bundle.
 }

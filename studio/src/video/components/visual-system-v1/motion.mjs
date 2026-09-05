@@ -36,6 +36,21 @@ export function visualSystemV1TextMotionAtFrame(frame, startFrame) {
   });
 }
 
+export function visualSystemV1ChapterRevealAtFrame(
+  frame,
+  revealStartFrame = null,
+  durationInFrames = 8
+) {
+  const progress = revealStartFrame == null
+    ? 1
+    : visualSystemV1ProgressAtFrame(frame, revealStartFrame, durationInFrames);
+  return Object.freeze({
+    progress,
+    opacity: progress,
+    translateY: (1 - progress) * 4
+  });
+}
+
 export function visualSystemV1SpringMotionAtFrame(frame, startFrame, fps = VISUAL_SYSTEM_V1.fps) {
   const localFrame = Math.max(0, frame - startFrame);
   const finalFrame = startFrame + VISUAL_SYSTEM_V1.motion.nodeSpringFrames - 1;

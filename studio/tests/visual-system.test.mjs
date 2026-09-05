@@ -27,6 +27,13 @@ test("视觉系统配置固定16:9母版和9:16重构输出", async () => {
   assert.ok(config.motion.stageManager.exitScale < 1);
   assert.equal(config.colors.canvas, "#F2F2F4");
   assert.equal(config.diagram.theme, "light-control-plane");
+  assert.equal(config.wallpaper.feathering, "radial-gradient-stops");
+  assert.equal(
+    config.wallpaper.compositorPolicy,
+    "no-viewport-filter-no-viewport-will-change"
+  );
+  assert.equal(config.wallpaper.largeLayerFilterBlur, false);
+  assert.equal(config.wallpaper.largeLayerWillChange, false);
   assert.ok(config.motion.references.some((item) => item.name === "Apple Stage Manager"));
   assert.ok(config.motion.references.some((item) => item.name === "Apple Keynote Magic Move"));
 });
@@ -127,7 +134,13 @@ test("样片规范禁用播放器时间元素但保留无秒数的语义章节�
   });
   assert.equal(config.motion.cardReflowFrames, 8);
   assert.equal(config.motion.cardFocusFrames, 12);
-  for (const item of ["dark-theme", "dual-window-overlap-transition", "window-blur-transition"]) {
+  for (const item of [
+    "dark-theme",
+    "dual-window-overlap-transition",
+    "window-blur-transition",
+    "viewport-scale-filter-blur",
+    "viewport-scale-will-change"
+  ]) {
     assert.ok(config.forbidden.includes(item));
   }
 });

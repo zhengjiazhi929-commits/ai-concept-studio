@@ -24,7 +24,7 @@ export function AgentSkillLongReviewRoot() {
       fps={AGENT_SKILL_LONG_REVIEW_FPS}
       width={1920}
       height={1080}
-      defaultProps={{ episode: defaultEpisode }}
+      defaultProps={{ episode: defaultEpisode, burnInSubtitle: true, renderAudio: true }}
     />
   );
 }

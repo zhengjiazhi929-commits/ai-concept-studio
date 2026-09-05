@@ -21,6 +21,10 @@ import {
   validateEditorialScene
 } from "../src/shared/editorial-visual-policy.mjs";
 import {
+  TECHNICAL_ARTIFACT_PROFILE_POLICY,
+  technicalArtifactLayout
+} from "../src/shared/technical-artifact-profile.mjs";
+import {
   AGENT_SKILL_LONG_REVIEW_CHAPTERS,
   AGENT_SKILL_LONG_REVIEW_CONNECTED_ENTRY_MODE,
   AGENT_SKILL_LONG_REVIEW_CONNECTOR_TONES,
@@ -65,7 +69,10 @@ import {
   longReviewResolvedSemanticGroupBounds,
   longReviewSemanticRelationType
 } from "../src/video/agent-skill-long-review-contrast.mjs";
-import { visualSystemV1TextMotionAtFrame } from "../src/video/components/visual-system-v1/motion.mjs";
+import {
+  visualSystemV1ChapterRevealAtFrame,
+  visualSystemV1TextMotionAtFrame
+} from "../src/video/components/visual-system-v1/motion.mjs";
 import { agentSkillLongReviewEpisodeFixture } from
   "./agent-skill-long-review.fixture.mjs";
 
@@ -449,10 +456,11 @@ test("长片用多种可复用图解叙事承载内容，并在 S04 一次性教
   assert.match(component, /data-shape-grammar-boundary-wrapper/u);
   assert.match(component, /data-shape-grammar-form=\{surfacePlan\?\.shapeGrammarVisualForm\}/u);
   assert.match(component, /data-narrative-treatment=\{spec\.narrativeTreatment\}/u);
-  assert.match(component, /data-semantic-group-role=\{isCompleteBoundary/u);
+  assert.match(component, /data-semantic-group-role=\{isCompleteObjectBoundary/u);
   assert.match(contrastGeometry, /layout\.fullGeometryById \?\? layout\.geometryById/u);
-  assert.match(component, /border: isCompleteBoundary \? `2px solid/u);
-  assert.match(component, /borderTop: isCompleteBoundary \? undefined/u);
+  assert.match(component, /data-visual-system-group-border/u);
+  assert.match(component, /surfaceBorder\.semanticGroup\.widthPx/u);
+  assert.doesNotMatch(component, /borderTop: isCompleteBoundary/u);
 });
 
 test("图解构建期间只保留一个降权短提示，建立前和安静终帧恢复完整字幕", async () => {
@@ -1080,6 +1088,14 @@ test("S18 在 592–594.5 秒完成四条件汇聚，之后进入无对号的安
   assert.match(component, /const backdropFrame = frame >= finalScene\.holdStartFrame/u);
   assert.match(component, /<WideMovingBackdrop frameOverride=\{backdropFrame\} \/>/u);
   assert.match(component, /data-wallpaper-sample-frame=\{frame\}/u);
+  const backdropStart = component.indexOf("function WideMovingBackdrop");
+  const backdropEnd = component.indexOf("function normalizeNodeCopy", backdropStart);
+  assert.ok(backdropStart >= 0 && backdropEnd > backdropStart);
+  const backdropSource = component.slice(backdropStart, backdropEnd);
+  assert.match(backdropSource, /radial-gradient/u);
+  assert.match(backdropSource, /data-wallpaper-compositor-policy/u);
+  assert.doesNotMatch(backdropSource, /filter\s*:/u);
+  assert.doesNotMatch(backdropSource, /willChange\s*:/u);
 });
 
 test("审阅计划用八章和十八个镜头连续覆盖完整时轴", () => {
@@ -1184,6 +1200,45 @@ test("每个镜头边界只保留一个完全不透明的信息 owner", () => {
   }
 });
 
+test("首帧先完整建立大标题，章节轨道与其他小字按帧延后", async () => {
+  const opening = sceneById("S01");
+  const titleStartFrame = opening.startFrame - AGENT_SKILL_LONG_REVIEW_TITLE_PREROLL_FRAMES;
+  assert.equal(titleStartFrame, -11);
+  for (const frame of [0, 1, 11, 18, 29]) {
+    assert.equal(
+      visualSystemV1TextMotionAtFrame(frame, titleStartFrame).opacity,
+      1,
+      `opening title must already be settled at frame ${frame}`
+    );
+  }
+  assert.equal(visualSystemV1ChapterRevealAtFrame(0, 11, 8).opacity, 0);
+  assert.equal(visualSystemV1ChapterRevealAtFrame(1, 11, 8).opacity, 0);
+  assert.equal(visualSystemV1ChapterRevealAtFrame(11, 11, 8).opacity, 0);
+  assert.equal(visualSystemV1ChapterRevealAtFrame(18, 11, 8).opacity, 1);
+  assert.equal(visualSystemV1ChapterRevealAtFrame(29, 11, 8).opacity, 1);
+  assert.equal(visualSystemV1ChapterRevealAtFrame(0).opacity, 1, "other compositions remain visible by default");
+  const episode = await readFixtureEpisode();
+  assert.equal(longReviewSubtitleGateAtFrame(episode.subtitles, 0).opacity, 0);
+  assert.ok(opening.visualPlan.timing.supportingCopyStartFrame > 0);
+  assert.ok(opening.visualPlan.timing.graphicStartFrame > opening.visualPlan.timing.supportingCopyStartFrame);
+
+  const [component, visualComponents] = await Promise.all([
+    readFile(COMPONENT_PATH, "utf8"),
+    readFile(VISUAL_COMPONENTS_PATH, "utf8")
+  ]);
+  assert.doesNotMatch(component, /spec\.startFrame === 0/u);
+  assert.match(
+    component,
+    /const titleStartFrame = spec\.startFrame - AGENT_SKILL_LONG_REVIEW_TITLE_PREROLL_FRAMES/u
+  );
+  assert.match(
+    component,
+    /revealStartFrame=\{AGENT_SKILL_LONG_REVIEW_TITLE_PREROLL_FRAMES\}/u
+  );
+  assert.match(visualComponents, /visualSystemV1ChapterRevealAtFrame/u);
+  assert.match(visualComponents, /opacity:\s*reveal\.opacity/u);
+});
+
 test("正式视觉标题不被旧 episode 覆盖，渐进目录边框只包住当前可见成员", async () => {
   const s05 = sceneById("S05");
   const visualCopy = longReviewVisualSceneCopy("S05", {
@@ -1240,7 +1295,7 @@ test("跨场景字幕保持连续，其余场景仍由大标题领先建立", as
   assert.ok(afterTitleLead.opacity > 0);
 });
 
-test("正式长片信息卡保持纯文字，四个 AI 图标只作为真实关系节点", async () => {
+test("正式长片信息卡保持纯文字，三个 AI 图标只作为真实关系节点", async () => {
   for (const scene of AGENT_SKILL_LONG_REVIEW_SCENE_SPECS) {
     for (const node of scene.nodes) {
       assert.equal(node.conceptKind, undefined, `${scene.id}/${node.id} embeds conceptKind`);
@@ -1281,25 +1336,6 @@ test("正式长片信息卡保持纯文字，四个 AI 图标只作为真实关�
     }))
   );
   assert.deepEqual(standaloneIcons, [
-    {
-      sceneId: "S08",
-      id: "context-window-symbol",
-      anchorId: "focus",
-      semanticObjectId: "focus",
-      ownerId: null,
-      participation: "graph-node",
-      conceptKind: "context-window",
-      presentation: "open-diagram-symbol",
-      layoutRole: "semantic-icon-node",
-      attachmentMode: "independent",
-      autoInsert: false,
-      placement: "anchor-bounds",
-      caption: null,
-      sizeRole: "support",
-      maximumGapPx: null,
-      labelRevealDeltaFrames: 0,
-      delayed: false
-    },
     {
       sceneId: "S10",
       id: "tool-symbol",
@@ -1611,9 +1647,9 @@ test("S15 在 490–500 秒形成横向证据生命周期、失效复评与回�
   );
 });
 
-test("S08、S10 与 S17 的四个图标替代真实关系节点，不再生成远端重复表现", async () => {
+test("S10 与 S17 的三个图标替代真实关系节点，不再生成远端重复表现", async () => {
   let resolvedCount = 0;
-  for (const sceneId of ["S08", "S10", "S17"]) {
+  for (const sceneId of ["S10", "S17"]) {
     const scene = sceneById(sceneId);
     const layout = longReviewLayoutAtFrame(sceneId, scene.holdStartFrame, {
       width: 1920,
@@ -1659,7 +1695,7 @@ test("S08、S10 与 S17 的四个图标替代真实关系节点，不再生成�
       resolvedCount += 1;
     }
   }
-  assert.equal(resolvedCount, 4);
+  assert.equal(resolvedCount, 3);
   const [component, visualComponents] = await Promise.all([
     readFile(COMPONENT_PATH, "utf8"),
     readFile(VISUAL_COMPONENTS_PATH, "utf8")
@@ -1680,7 +1716,7 @@ test("S08 的卡片实体都有完整边框，S10 与 S17 的图标节点保持�
     assert.ok(s08SampleById.get(nodeId).borderWidthPx >= 2, `S08/${nodeId} border width`);
   }
   assert.equal(s08.surfacePlanById.focus.surfaceRole, "open-canvas");
-  assert.equal(s08.standaloneIcons[0].anchorId, "focus");
+  assert.deepEqual(s08.standaloneIcons, []);
   assert.deepEqual(s08.edges.map((edge) => edge.id), [
     "metadata-focus",
     "instruction-focus",
@@ -1851,7 +1887,7 @@ test("同阶段关系默认等待端点；渐进目录先完成边框和结构�
   assert.doesNotMatch(component, /semanticRelation\?\.semanticType === "contrasts-with"/u);
 });
 
-test("S14 使用精确 sequence-critical 连线 tone，长片品牌层按 18 个真实切场帧短暂运动", async () => {
+test("S14 使用精确 sequence-critical 连线 tone，长片品牌层保持quiet透明度并持续运动", async () => {
   assert.equal(sceneById("S14").connectorTone, "sequence-critical");
   assert.deepEqual(AGENT_SKILL_LONG_REVIEW_CONNECTOR_TONES["sequence-critical"], {
     strokeWidthPx: 2.6,
@@ -1873,7 +1909,7 @@ test("S14 使用精确 sequence-critical 连线 tone，长片品牌层按 18 个
   const component = await readFile(COMPONENT_PATH, "utf8");
   assert.match(
     component,
-    /<VisualSystemV1WideBrandLayer[\s\S]*?tone="quiet"[\s\S]*?transitionFrames=\{AGENT_SKILL_LONG_REVIEW_SCENE_START_FRAMES\}[\s\S]*?\/>/u
+    /<VisualSystemV1WideBrandLayer[\s\S]*?tone="quiet"[\s\S]*?motionCadence="continuous"[\s\S]*?transitionFrames=\{AGENT_SKILL_LONG_REVIEW_SCENE_START_FRAMES\}[\s\S]*?\/>/u
   );
 });
 
@@ -1925,6 +1961,13 @@ test("完整长片用内容驱动宽度、纯文字卡片和开放图解打破�
     { id: "method", label: "方法与判断" },
     { id: "execution", label: "动作、连接与结果" }
   ]);
+  assert.equal(s11.groups.every((group) => group.visualForm === "full-outline"), true);
+  assert.equal(
+    s11.groups.every(
+      (group) => group.semanticMeaning === "process-or-relationship-group-boundary"
+    ),
+    true
+  );
   assert.equal(new Set(s11.layoutSamples[0].elements.map((element) => element.bounds.y)).size, 2);
   assert.deepEqual(
     Object.fromEntries(s11.layoutSamples[0].elements.map((element) => [element.id, element.surfaceRole])),
@@ -2062,6 +2105,64 @@ test("完整长片用内容驱动宽度、纯文字卡片和开放图解打破�
   assert.match(component, /<polyline/u);
 });
 
+test("S16 前置条件首次出现后持续保留，分支只替换结果", () => {
+  const scene = sceneById("S16");
+  assert.deepEqual(scene.continuityNodeIds, ["stable", "detect", "authority", "version", "gate"]);
+  const expected = {
+    candidate: {
+      nodes: ["candidate"],
+      edges: []
+    },
+    stability: {
+      nodes: ["candidate", "stable", "detect"],
+      edges: ["candidate-stable", "candidate-detect"]
+    },
+    authority: {
+      nodes: ["candidate", "stable", "detect", "authority"],
+      edges: ["candidate-stable", "candidate-detect", "candidate-authority"]
+    },
+    version: {
+      nodes: ["stable", "detect", "authority", "version"],
+      edges: ["detect-version"]
+    },
+    chaos: {
+      nodes: ["stable", "detect", "authority", "version", "gate", "chaos"],
+      edges: ["stable-gate", "detect-gate", "authority-gate", "version-gate", "gate-chaos"]
+    },
+    "gate-settle": {
+      nodes: ["stable", "detect", "authority", "version", "gate"],
+      edges: ["stable-gate", "detect-gate", "authority-gate", "version-gate"]
+    },
+    trusted: {
+      nodes: ["stable", "detect", "authority", "version", "gate", "trusted"],
+      edges: ["stable-gate", "detect-gate", "authority-gate", "version-gate", "gate-trusted"]
+    }
+  };
+  for (const [stageIndex, stage] of scene.stages.entries()) {
+    assert.deepEqual(longReviewVisibleNodeIdsAtStage(scene.id, stageIndex), expected[stage.id].nodes);
+    assert.deepEqual(longReviewVisibleEdgeIdsAtStage(scene.id, stageIndex), expected[stage.id].edges);
+    const settledState = longReviewDiagramStateAtFrame(
+      scene.id,
+      stage.startFrame + AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES
+    );
+    for (const continuityNodeId of scene.continuityNodeIds) {
+      const firstVisibleStageIndex = scene.stages.findIndex((candidate, index) =>
+        longReviewVisibleNodeIdsAtStage(scene.id, index).includes(continuityNodeId)
+      );
+      if (stageIndex < firstVisibleStageIndex) continue;
+      assert.ok(expected[stage.id].nodes.includes(continuityNodeId));
+      assert.equal(settledState.nodeVisibilityProgress[continuityNodeId], 1);
+      if (!stage.activeNodeIds.includes(continuityNodeId)) {
+        assert.equal(settledState.nodeHighlightProgress[continuityNodeId], 0);
+      }
+    }
+    const layout = longReviewLayoutAtFrame(scene.id, stage.startFrame);
+    assert.deepEqual(layout.fullGeometryById, longReviewLayoutAtFrame(scene.id, scene.holdStartFrame).fullGeometryById);
+    for (const connector of layout.allConnectors) assertOrthogonalConnector(connector, `S16/${stage.id}/${connector.relationId}`);
+  }
+  assert.deepEqual(scene.standaloneIcons, []);
+});
+
 test("阶段可见集合只保留当前要表达的对象，关系端点与实际连接线始终一致", () => {
   for (const scene of AGENT_SKILL_LONG_REVIEW_SCENE_SPECS) {
     for (const [stageIndex, stage] of scene.stages.entries()) {
@@ -2169,8 +2270,13 @@ test("已报告的关键问题帧保持语义清楚、卡片有完整边框且�
   }
 
   const at9990 = longReviewLayoutAtFrame("S10", 9990);
-  assert.deepEqual(at9990.state.currentVisibleNodeIds, ["combine", "weekly"]);
-  assert.deepEqual(at9990.state.currentVisibleEdgeIds, ["combine-weekly"]);
+  assert.deepEqual(at9990.state.currentVisibleNodeIds, ["skill", "tool", "mcp", "combine", "weekly"]);
+  assert.deepEqual(at9990.state.currentVisibleEdgeIds, [
+    "skill-combine",
+    "tool-combine",
+    "mcp-combine",
+    "combine-weekly"
+  ]);
 
   const s14 = sceneById("S14");
   const at13920 = longReviewLayoutAtFrame("S14", 13920);
@@ -2283,6 +2389,83 @@ test("场景标题、说明、阶段文字和语义节点正文都接入独立�
   );
   assert.match(visualComponents, /contentOpacity = 1/u);
   assert.ok((visualComponents.match(/opacity: normalizedContentOpacity/gu) ?? []).length >= 3);
+});
+
+test("S08、S10、S12、S14 使用稳定且绑定真实节点的技术工件骨架", async () => {
+  const expectedKinds = new Map([
+    ["S08", "bounded-resource-artifact"],
+    ["S10", "layered-runtime-map"],
+    ["S12", "decision-field"],
+    ["S14", "evidence-lifecycle-ledger"]
+  ]);
+  for (const scene of AGENT_SKILL_LONG_REVIEW_SCENE_SPECS) {
+    if (!expectedKinds.has(scene.id)) {
+      assert.equal(scene.artifactProfile, null, `${scene.id} must not receive a generic decorative scaffold`);
+      continue;
+    }
+    const profile = scene.artifactProfile;
+    assert.equal(profile.kind, expectedKinds.get(scene.id));
+    assert.equal(profile.schemaVersion, "technical-artifact-profile-v1");
+    assert.equal(profile.revealMode, "anchor-bound");
+    assert.equal(profile.decorativeIconsAllowed, false);
+    assert.ok(profile.semanticPurpose.length > 0);
+    assert.equal(new Set(profile.anchorNodeIds).size, profile.anchorNodeIds.length);
+    const nodeIds = new Set(scene.nodes.map((node) => node.id));
+    for (const anchorNodeId of profile.anchorNodeIds) assert.ok(nodeIds.has(anchorNodeId));
+    for (const zone of profile.zones) {
+      const futureCopy = new Set(scene.nodes.flatMap((node) => [node.label, node.detail]));
+      assert.equal(futureCopy.has(zone.label), false, `${scene.id}/${zone.id} must not preload node copy`);
+    }
+    const holdLayout = longReviewLayoutAtFrame(scene.id, scene.holdStartFrame);
+    const artifactLayout = technicalArtifactLayout({
+      profile,
+      safeArea: holdLayout.safeArea,
+      geometryById: holdLayout.fullGeometryById
+    });
+    assert.equal(artifactLayout.bounds.meetsCoverage, true);
+    assert.ok(
+      artifactLayout.bounds.safeWidthRatio >= TECHNICAL_ARTIFACT_PROFILE_POLICY.minimumSafeWidthRatio
+    );
+    assert.ok(
+      artifactLayout.bounds.safeHeightRatio >= TECHNICAL_ARTIFACT_PROFILE_POLICY.minimumSafeHeightRatio
+    );
+    for (const labelBounds of artifactLayout.labelBounds) {
+      assert.ok(labelBounds.left >= 0 && labelBounds.top >= 0);
+      assert.ok(labelBounds.left + labelBounds.width <= holdLayout.safeArea.width);
+      assert.ok(labelBounds.top + labelBounds.height <= holdLayout.safeArea.height);
+      for (const geometry of Object.values(holdLayout.fullGeometryById)) {
+        const local = {
+          left: geometry.left - holdLayout.safeArea.left,
+          top: geometry.top - holdLayout.safeArea.top,
+          right: geometry.right - holdLayout.safeArea.left,
+          bottom: geometry.bottom - holdLayout.safeArea.top
+        };
+        const overlaps = labelBounds.left < local.right &&
+          labelBounds.left + labelBounds.width > local.left &&
+          labelBounds.top < local.bottom &&
+          labelBounds.top + labelBounds.height > local.top;
+        assert.equal(overlaps, false, `${scene.id} scaffold label must not overlap semantic copy`);
+      }
+    }
+    for (const stage of scene.stages) {
+      const layout = longReviewLayoutAtFrame(scene.id, stage.startFrame);
+      const stagedArtifactLayout = technicalArtifactLayout({
+        profile,
+        safeArea: layout.safeArea,
+        geometryById: layout.fullGeometryById
+      });
+      assert.deepEqual(stagedArtifactLayout, artifactLayout, `${scene.id} artifact scaffold must not reflow`);
+    }
+  }
+  assert.equal(sceneById("S08").standaloneIcons.length, 0);
+  assert.equal(sceneById("S10").standaloneIcons.length, 2);
+
+  const component = await readFile(COMPONENT_PATH, "utf8");
+  const artifactIndex = component.indexOf("<VisualSystemV1TechnicalArtifact");
+  const connectorIndex = component.indexOf("<AdaptiveConnectors", artifactIndex);
+  const nodeIndex = component.indexOf("semanticLayout.nodeIds.map", artifactIndex);
+  assert.ok(artifactIndex >= 0 && artifactIndex < connectorIndex && connectorIndex < nodeIndex);
+  assert.doesNotMatch(component, /spec\.(?:id|kind).*artifact/u);
 });
 
 test("节点焦点连续交接，八个证据镜头使用稳定最终布局的语义节点图", async () => {

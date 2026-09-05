@@ -23,27 +23,33 @@ const COLOR_ROLE_TOKENS = Object.freeze({
 });
 
 const TYPOGRAPHY_ROLE_TOKENS = Object.freeze({
-  headline: Object.freeze({ fontSizePx: VISUAL_SYSTEM_V1.typography.headlineWidePx, fontWeight: 900 }),
-  supporting: Object.freeze({ fontSizePx: VISUAL_SYSTEM_V1.typography.supportingWidePx, fontWeight: 650 }),
+  headline: Object.freeze({
+    fontSizePx: VISUAL_SYSTEM_V1.typography.headlineWidePx,
+    fontWeight: VISUAL_SYSTEM_V1.typography.fontWeights.display
+  }),
+  supporting: Object.freeze({
+    fontSizePx: VISUAL_SYSTEM_V1.typography.supportingWidePx,
+    fontWeight: VISUAL_SYSTEM_V1.typography.fontWeights.supporting
+  }),
   "stage-title": Object.freeze({
     fontSizePx: VISUAL_EXPRESSION_STYLE_POLICY.typography.minimumStageTitleFontPx,
-    fontWeight: 820
+    fontWeight: VISUAL_SYSTEM_V1.typography.fontWeights.sectionLabel
   }),
   "node-label": Object.freeze({
     fontSizePx: VISUAL_SYSTEM_V1.cardTypography.label.expandedPx,
-    fontWeight: 820
+    fontWeight: VISUAL_SYSTEM_V1.typography.fontWeights.primaryLabel
   }),
   "node-detail": Object.freeze({
     fontSizePx: VISUAL_EXPRESSION_STYLE_POLICY.typography.minimumBodyFontPx,
-    fontWeight: 620
+    fontWeight: VISUAL_SYSTEM_V1.typography.fontWeights.detail
   }),
   caption: Object.freeze({
     fontSizePx: VISUAL_EXPRESSION_STYLE_POLICY.typography.minimumBodyFontPx,
-    fontWeight: 600
+    fontWeight: VISUAL_SYSTEM_V1.typography.fontWeights.detail
   }),
   "evidence-label": Object.freeze({
     fontSizePx: VISUAL_EXPRESSION_STYLE_POLICY.typography.minimumBodyFontPx,
-    fontWeight: 680
+    fontWeight: VISUAL_SYSTEM_V1.typography.fontWeights.technicalLabel
   })
 });
 

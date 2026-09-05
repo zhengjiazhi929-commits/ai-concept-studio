@@ -22,6 +22,8 @@
     "cloud:status": "node scripts/cloud-status.mjs",
     "cloud:backup": "node scripts/run-cloud-backup.mjs",
     "render:preview": "node scripts/render-preview.mjs golden-001",
+    "render:long-review": "node scripts/render-agent-skill-long-review-chunked.mjs",
+    "qa:long-review": "node scripts/qa-agent-skill-long-review.mjs",
     "render:agent-skill-visual-proof": "node scripts/render-agent-skill-visual-proof.mjs",
     "build:agent-skill-natural-voice-proof": "node scripts/build-agent-skill-natural-voice-proof.mjs",
     "build:agent-skill-local-tts-proof": "node scripts/build-agent-skill-local-tts-proof.mjs",
@@ -45,10 +47,11 @@
     "check:visual-expression": "node --check src/shared/visual-expression-contract.mjs && node --check src/video/components/visual-system-v1/resolver.mjs && node --check src/video/components/visual-system-v1/grammar-layout.mjs && node --check src/video/production-semantic-preview.mjs && node --check src/server/renderer.mjs && node --check src/server/production/quality.mjs && node --test tests/visual-expression-contract.test.mjs tests/visual-system-v1-resolver.test.mjs tests/visual-system-v1-grammar-layout.test.mjs tests/production-semantic-preview.test.mjs tests/deterministic-layout-sample.test.mjs",
     "precheck": "node --check src/shared/redaction.mjs && node --check src/video/agent-skill-motion-plan.mjs && node --check src/video/agent-skill-full-video-plan.mjs && node --check src/server/reviews/human-approval-view.mjs && node --check src/server/reviews/asset-execution-preflight-runner.mjs && node --check src/server/production/external-assets.mjs && node --check src/server/security/operator-session.mjs && node --check scripts/render-agent-skill-full-video-stills.mjs && node --check scripts/start-studio.mjs",
     "check": "node scripts/check-syntax.mjs",
-    "diff:check": "git diff --check && git diff --cached --check",
+    "diff:check": "node scripts/check-git-diff.mjs",
     "verify": "pnpm scan:secrets && pnpm check && pnpm motion:check && pnpm test && pnpm rehearse:rollback && pnpm ci:render-smoke && pnpm diff:check"
   },
   "dependencies": {
+    "@fontsource-variable/noto-sans-sc": "5.3.0",
     "@phosphor-icons/react": "2.1.10",
     "@remotion/bundler": "4.0.504",
     "@remotion/renderer": "4.0.504",

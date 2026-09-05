@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "agent-skill-long-review-wide-v004-python-runtime-lock-v1",
+  "pythonVersion": "3.12.13",
+  "implementation": "CPython",
+  "requirementsLock": "qa-agent-skill-long-review-wide-v004-requirements.lock.txt",
+  "packages": {
+    "numpy": "2.3.5",
+    "Pillow": "12.3.0"
+  }
+}

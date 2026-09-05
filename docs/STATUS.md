@@ -1,66 +1,80 @@
 # AI Concept Studio 当前状态
 
-更新时间：2026-08-25 17:03（Asia/Shanghai）
+更新时间：2026-09-05（Asia/Shanghai）
+状态真源版本：24
 
-状态真源版本：9
+## 本轮目标与边界
 
-核心整改合并提交：`4408ea52ce8987a6c7a7646c43d2a13179ce07cc`。
+Zhengjiazhi 已授权修改并选择性提交长视频相关代码，更新现有 PR #7；本轮不合并 main。
+粒子封面已取消：不纳入本次代码提交、PR 或视频；原封面文件和旧视频仍保留。
+正式视频右上角动态 logo、无框字幕、语义分句、整体加速和清晰完整的卡片边框继续保留。
 
-首次状态同步合并提交：`59fc520badc82e52a39b58732efe4239aafa363f`。本文件不把自己的
-提交 SHA 写成“当前 main”，避免状态提交合并后立即产生自指漂移。
+风险级别为 R2：跨视觉、字幕和渲染/QA 模块整合。接受标准是针对性回归、完整 verify、
+锁定依赖安装与安全审计、提交后的 GitHub CI；这些机器证据不代替成片视觉验收。
+回滚方式为撤销本轮整合提交，不重置或清理原工作树、Episode、旧候选或媒体。
 
-## 当前准确结论
+## Git 与工作树
 
-安全、恢复、素材权利、CI 和文档整改已经通过 PR #2 合并到远端 `main`。合并保留了
-原有 v004 与动效库，且没有包含 Research、Script 或 Storyboard 的真实业务 Gate 状态变更。
+- 实时核对的 main 为 `23990937411710e394cde0be5253b02841d42d11`。
+- 远端待合并分支为 `codex/reliability-p1-p2-20260831`，整合前提交
+  `e09ca7a1d496850d59f37990e5ad733d6505ed3f`，PR #7 保持 OPEN，无自动合并。
+- 本轮从该提交创建隔离分支 `codex/long-video-integration-20260905`，整合另一工作树
+  `980c4f4` 上尚未提交的长片改动。只更新现有远端可靠性分支，不另建重复 PR。
+- 原生产工作树 `codex/agent-production-pipeline@1bb4859` 和原长片 detached 工作树
+  保持不动。生成 MP4、音频、QA 输出、render-inputs 和无关数据快照不提交。
+- 本文件随代码提交；提交身份以 Git HEAD 为准，GitHub CI 结果以 PR 当前提交的检查为准。
 
-本地离线 `pnpm verify`、分支 push CI、PR merge-ref CI 和合并后的 `main` CI 均已通过；
-全量测试为 `597/597`，P0=0、P1=0 的攻击回归仍通过。核心仓库整改已经技术完成并合并，
-但这不等于真实业务 Gate 已批准、产品已发布或开源发布材料已经齐备。
+## 本轮整合
 
-## 已合并整改范围
+1. 同时保留 PR 中已锁定的字重合同和新完整边框规则；语义分组与信息卡不再依赖淡化边线。
+2. 正式视频 logo 由全片绝对帧驱动旋转，字幕无底框；节奏默认 1.15 倍，可按内容调整时长，
+   不再为了十分钟补慢速停顿。音视频保持同一时间映射。
+3. 字幕生成和 QA 共用语义分段逻辑，保留英文单词间空白，限制字幕驻留时间，避免拆词和
+   提前显示后文；原文必须与实际字幕或已显示的累计前缀一致，禁止伪造 sourceText 绕过 QA。
+   字幕实现加入评测依赖闭包，旧实现证据失效。
+4. 整合分段续跑、正式 QA、无框字幕叠加与只读重绑定工具；保留不可覆盖发布和来源绑定。
+   历史 job 描述不携带生产输入，不能当作可直接执行的当前渲染授权。
+5. 新增测试使用确定性临时夹具，不依赖旧 MP4 或未跟踪的字幕时间轴。
+   合成英文字体测试仅证明布局与发布行为，不证明中文视觉质量；正式 QA 的字体来源锁不放宽。
+6. 间接依赖 `fast-uri` 从 3.1.5 锁定到 3.1.6，修复审计发现的四条高危通告；
+   Remotion、React 和其他直接依赖保持原版本。
+   参考：[上游安全通告](https://github.com/advisories/GHSA-jqff-g426-hqxp)。
 
-1. 外部素材下载的公网 HTTPS、DNS、重定向、超时和流式大小边界。
-2. Provider 调用的 ambiguous 结算冻结、人工对账和禁止静默重试。
-3. 预算与计费字段的严格校验，未知费用不再按 0 记账。
-4. 外部素材 rights declaration、调用合同、完成收据、资产快照和媒体哈希绑定。
-5. 损坏审计账本 fail closed，以及上传提交后的可幂等审计 outbox 恢复。
-6. Operator 身份、Capability 与网络、文件、模型和付费副作用边界。
-7. 测试 fixture 与 live Episode 隔离，评测证据按实现、配置、输入和运行时失效。
-8. 精确 Node/pnpm/依赖版本、秘密扫描、语法检查、测试、回滚和固定渲染 CI。
-9. Golden Gate 的通用版本绑定和审核安全逻辑；不包含任何真实人工批准动作。
-10. README、治理、威胁模型、许可、回滚和当前状态文档。
+## 验证状态
 
-## 明确排除
+- 视觉、字幕、节奏专项：107/107，通过且无跳过。
+- generator / production-quality / 字幕语义：27/27，通过且无跳过。
+- 渲染与 QA 专项：93/93，通过且无跳过。
+- `pnpm install --frozen-lockfile`：通过。
+- `pnpm audit --prod --audit-level high`：升级后未发现已知漏洞。
+- 完整 `CI=true pnpm verify`：1012/1012 测试，0 失败、0 跳过；302 个源码语法检查、
+  35/35 动效检查、7/7 回滚演练、4 张实际解码且像素哈希各异的 Remotion 帧全部通过。
+  暂存新文件后的秘密扫描、working-tree/index/untracked diff 检查均通过。
+- 本记录随整合代码提交，无法预先证明该提交之后的 hosted CI；最终云端结果以 PR #7
+  当前 head commit 的 checks 为准，不复用 9 月 1 日旧 CI 结论。
+- 首次整合提交 `deb72ed` 的 hosted push/PR runs `33953013376` / `33953014689`
+  失败于本机 Python 默认路径和模块顶层 Homebrew realpath。后续补修将文件发布使用的 Python
+  显式承接 CI 的 `QA_PYTHON`，缺失指定路径时失败关闭，不放宽视觉测量的来源锁；
+  FFmpeg/FFprobe 只在真正运行 proof 时解析，且早于输出建目录。
+  回归使用 Node 权限机制禁止访问 Homebrew 后实际导入成功，不创建假系统目录或跳过测试。
+- Linux 补修后仅剩上述回归的错误码假设：路径不存在时 Node 先返回 `ENOENT`，macOS
+  已存在但不可读时返回 `ERR_ACCESS_DENIED`。测试改为独立断言读取权限为 false，再接受这两种
+  真实失败，仍必须成功导入 proof 合同；不修改生产行为或放宽运行时访问权限。
+- 本轮没有重新渲染完整视频、修改人工 Gate 或调用付费生成服务。
 
-- PR #2 未修改 `studio/data/episodes/golden-001/episode.json`。
-- 不批准或推进任何真实 Research、Script、Storyboard、Assets/Voice 或 Final Gate。
-- 不调用模型、语音、图片、视频、发布或其他付费 Provider。
-- 不把业务 Gate 状态提交混入核心整改 PR。
-- 不宣称开源发布就绪；LICENSE、SECURITY、CONTRIBUTING 等发布材料仍属后续范围。
+## 合并与发布门禁
 
-## 验证与合并状态
+即使本轮 CI 通过，也不立即 merge：需要与当前源码绑定的完整视频、正式机器 QA、
+视觉 Skill 检查、连续 1× 观看以及 Zhengjiazhi 的最终视觉认可。
+视频无需凑满十分钟；旧版本 QA、局部片段和四帧 render smoke 都不能替代此门禁。
+临时系统合成旁白（包括 voice-v001）不是最终真人录音。
 
-| 层级 | 当前状态 |
-|---|---|
-| 旧集成快照机器检查 | `571/571` 及离线 `pnpm verify` 通过，仅作历史证据 |
-| 最新 main 重组后的聚焦检查 | v004 冲突点与安全/恢复回归 `102/102` 通过 |
-| 最新 main 重组后的全量检查 | `597/597`；256 个源码文件；35/35 动效；0 失败 |
-| 回滚与固定渲染 | 7/7；19,776 bytes；external/paid/live read/write 均为 0 |
-| Hosted push CI | `Verify` run `32829050878` 通过；固定 Actions 已使用 Node 24 runtime |
-| PR merge-ref CI | `Verify` run `32829179335` 通过 |
-| 核心整改 main CI | `Verify` run `32829318265` 通过；合并提交 `4408ea5` |
-| 状态同步 main CI | `Verify` run `32829734090` 通过；合并提交 `59fc520` |
-| 技术完成 | 核心仓库整改已完成并合并 |
-| 业务验收 | 不在本分支范围；没有新增人工批准 |
-| Git 状态 | PR #2 已合并到 `main` |
-| 发布 | 代码已合并；产品与开源版本未发布 |
+- `machine_status`: local_verify_1012_of_1012_passed_hosted_evidence_per_pr_head
+- `technical_status`: long_video_integration_code_verified_visual_acceptance_pending
+- `business_acceptance_status`: current_integrated_video_not_accepted
+- `git_status`: pr_7_selective_code_update_no_auto_merge_no_merge
+- `release_status`: not_released
 
-GitHub 当前仍没有分支保护。本次已人工执行“基于最新 `main` → 本地全量验证 → push CI →
-PR merge-ref CI → 合并 → main CI”的完整门禁；后续应把已出现的 `Verify` check 配置为
-`main` 必需状态检查。
-
-- `machine_status`: local_pr_and_main_hosted_verification_passed
-- `technical_status`: core_remediation_merged_to_main
-- `business_acceptance_status`: unchanged_out_of_scope
-- `release_status`: code_merged_product_and_open_source_not_released
+历史 v21 原文已保存在 [2026-09-01 状态归档](./archive/STATUS-20260901-v21.md)，其中的
+分支、未提交状态、测试数和渲染进度仅代表历史快照，不是当前结论。仓库保护设置本轮未更改，
+也未重新核验；不得把旧快照中的设置描述当作今天的安全保障。

@@ -178,8 +178,19 @@ test("approved v013 is the default while approved v012 remains explicitly availa
   assert.match(component, /visualSystemV1AiWatermarkProfile\(profile\)/u);
   assert.match(component, /data-ai-watermark-profile=\{resolvedProfile\.id\}/u);
   assert.match(component, /rasterFramePath\(cadenceState\.rasterFrame, resolvedProfile\)/u);
+  assert.match(brandLayer, /schemaVersion: "visual-system-v1-wide-brand-layer-v2"/u);
   assert.match(brandLayer, /profile = VISUAL_SYSTEM_V1_AI_WATERMARK\.defaultProfileId/u);
-  assert.match(brandLayer, /motionCadence=\{resolvedTone\.watermarkCadence\}/u);
+  assert.match(
+    brandLayer,
+    /motionCadence = VISUAL_SYSTEM_V1_AI_WATERMARK\.defaultCadenceId/u
+  );
+  assert.match(
+    brandLayer,
+    /const effectiveCadence = visualSystemV1AiWatermarkCadence\(motionCadence\)\.id/u
+  );
+  assert.match(brandLayer, /data-brand-watermark-motion-cadence=\{effectiveCadence\}/u);
+  assert.match(brandLayer, /motionCadence=\{effectiveCadence\}/u);
+  assert.doesNotMatch(brandLayer, /resolvedTone\.watermarkCadence/u);
   assert.match(brandLayer, /transitionFrames=\{transitionFrames\}/u);
 });
 

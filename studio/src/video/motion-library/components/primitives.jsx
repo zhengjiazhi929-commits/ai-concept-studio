@@ -1,4 +1,5 @@
 import React from "react";
+import { VIDEO_SANS_FONT_FAMILY } from "../../font-system.mjs";
 
 export const MOTION_PALETTE = Object.freeze({
   paper: "#F6F8F6",
@@ -14,8 +15,7 @@ export const MOTION_PALETTE = Object.freeze({
   purpleSoft: "#EEE9FF"
 });
 
-export const MOTION_FONT_FAMILY =
-  "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif";
+export const MOTION_FONT_FAMILY = VIDEO_SANS_FONT_FAMILY;
 
 export function DemoText({ eyebrow = "AGENT FLOW", title = "结果已经返回", detail = "等待人工确认后再进入下一步", style = {} }) {
   return (

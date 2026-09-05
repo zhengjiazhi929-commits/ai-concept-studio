@@ -7,9 +7,10 @@ import {
   shallowTileMotionAtFrame,
   textMotionAtFrame
 } from "./agent-skill-uiverse-motion-proof-plan.mjs";
+import { VIDEO_SANS_FONT_FAMILY } from "./font-system.mjs";
 
 const { palette, motion } = AGENT_SKILL_UIVERSE_MOTION_PROOF;
-const fontFamily = "Inter, SF Pro Display, PingFang SC, Helvetica Neue, sans-serif";
+const fontFamily = VIDEO_SANS_FONT_FAMILY;
 
 function PopText({ frame, startFrame, children, style }) {
   const state = textMotionAtFrame(frame, startFrame);

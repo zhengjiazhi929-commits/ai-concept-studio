@@ -10,6 +10,10 @@ import {
   generateShadowPlan,
   runShadowPlanning
 } from "../src/server/control/main-agent.mjs";
+import { createEpisodeBudgetLedger } from
+  "../src/server/control/budget-ledger.mjs";
+import { createCapabilityAuthority } from
+  "../src/server/security/side-effect-capability.mjs";
 import {
   MAIN_AGENT_PROMPT_VERSION,
   buildMainAgentInstructions
@@ -169,6 +173,114 @@ test("Main Agent 未启用时 shadow bootstrap 只保存建议且可持续积累
   assert.equal(stored.control.pendingDispatch, null);
   assert.equal(JSON.stringify(stored.pipeline), pipelineBefore);
   assert.equal(stored.routingHistory.length, 2);
+});
+
+test("shadow bootstrap 通过真实 AI client 依赖路径完成只规划且保持控制开关关闭", async () => {
+  let stored = await shadowEpisode();
+  stored.control.budget.maxCalls = 4;
+  stored.control.budget.maxCostUsd = 4;
+  let providerCalls = 0;
+  const budgetLedger = createEpisodeBudgetLedger({
+    readEpisode: async () => structuredClone(stored),
+    writeEpisode: async (episode) => {
+      stored = structuredClone(episode);
+    }
+  });
+  const capabilityAuthority = createCapabilityAuthority({
+    secret: "main-agent-shadow-bootstrap-test-secret-at-least-32-bytes",
+    maximumCalls: 4,
+    maximumCostUsd: 4
+  });
+  const router = {
+    route: () => ({
+      id: "route-shadow-bootstrap-real-client",
+      at: "2026-08-31T01:00:00.000Z",
+      taskId: "main-agent",
+      profile: "planner",
+      reason: "覆盖正式 AI client、预算、Capability 与 Provider 边界",
+      candidates: [],
+      selected: { providerId: "test-provider", model: "test-model" },
+      orderedRoutes: [{
+        providerId: "test-provider",
+        model: "test-model",
+        reservationCostUsd: 0.1
+      }],
+      estimatedCostUsd: 0.1,
+      pricingVersion: "test-pricing-v1",
+      reservation: { calls: 1, costUsd: 0.1, safetyFactor: 1 },
+      locked: false
+    }),
+    costForUsage: () => 0.1
+  };
+  process.env.STUDIO_MAIN_AGENT_BOOTSTRAP_TEST_KEY = "test-only-placeholder";
+  try {
+    const result = await runShadowPlanning(stored.id, {
+      readEpisode: async () => structuredClone(stored),
+      writeEpisode: async (episode) => {
+        stored = structuredClone(episode);
+      },
+      appendEvent: async () => {},
+      authorizeSideEffect: (spec) => capabilityAuthority.authorize(spec),
+      aiClientOptions: {
+        config: {
+          primaryProvider: "test-provider",
+          fallbackProviders: [],
+          request: {
+            timeoutMs: 1000,
+            primaryAttempts: 1,
+            fallbackAttempts: 0,
+            retryBackoffMs: [0],
+            maxOutputTokens: 1200
+          },
+          tasks: {
+            "main-agent": {
+              model: "test-model",
+              reasoningEffort: "low",
+              verbosity: "low",
+              profile: "planner"
+            }
+          },
+          providers: {
+            "test-provider": {
+              label: "Test Provider",
+              baseUrl: "https://provider.invalid/v1",
+              apiKeyEnv: "STUDIO_MAIN_AGENT_BOOTSTRAP_TEST_KEY",
+              enabled: true
+            }
+          }
+        },
+        router,
+        budgetLedger,
+        providerHealth: { "test-provider": { state: "healthy" } },
+        proxyUrl: null,
+        fetchImpl: async () => {
+          providerCalls += 1;
+          return new Response(JSON.stringify({
+            id: "response-shadow-bootstrap",
+            output_text: JSON.stringify(validPlan()),
+            usage: { input_tokens: 20, output_tokens: 10 }
+          }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+      },
+      now: new Date("2026-08-31T01:00:00.000Z")
+    });
+
+    assert.equal(providerCalls, 1);
+    assert.equal(result.record.bootstrap, true);
+    assert.equal(result.record.planningOnly, true);
+    assert.equal(result.record.routingUsed, true);
+    assert.equal(stored.control.mainAgentEnabled, false);
+    assert.equal(stored.control.modelRouterEnabled, false);
+    assert.equal(stored.control.pendingDispatch, null);
+    assert.equal(stored.pipeline.some((step) => step.status === "running"), false);
+    assert.equal(stored.control.budget.usedCalls, 1);
+    assert.equal(stored.control.budget.usedCostUsd, 0.1);
+  } finally {
+    delete process.env.STUDIO_MAIN_AGENT_BOOTSTRAP_TEST_KEY;
+  }
 });
 
 test("注入 planner 的 shadow bootstrap 明确记录未使用 Model Router", async () => {

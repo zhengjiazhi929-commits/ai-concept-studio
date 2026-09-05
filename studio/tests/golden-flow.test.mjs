@@ -9,7 +9,7 @@ import { isSuccessfulQaWorkerStatus } from "../src/server/qa.mjs";
 import { resetApprovalForVersion } from "../src/shared/workflow.mjs";
 import {
   fixtureAssetFileDependencies,
-  readFixtureEpisode
+  readPacedFixtureEpisode
 } from "./episode-fixture.mjs";
 
 const RENDER_V1_SHA256 = "a".repeat(64);
@@ -82,8 +82,8 @@ function approvalRequest(episode, gate, note) {
   return { ...exactApprovalBinding(episode, gate), note };
 }
 
-test("Golden 不可变夹具可经过素材与最终闸门完成整期流程", async () => {
-  const source = await readFixtureEpisode();
+test("Golden 合成短字幕夹具可经过素材与最终闸门完成整期流程", async () => {
+  const source = await readPacedFixtureEpisode();
   assert.equal(source.production.materialsVersion, 1);
   assert.equal(source.approvals.assets.currentVersion, 1);
 
@@ -270,7 +270,7 @@ test("QA 命令将等待最终审批视为成功，但不会把失败误报为�
 });
 
 test("编排器串行落账未等待的进度回调，避免与 Worker 最终状态发生版本竞争", async () => {
-  const source = await readFixtureEpisode();
+  const source = await readPacedFixtureEpisode();
   const store = versionedMemoryStore(source);
   const review = fixtureAssetFileDependencies(source);
   await runAgent("golden-001", "voice-agent", { ...store, review });

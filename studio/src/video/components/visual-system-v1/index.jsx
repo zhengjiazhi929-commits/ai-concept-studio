@@ -1,4 +1,13 @@
-export { VISUAL_SYSTEM_V1, VISUAL_SYSTEM_V1_DEPTH_ROLES } from "./tokens.mjs";
+export {
+  VISUAL_SYSTEM_V1,
+  VISUAL_SYSTEM_V1_DEPTH_ROLES,
+  VISUAL_SYSTEM_V1_FONT_WEIGHTS,
+  VISUAL_SYSTEM_V1_SURFACE_BORDER
+} from "./tokens.mjs";
+export {
+  visualSystemV1InformationCardSurfaceAtFocus,
+  visualSystemV1MixHexColors
+} from "./surface-border.mjs";
 export {
   VISUAL_SYSTEM_V1_COLOR_ROLE_TOKENS,
   VISUAL_SYSTEM_V1_LINE_ROLE_TOKENS,
@@ -55,6 +64,7 @@ export {
 } from "./content-layout.mjs";
 export {
   visualSystemV1Clamp01,
+  visualSystemV1ChapterRevealAtFrame,
   visualSystemV1ChapterProgressAtFrame,
   visualSystemV1ConnectorMotionAtFrame,
   visualSystemV1DepthMotionAtFrame,
@@ -109,3 +119,4 @@ export {
   VisualSystemV1SemanticElement,
   VisualSystemV1SemanticScene
 } from "./semantic-components.jsx";
+export { VisualSystemV1TechnicalArtifact } from "./technical-artifact.jsx";
