@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import {execFile} from "node:child_process";
+import {promisify} from "node:util";
 import {
   lstat,
   mkdtemp,
@@ -371,6 +373,25 @@ test("v004c cue 仍严格绑定原 marker、场景、帧与样本范围", async 
     );
     assert.equal(cue.sceneId, output.speechSegments[cue.speechSegmentIndex - 1].sceneId);
     assert.ok(cue.endFrameExclusive > cue.startFrame);
+  }
+});
+
+test("v004c 显式发布 Python 不可用时失败关闭，不回退本机运行时", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "v004c-subtitle-runtime-"));
+  const moduleUrl = new URL("../scripts/resegment-agent-skill-v004c-subtitles.mjs", import.meta.url).href;
+  const output = resolve(root, "timeline.json");
+  const missingPython = resolve(root, "missing-python");
+  try {
+    const code = `import {writeJsonNoReplace} from ${JSON.stringify(moduleUrl)}; await writeJsonNoReplace(${JSON.stringify(output)}, {fixture: true});`;
+    await assert.rejects(
+      () => promisify(execFile)(process.execPath, ["--input-type=module", "-e", code], {
+        env: {...process.env, QA_PYTHON: missingPython}
+      }),
+      (error) => error.code === 1 && error.stderr.includes(missingPython)
+    );
+    assert.deepEqual(await readdir(root), []);
+  } finally {
+    await rm(root, {recursive: true, force: true});
   }
 });
 

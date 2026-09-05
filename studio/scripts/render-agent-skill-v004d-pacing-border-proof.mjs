@@ -1,11 +1,12 @@
 import {execFile} from "node:child_process";
 import {createHash, randomUUID} from "node:crypto";
-import {createReadStream, realpathSync} from "node:fs";
+import {createReadStream} from "node:fs";
 import {
   access,
   lstat,
   mkdir,
   readFile,
+  realpath,
   rm,
   writeFile
 } from "node:fs/promises";
@@ -53,8 +54,8 @@ const REUSED_OVERLAY_MANIFEST = resolve(
   "overlay-manifest-v004c-no-box-proof.json"
 );
 const REUSED_OVERLAY_FRAMES = resolve(REUSED_OVERLAY_ROOT, "frames");
-const FFMPEG = realpathSync("/opt/homebrew/bin/ffmpeg");
-const FFPROBE = realpathSync("/opt/homebrew/bin/ffprobe");
+const FFMPEG_PATH = "/opt/homebrew/bin/ffmpeg";
+const FFPROBE_PATH = "/opt/homebrew/bin/ffprobe";
 const PYTHON =
   "/Users/zhengjiazhi/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3.12";
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
@@ -251,20 +252,20 @@ function finalFfmpegArguments(renderBasePath, outputPath) {
   ];
 }
 
-async function probe(path) {
-  const {stdout} = await run(FFPROBE, [
+async function probe(path, ffprobe) {
+  const {stdout} = await run(ffprobe, [
     "-v", "error", "-count_frames", "-show_format", "-show_streams",
     "-of", "json", path
   ], 120_000);
   return JSON.parse(stdout);
 }
 
-async function extractContactSheet(videoPath, qaDirectory) {
+async function extractContactSheet(videoPath, qaDirectory, ffmpeg) {
   const timestamps = [0.6, 3.4, 6.2, 9.2, 12.4, 16.2];
   const stills = [];
   for (let index = 0; index < timestamps.length; index += 1) {
     const path = resolve(qaDirectory, `frame-${String(index + 1).padStart(2, "0")}.png`);
-    await run(FFMPEG, [
+    await run(ffmpeg, [
       "-nostdin", "-hide_banner", "-loglevel", "error", "-n",
       "-ss", timestamps[index].toFixed(3), "-i", videoPath,
       "-frames:v", "1", "-c:v", "png", path
@@ -280,7 +281,7 @@ async function extractContactSheet(videoPath, qaDirectory) {
     "[top][bottom]vstack=inputs=2[sheet]"
   ].join(";");
   const contactSheetPath = resolve(qaDirectory, "contact-sheet.png");
-  await run(FFMPEG, [
+  await run(ffmpeg, [
     "-nostdin", "-hide_banner", "-loglevel", "error", "-n",
     ...stills.flatMap((path) => ["-i", path]),
     "-filter_complex", filter, "-map", "[sheet]", "-frames:v", "1",
@@ -296,6 +297,10 @@ function relativePath(path) {
 export async function renderV004dPacingBorderProof() {
   const contract = V004D_PACING_BORDER_PROOF;
   const observedNice = assertLowPriority();
+  const [ffmpeg, ffprobe] = await Promise.all([
+    realpath(FFMPEG_PATH),
+    realpath(FFPROBE_PATH)
+  ]);
   await mkdir(REVIEW_ROOT, {recursive: true});
   if (await exists(CANDIDATE_DIRECTORY)) {
     throw new Error(`拒绝覆盖既有样片：${CANDIDATE_DIRECTORY}`);
@@ -310,8 +315,8 @@ export async function renderV004dPacingBorderProof() {
       contract.reusedOverlayManifestSha256,
       "已验收字幕图层 manifest"
     ),
-    assertPlainFile(FFMPEG, "ffmpeg"),
-    assertPlainFile(FFPROBE, "ffprobe"),
+    assertPlainFile(ffmpeg, "ffmpeg"),
+    assertPlainFile(ffprobe, "ffprobe"),
     assertPlainFile(PYTHON, "python"),
     assertPlainFile(CHROME, "Chrome")
   ]);
@@ -348,19 +353,19 @@ export async function renderV004dPacingBorderProof() {
   try {
     const base = await renderBase(stagingDirectory, inputProps);
     const outputPath = resolve(stagingDirectory, OUTPUT_FILE_NAME);
-    await run(FFMPEG, finalFfmpegArguments(base.outputLocation, outputPath), 900_000);
-    const mediaProbe = await probe(outputPath);
-    await run(FFMPEG, [
+    await run(ffmpeg, finalFfmpegArguments(base.outputLocation, outputPath), 900_000);
+    const mediaProbe = await probe(outputPath, ffprobe);
+    await run(ffmpeg, [
       "-nostdin", "-hide_banner", "-loglevel", "error", "-xerror",
       "-i", outputPath, "-map", "0:v:0", "-an", "-c:v", "rawvideo",
       "-f", "null", "-"
     ], 900_000);
-    await run(FFMPEG, [
+    await run(ffmpeg, [
       "-nostdin", "-hide_banner", "-loglevel", "error", "-xerror",
       "-i", outputPath, "-map", "0:a:0", "-vn", "-c:a", "pcm_s16le",
       "-f", "null", "-"
     ], 900_000);
-    const contactSheet = await extractContactSheet(outputPath, qaDirectory);
+    const contactSheet = await extractContactSheet(outputPath, qaDirectory, ffmpeg);
     await writeFile(
       resolve(qaDirectory, "media-probe.json"),
       `${JSON.stringify(mediaProbe, null, 2)}\n`,

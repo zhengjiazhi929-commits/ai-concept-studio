@@ -1,7 +1,7 @@
 # AI Concept Studio 当前状态
 
 更新时间：2026-09-05（Asia/Shanghai）
-状态真源版本：22
+状态真源版本：23
 
 ## 本轮目标与边界
 
@@ -34,7 +34,7 @@ Zhengjiazhi 已授权修改并选择性提交长视频相关代码，更新现�
    字幕实现加入评测依赖闭包，旧实现证据失效。
 4. 整合分段续跑、正式 QA、无框字幕叠加与只读重绑定工具；保留不可覆盖发布和来源绑定。
    历史 job 描述不携带生产输入，不能当作可直接执行的当前渲染授权。
-5. 新增测试使用确定性临时夹具，不依赖本机绝对路径、旧 MP4 或未跟踪的字幕时间轴。
+5. 新增测试使用确定性临时夹具，不依赖旧 MP4 或未跟踪的字幕时间轴。
    合成英文字体测试仅证明布局与发布行为，不证明中文视觉质量；正式 QA 的字体来源锁不放宽。
 6. 间接依赖 `fast-uri` 从 3.1.5 锁定到 3.1.6，修复审计发现的四条高危通告；
    Remotion、React 和其他直接依赖保持原版本。
@@ -47,11 +47,16 @@ Zhengjiazhi 已授权修改并选择性提交长视频相关代码，更新现�
 - 渲染与 QA 专项：93/93，通过且无跳过。
 - `pnpm install --frozen-lockfile`：通过。
 - `pnpm audit --prod --audit-level high`：升级后未发现已知漏洞。
-- 完整 `CI=true pnpm verify`：1010/1010 测试，0 失败、0 跳过；302 个源码语法检查、
+- 完整 `CI=true pnpm verify`：1012/1012 测试，0 失败、0 跳过；302 个源码语法检查、
   35/35 动效检查、7/7 回滚演练、4 张实际解码且像素哈希各异的 Remotion 帧全部通过。
   暂存新文件后的秘密扫描、working-tree/index/untracked diff 检查均通过。
 - 本记录随整合代码提交，无法预先证明该提交之后的 hosted CI；最终云端结果以 PR #7
   当前 head commit 的 checks 为准，不复用 9 月 1 日旧 CI 结论。
+- 首次整合提交 `deb72ed` 的 hosted push/PR runs `33953013376` / `33953014689`
+  失败于本机 Python 默认路径和模块顶层 Homebrew realpath。后续补修将文件发布使用的 Python
+  显式承接 CI 的 `QA_PYTHON`，缺失指定路径时失败关闭，不放宽视觉测量的来源锁；
+  FFmpeg/FFprobe 只在真正运行 proof 时解析，且早于输出建目录。
+  回归使用 Node 权限机制禁止访问 Homebrew 后实际导入成功，不创建假系统目录或跳过测试。
 - 本轮没有重新渲染完整视频、修改人工 Gate 或调用付费生成服务。
 
 ## 合并与发布门禁
@@ -61,7 +66,7 @@ Zhengjiazhi 已授权修改并选择性提交长视频相关代码，更新现�
 视频无需凑满十分钟；旧版本 QA、局部片段和四帧 render smoke 都不能替代此门禁。
 临时系统合成旁白（包括 voice-v001）不是最终真人录音。
 
-- `machine_status`: local_verify_1010_of_1010_passed_hosted_evidence_per_pr_head
+- `machine_status`: local_verify_1012_of_1012_passed_hosted_evidence_per_pr_head
 - `technical_status`: long_video_integration_code_verified_visual_acceptance_pending
 - `business_acceptance_status`: current_integrated_video_not_accepted
 - `git_status`: pr_7_selective_code_update_no_auto_merge_no_merge

@@ -1,8 +1,30 @@
 import assert from "node:assert/strict";
+import {execFile} from "node:child_process";
 import {readFile} from "node:fs/promises";
+import {resolve} from "node:path";
+import {promisify} from "node:util";
 import test from "node:test";
 
 import {V004D_PACING_BORDER_PROOF} from "../scripts/render-agent-skill-v004d-pacing-border-proof.mjs";
+
+test("仅导入 v004d 合同不读取或解析本机 Homebrew 媒体工具", async () => {
+  const moduleUrl = new URL("../scripts/render-agent-skill-v004d-pacing-border-proof.mjs", import.meta.url);
+  const program = [
+    "import assert from 'node:assert/strict';",
+    "import {realpathSync} from 'node:fs';",
+    "assert.throws(() => realpathSync('/opt/homebrew/bin/ffmpeg'), {code: 'ERR_ACCESS_DENIED'});",
+    `const {V004D_PACING_BORDER_PROOF: contract} = await import(${JSON.stringify(moduleUrl.href)});`,
+    "process.stdout.write(JSON.stringify({proofOnly: contract.proofOnly, frames: contract.outputFrameCount}));"
+  ].join("\n");
+  const {stdout} = await promisify(execFile)(process.execPath, [
+    "--permission",
+    `--allow-fs-read=${resolve(import.meta.dirname, "..")}`,
+    "--input-type=module",
+    "--eval",
+    program
+  ], {timeout: 30_000});
+  assert.deepEqual(JSON.parse(stdout), {proofOnly: true, frames: 522});
+});
 
 test("v004d 样片固定验证 S11 边框并同步提速所有时间媒体", async () => {
   const contract = V004D_PACING_BORDER_PROOF;

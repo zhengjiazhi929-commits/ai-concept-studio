@@ -96,8 +96,8 @@ async function readSourceSnapshot(path, expectedSha256) {
   };
 }
 
-async function resolvePythonRuntime() {
-  const path = await realpath(OFFICIAL_PYTHON_PATH);
+async function resolvePythonRuntime(requestedPath = OFFICIAL_PYTHON_PATH) {
+  const path = await realpath(requestedPath);
   assertPlainFile(await lstat(path), path, "字幕测量 Python runtime");
   return path;
 }
@@ -826,7 +826,12 @@ async function syncDirectory(path) {
 }
 
 async function atomicRenameNoReplace(sourcePath, targetPath) {
-  const pythonPath = await resolvePythonRuntime();
+  // Publication only needs the platform's atomic rename syscall, not the
+  // workstation font-measurement environment. CI supplies its verified Python.
+  // An invalid explicit path fails closed; measurement remains pinned above.
+  const pythonPath = await resolvePythonRuntime(
+    process.env.QA_PYTHON ?? OFFICIAL_PYTHON_PATH
+  );
   const code = [
     "import ctypes, errno, os, sys",
     "source = os.fsencode(sys.argv[1])",
