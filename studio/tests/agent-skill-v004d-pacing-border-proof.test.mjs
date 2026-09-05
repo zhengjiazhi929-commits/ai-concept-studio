@@ -12,7 +12,8 @@ test("仅导入 v004d 合同不读取或解析本机 Homebrew 媒体工具", asy
   const program = [
     "import assert from 'node:assert/strict';",
     "import {realpathSync} from 'node:fs';",
-    "assert.throws(() => realpathSync('/opt/homebrew/bin/ffmpeg'), {code: 'ERR_ACCESS_DENIED'});",
+    "assert.equal(process.permission.has('fs.read', '/opt/homebrew/bin/ffmpeg'), false);",
+    "assert.throws(() => realpathSync('/opt/homebrew/bin/ffmpeg'), (error) => ['ERR_ACCESS_DENIED', 'ENOENT'].includes(error.code));",
     `const {V004D_PACING_BORDER_PROOF: contract} = await import(${JSON.stringify(moduleUrl.href)});`,
     "process.stdout.write(JSON.stringify({proofOnly: contract.proofOnly, frames: contract.outputFrameCount}));"
   ].join("\n");
