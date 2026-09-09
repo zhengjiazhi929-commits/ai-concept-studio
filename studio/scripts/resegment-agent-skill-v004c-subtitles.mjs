@@ -11,7 +11,7 @@ import {
   unlink
 } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   subtitleBoundaryReasons,
@@ -24,6 +24,7 @@ import {
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const WORKSPACE_ROOT = resolve(dirname(SCRIPT_PATH), "../..");
+const DEFAULT_OUTPUT_ROOT = resolve(WORKSPACE_ROOT, "studio/data/render-inputs");
 const DEFAULT_SOURCE = resolve(
   WORKSPACE_ROOT,
   "studio/data/render-inputs/full-v004b-attempt-001/subtitle-timeline-v004-full.json"
@@ -875,7 +876,10 @@ async function atomicRenameNoReplace(sourcePath, targetPath) {
 export async function writeJsonNoReplace(path, value, options = {}) {
   const targetPath = resolve(path);
   const targetDirectory = dirname(targetPath);
+  const outputRoot = options.outputRoot ?? DEFAULT_OUTPUT_ROOT;
+  await assertDefaultOutputScope(targetPath, outputRoot);
   await mkdir(targetDirectory, {recursive: true});
+  await assertDefaultOutputScope(targetPath, outputRoot);
   const bytes = Buffer.from(`${JSON.stringify(value, null, 2)}\n`, "utf8");
   const temporaryPath = resolve(
     targetDirectory,
@@ -955,11 +959,37 @@ function parseArguments(argv) {
   return result;
 }
 
-function assertDefaultOutputScope(output) {
-  const dataRoot = resolve(WORKSPACE_ROOT, "studio/data/render-inputs");
-  const child = relative(dataRoot, output);
-  if (!child || child.startsWith("..") || resolve(dataRoot, child) !== output) {
-    throw new Error(`v004c 时间线必须写入 studio/data/render-inputs：${output}`);
+async function assertDefaultOutputScope(output, outputRoot = DEFAULT_OUTPUT_ROOT) {
+  const dataRoot = resolve(outputRoot);
+  const targetPath = resolve(output);
+  const child = relative(dataRoot, targetPath);
+  if (!child || child === ".." || child.startsWith(`..${sep}`) || isAbsolute(child)) {
+    throw new Error(`v004c 时间线超出输出范围 ${dataRoot}：${targetPath}`);
+  }
+  // Lexical containment alone follows a pre-existing parent symlink outside
+  // the approved root. Check every existing ancestor before creating anything.
+  const ancestors = [];
+  for (let path = targetPath; ; path = dirname(path)) {
+    ancestors.push(path);
+    if (dirname(path) === path) break;
+  }
+  for (const path of ancestors.reverse()) {
+    let details;
+    try {
+      details = await lstat(path);
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw error;
+    }
+    if (details.isSymbolicLink()) {
+      throw new Error(`v004c 输出路径不得包含符号链接：${path}`);
+    }
+    if (path === targetPath) {
+      throw new Error(`拒绝覆盖既有 v004c 时间线：${targetPath}`);
+    }
+    if (!details.isDirectory()) {
+      throw new Error(`v004c 输出父路径必须是普通目录：${path}`);
+    }
   }
 }
 
@@ -968,7 +998,7 @@ async function main() {
   if (options.source === options.output) {
     throw new Error("源时间线与 v004c 输出路径不能相同");
   }
-  assertDefaultOutputScope(options.output);
+  await assertDefaultOutputScope(options.output);
   const snapshot = await readSourceSnapshot(
     options.source,
     options.expectedSourceSha256

@@ -1,5 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { validateEpisode } from "../src/shared/schema.mjs";
 import { buildEpisodeFromTrendSelection } from "../src/server/research/episode.mjs";
 import {
@@ -14,7 +18,15 @@ import {
   runEpisodeResearchAgent
 } from "../src/server/research/agent.mjs";
 import { validateResearchEvidenceBatch } from "../src/server/research/schema.mjs";
-import { readResearchConfig } from "../src/server/research/store.mjs";
+import {
+  publishResearchPackRevision,
+  readLatestResearchPack,
+  readResearchConfig,
+  readResearchPackAtPath,
+  writeResearchEvidenceBatch,
+  writeResearchPack,
+  writeResearchPackRevision
+} from "../src/server/research/store.mjs";
 
 const selectedAt = "2026-08-03T10:00:00.000Z";
 const publicLookup = async () => [{ address: "93.184.216.34", family: 4 }];
@@ -473,6 +485,58 @@ test("research batch 幂等哈希忽略对象键顺序但保留数组顺序", as
     }),
     (error) => error?.code === "research_batch_id_conflict" && error?.statusCode === 409
   );
+});
+
+test("重试较早批次返回当前 pack 的路径且不回退后续批次的 latest", async (t) => {
+  const researchRoot = await mkdtemp(join(tmpdir(), "research-import-retry-"));
+  t.after(() => rm(researchRoot, { recursive: true, force: true }));
+  const storeOptions = { researchRoot };
+  const config = await readResearchConfig();
+  let stored = buildEpisodeFromTrendSelection(selectionFixture(), new Date(selectedAt));
+  const initial = buildResearchPlan({ episode: stored, config, now: new Date(selectedAt) });
+  stored.research.packPath = await writeResearchPack(initial, storeOptions);
+  let episodeWrites = 0;
+  const dependencies = {
+    appendEvent: async (event) => event,
+    fileRecord: async (path) => {
+      const body = await readFile(path);
+      return {
+        path,
+        bytes: body.length,
+        sha256: createHash("sha256").update(body).digest("hex")
+      };
+    },
+    readEpisode: async () => structuredClone(stored),
+    readLatestResearchPack: (episodeId) => readLatestResearchPack(episodeId, storeOptions),
+    readResearchPackAtPath: (path) => readResearchPackAtPath(path, storeOptions),
+    readResearchConfig: async () => config,
+    publishResearchPackRevision: (pack, runPath) =>
+      publishResearchPackRevision(pack, runPath, storeOptions),
+    writeEpisode: async (episode) => {
+      stored = structuredClone(episode);
+      episodeWrites += 1;
+    },
+    writeResearchEvidenceBatch: (batch) => writeResearchEvidenceBatch(batch, storeOptions),
+    writeResearchPackRevision: (pack) => writeResearchPackRevision(pack, storeOptions)
+  };
+  const firstBatch = evidenceBatch(initial);
+  const secondBatch = { ...structuredClone(firstBatch), batchId: "research-later-batch" };
+  const first = await importResearchEvidenceBatch(firstBatch, { dependencies });
+  const second = await importResearchEvidenceBatch(secondBatch, { dependencies });
+  const committedEpisode = structuredClone(stored);
+  const retry = await importResearchEvidenceBatch(firstBatch, { dependencies });
+
+  assert.equal(retry.idempotent, true);
+  assert.equal(retry.commitStatus, "already_committed");
+  assert.equal(retry.publication.status, "published");
+  assert.equal(episodeWrites, 2);
+  assert.deepEqual(stored, committedEpisode);
+  assert.equal(retry.batchPath, first.batchPath);
+  assert.equal(retry.runPath, second.runPath);
+  assert.deepEqual(retry.pack, second.pack);
+  assert.deepEqual(await readResearchPackAtPath(retry.runPath, storeOptions), retry.pack);
+  assert.deepEqual(await readLatestResearchPack(stored.id, storeOptions), second.pack);
+  assert.deepEqual(await readLatestResearchPack(null, storeOptions), second.pack);
 });
 
 test("同一 research batchId 不能复用为不同内容", async () => {

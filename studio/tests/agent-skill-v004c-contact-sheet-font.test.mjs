@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import {execFile} from "node:child_process";
 import {createHash} from "node:crypto";
-import {mkdtemp, readFile, rm} from "node:fs/promises";
+import {access, mkdir, mkdtemp, readFile, rm, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
-import {join, resolve} from "node:path";
+import {dirname, join, resolve} from "node:path";
 import test from "node:test";
 import {promisify} from "node:util";
+import {RenderInternals} from "@remotion/renderer";
+import * as supplement from "../scripts/build-agent-skill-v004c-contact-sheet-supplement.mjs";
 import {resolveLockedPythonRuntime} from "../scripts/qa-agent-skill-long-review-wide-v004.mjs";
 
 import {
@@ -27,6 +29,87 @@ const HARNESS_PATH = resolve(import.meta.dirname, "helpers/overlay-python-harnes
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
+
+
+test("supplement decodes indexed frames from the hash-bound MP4 instead of cached PNGs", async (context) => {
+  assert.equal(typeof supplement.decodeBoundContactSheetFrames, "function");
+  const {path: pythonPath} = await resolveLockedPythonRuntime();
+  const directory = await mkdtemp(join(tmpdir(), "v004c-supplement-decode-test-"));
+  context.after(() => rm(directory, {recursive: true, force: true}));
+  const ffmpegPath = RenderInternals.getExecutablePath({
+    type: "ffmpeg", indent: false, logLevel: "error", binariesDirectory: null,
+  });
+  const commandOptions = {
+    timeout: 30_000,
+    maxBuffer: 8 * 1024 * 1024,
+    env: {
+      PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C",
+      ...(process.platform === "darwin" ? {DYLD_LIBRARY_PATH: dirname(ffmpegPath)} : {}),
+    },
+  };
+  await execFileAsync(pythonPath, ["-I", "-c", [
+    "from pathlib import Path",
+    "from PIL import Image",
+    "import sys",
+    "root = Path(sys.argv[1])",
+    "for index, color in enumerate([(220,30,30),(30,220,30),(30,30,220)]):",
+    "    Image.new('RGB', (96,54), color).save(root / f'source-{index:03d}.png')",
+  ].join("\n"), directory], {timeout: 30_000});
+  const videoPath = join(directory, "source.mp4");
+  await execFileAsync(ffmpegPath, [
+    "-nostdin", "-hide_banner", "-v", "error", "-n",
+    "-framerate", "30", "-i", join(directory, "source-%03d.png"),
+    "-frames:v", "3", "-c:v", "libx264", "-pix_fmt", "yuv420p", videoPath,
+  ], commandOptions);
+  const expectedVideoSha256 = sha256(await readFile(videoPath));
+  const filename = "frame-local-00002-global-10082.png";
+  const cachedDirectory = join(directory, "cached-qa");
+  await mkdir(cachedDirectory);
+  const wrongCachedFrame = await readFile(join(directory, "source-000.png"));
+  await writeFile(join(cachedDirectory, filename), wrongCachedFrame);
+  const frameIndex = {
+    proofGlobalStartFrame: 10080,
+    proofGlobalEndFrameExclusive: 10083,
+    fullSamples: [{frame: 2, globalFrame: 10082, filename, tags: ["subtitle-cue:1"]}],
+  };
+  const outputDirectory = join(directory, "fresh-decoded-frames");
+  const result = await supplement.decodeBoundContactSheetFrames({
+    videoPath, expectedVideoSha256, frameIndex, outputDirectory, ffmpegPath,
+  });
+  const decoded = await readFile(join(outputDirectory, filename));
+  assert.notDeepEqual(decoded, wrongCachedFrame);
+  assert.deepEqual(await readFile(join(cachedDirectory, filename)), wrongCachedFrame);
+  const reference = join(directory, "reference.png");
+  await execFileAsync(ffmpegPath, [
+    "-nostdin", "-hide_banner", "-v", "error", "-n", "-i", videoPath,
+    "-vf", "trim=start_frame=2:end_frame=3",
+    "-frames:v", "1", "-c:v", "png", "-threads:v", "1", reference,
+  ], commandOptions);
+  assert.deepEqual(decoded, await readFile(reference));
+  assert.equal(result.sourceVideo.sha256, expectedVideoSha256);
+  assert.equal(result.frames[0].integrity.sha256, sha256(decoded));
+  await assert.rejects(supplement.decodeBoundContactSheetFrames({
+    videoPath, expectedVideoSha256, frameIndex, outputDirectory, ffmpegPath,
+  }), /EEXIST/);
+  assert.deepEqual(await readFile(join(outputDirectory, filename)), decoded);
+  const wrongHashOutput = join(directory, "wrong-hash-output");
+  await assert.rejects(supplement.decodeBoundContactSheetFrames({
+    videoPath, expectedVideoSha256: "0".repeat(64), frameIndex,
+    outputDirectory: wrongHashOutput, ffmpegPath,
+  }), /SHA-256 drift/);
+  await assert.rejects(access(wrongHashOutput), {code: "ENOENT"});
+  const invalidIndexOutput = join(directory, "invalid-index-output");
+  await assert.rejects(supplement.decodeBoundContactSheetFrames({
+    videoPath, expectedVideoSha256,
+    frameIndex: {...frameIndex, fullSamples: [{...frameIndex.fullSamples[0], frame: 3}]},
+    outputDirectory: invalidIndexOutput, ffmpegPath,
+  }), /frame index/);
+  await assert.rejects(access(invalidIndexOutput), {code: "ENOENT"});
+  const source = await readFile(join(STUDIO_ROOT,
+    "scripts/build-agent-skill-v004c-contact-sheet-supplement.mjs"), "utf8");
+  assert.match(source, /"--qa-dir",\s*decodedFrames\.outputDirectory/u);
+  assert.doesNotMatch(source, /"--qa-dir",\s*SOURCE_QA_DIRECTORY/u);
+});
 
 
 test("proof contact sheet locks Hiragino Sans GB W3/W6 collection faces", () => {

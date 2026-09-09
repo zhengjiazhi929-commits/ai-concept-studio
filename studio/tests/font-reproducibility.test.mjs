@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile, readdir, realpath } from "node:fs/promises";
-import { resolve } from "node:path";
+import { resolve, sep } from "node:path";
 import test from "node:test";
 
 import {
@@ -91,7 +91,19 @@ test("视频入口统一加载锁定的本地 Noto Sans SC variable font", async
     }
   }
 
-  assert.equal(entrypoints.length, 8);
+  assert.deepEqual(entrypoints.map(({ relativePath }) => relativePath.split(sep).join("/")).sort(), [
+    "agent-skill-long-review-index.jsx",
+    "agent-skill-uiverse-motion-proof-index.jsx",
+    "glass-card-preview/index.jsx",
+    "illustration-storyboards/index.jsx",
+    "illustration-system/index.jsx",
+    "index.jsx",
+    "motion-library/index.jsx",
+    "visual-system-v1-ai-watermark-proof-index.jsx",
+    "visual-system-v1-ai-watermark-raster-source-index.jsx",
+    "visual-system-v1-ai-watermark-size-proof-index.jsx",
+    "visual-system-v1-skill-agent-mcp-proof-index.jsx"
+  ].sort());
   for (const { relativePath, source } of entrypoints) {
     assert.match(
       source,

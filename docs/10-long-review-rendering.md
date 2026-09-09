@@ -35,7 +35,7 @@ taskpolicy -b nice -n 20 node studio/scripts/render-agent-skill-long-review-chun
 
 ```sh
 cd studio
-QA_PYTHON=/absolute/path/to/locked/python3.12 pnpm qa:long-review -- \
+QA_PYTHON=/absolute/path/to/locked/python3.12 pnpm qa:long-review \
   --job-config studio/config/render-jobs/<candidate>.json \
   --qa-dir-name qa
 ```
@@ -57,4 +57,4 @@ receipt；`durability_unknown` 不能进入 QA，必须先在原目录就地复�
 节奏或转场已经被人工接受。必须继续打开实际 MP4 做连续 1x 观看并由人工确认。
 
 历史 `qa-agent-skill-long-review-wide-v004.mjs` 只保留 v004 恢复兼容；v005 及以后
-一律使用 `pnpm qa:long-review -- --job-config ...`。
+一律使用 `pnpm qa:long-review --job-config ...`。这里的“以后”仅指该历史长片合同的新候选版本；任意新视频的入口与时长边界见 [新视频制作基线](./17-new-video-baseline.md)。

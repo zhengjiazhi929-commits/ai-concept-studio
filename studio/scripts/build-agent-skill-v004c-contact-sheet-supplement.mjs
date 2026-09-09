@@ -16,9 +16,11 @@ import {fileURLToPath, pathToFileURL} from "node:url";
 import {promisify} from "node:util";
 
 import {
+  partitionV004cProofEvidenceSamples,
   V004C_SEMANTIC_LOGO_PROOF_CONTRACT,
   V004C_SEMANTIC_LOGO_PROOF_PATHS,
 } from "./render-agent-skill-v004c-semantic-logo-proof.mjs";
+import {buildSequentialExtractionFfmpegArgs} from "./qa-agent-skill-long-review-wide-v004.mjs";
 
 
 const execFileAsync = promisify(execFile);
@@ -141,6 +143,91 @@ function assertSafeFrameFilename(filename) {
 }
 
 
+function validateIndexedFrames(frameIndex) {
+  const start = frameIndex?.proofGlobalStartFrame;
+  const end = frameIndex?.proofGlobalEndFrameExclusive;
+  if (
+    !Number.isSafeInteger(start) || start < 0 ||
+    !Number.isSafeInteger(end) || end <= start ||
+    !Array.isArray(frameIndex.fullSamples) || frameIndex.fullSamples.length === 0
+  ) {
+    throw new Error("Invalid proof frame index bounds or evidence samples");
+  }
+  const filenames = new Set();
+  return frameIndex.fullSamples.map((sample) => {
+    const expectedFilename = `frame-local-${String(sample.frame).padStart(5, "0")}` +
+      `-global-${String(sample.globalFrame).padStart(5, "0")}.png`;
+    if (
+      !Number.isSafeInteger(sample.frame) || sample.frame < 0 ||
+      sample.frame >= end - start || sample.globalFrame !== start + sample.frame ||
+      sample.filename !== expectedFilename || filenames.has(sample.filename)
+    ) {
+      throw new Error("Invalid or duplicate proof frame index sample");
+    }
+    assertSafeFrameFilename(sample.filename);
+    filenames.add(sample.filename);
+    return {...sample};
+  });
+}
+
+
+// Cached QA PNGs have no fixed fingerprints. Only freshly decoded, exact local
+// frame numbers from the hash-bound MP4 may be used to build this supplement.
+export async function decodeBoundContactSheetFrames({
+  videoPath, expectedVideoSha256, frameIndex, outputDirectory, ffmpegPath,
+}) {
+  const samples = validateIndexedFrames(frameIndex);
+  const sourceVideo = await inspectFile(videoPath);
+  assertExpectedHash(sourceVideo, expectedVideoSha256, "source video");
+  if (typeof ffmpegPath !== "string" || ffmpegPath.length === 0) {
+    throw new Error("Source proof manifest does not identify its FFmpeg decoder");
+  }
+  const decoderPath = await realpath(ffmpegPath);
+  const decoderIntegrity = await inspectFile(decoderPath);
+  // Refuse an existing destination, including symlinks, before taking ownership.
+  await mkdir(outputDirectory, {recursive: false, mode: 0o700});
+  try {
+    for (const batch of partitionV004cProofEvidenceSamples(samples)) {
+      await execFileAsync(decoderPath, buildSequentialExtractionFfmpegArgs({
+        videoPath,
+        samples: batch,
+        outputPaths: batch.map((sample) => resolve(outputDirectory, sample.filename)),
+      }), {
+        timeout: 120_000,
+        maxBuffer: 8 * 1024 * 1024,
+        env: {
+          PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C",
+          ...(process.platform === "darwin"
+            ? {DYLD_LIBRARY_PATH: dirname(decoderPath)} : {}),
+        },
+      });
+    }
+    const frames = await Promise.all(samples.map(async (sample) => ({
+      ...sample,
+      integrity: await inspectFile(resolve(outputDirectory, sample.filename)),
+    })));
+    const sourceAfter = await inspectFile(videoPath);
+    assertExpectedHash(sourceAfter, expectedVideoSha256, "source video after decoding");
+    if (JSON.stringify(sourceAfter) !== JSON.stringify(sourceVideo)) {
+      throw new Error("Source video changed while decoding evidence frames");
+    }
+    const decoderAfter = await inspectFile(decoderPath);
+    if (JSON.stringify(decoderAfter) !== JSON.stringify(decoderIntegrity)) {
+      throw new Error("FFmpeg decoder changed while decoding evidence frames");
+    }
+    return {
+      outputDirectory,
+      sourceVideo,
+      decoder: {path: decoderPath, ...decoderIntegrity},
+      frames,
+    };
+  } catch (error) {
+    await rm(outputDirectory, {recursive: true, force: false});
+    throw error;
+  }
+}
+
+
 async function captureSourceEvidence() {
   const contract = V004C_CONTACT_SHEET_SUPPLEMENT_CONTRACT;
   const [manifestIntegrity, frameIndexIntegrity, videoIntegrity, oldSheetIntegrity] =
@@ -171,24 +258,7 @@ async function captureSourceEvidence() {
   ) {
     throw new Error("Source proof manifest/frame index no longer bind the fixed video");
   }
-  if (!Array.isArray(frameIndex.fullSamples) || frameIndex.fullSamples.length === 0) {
-    throw new Error("Source proof frame index has no evidence frames");
-  }
-  const frames = [];
-  for (const sample of frameIndex.fullSamples) {
-    assertSafeFrameFilename(sample.filename);
-    const path = resolve(SOURCE_QA_DIRECTORY, sample.filename);
-    if (dirname(path) !== SOURCE_QA_DIRECTORY) {
-      throw new Error(`Proof frame escaped the source QA directory: ${sample.filename}`);
-    }
-    frames.push({
-      filename: sample.filename,
-      frame: sample.frame,
-      globalFrame: sample.globalFrame,
-      tags: sample.tags,
-      integrity: await inspectFile(path),
-    });
-  }
+  const frames = validateIndexedFrames(frameIndex);
   return {
     manifestIntegrity,
     frameIndexIntegrity,
@@ -295,9 +365,21 @@ export async function buildV004cContactSheetSupplement() {
     REVIEW_CANDIDATES_ROOT,
     `.${TARGET_DIRECTORY_NAME}.part-${randomUUID()}`,
   );
-  await mkdir(stagingDirectory, {recursive: false});
+  await mkdir(stagingDirectory, {recursive: false, mode: 0o700});
+  const decodedDirectory = resolve(stagingDirectory, "decoded-frames");
   let published = false;
   try {
+    const decodedFrames = await decodeBoundContactSheetFrames({
+      videoPath: SOURCE_VIDEO,
+      expectedVideoSha256: V004C_CONTACT_SHEET_SUPPLEMENT_CONTRACT.sourceVideoSha256,
+      frameIndex: sourceBefore.frameIndex,
+      outputDirectory: decodedDirectory,
+      ffmpegPath: sourceManifest.runtime?.ffmpeg,
+    });
+    const stagingFrameIndex = resolve(stagingDirectory, "frame-index.json");
+    await writeFile(stagingFrameIndex, `${JSON.stringify(sourceBefore.frameIndex, null, 2)}\n`, {
+      encoding: "utf8", flag: "wx", mode: 0o444,
+    });
     const stagingOutput = resolve(stagingDirectory, OUTPUT_FILE_NAME);
     const {stdout} = await execFileAsync(
       python.path,
@@ -307,9 +389,9 @@ export async function buildV004cContactSheetSupplement() {
         "--analyzer",
         QA_ANALYZER,
         "--qa-dir",
-        SOURCE_QA_DIRECTORY,
+        decodedFrames.outputDirectory,
         "--frame-index",
-        SOURCE_FRAME_INDEX,
+        stagingFrameIndex,
         "--output",
         stagingOutput,
       ],
@@ -326,6 +408,12 @@ export async function buildV004cContactSheetSupplement() {
       ]);
     if (outputIntegrity.sha256 !== buildResult.contactSheet.sha256) {
       throw new Error("Readable contact-sheet hash differs from builder result");
+    }
+    for (const frame of decodedFrames.frames) {
+      const current = await inspectFile(resolve(decodedDirectory, frame.filename));
+      if (JSON.stringify(current) !== JSON.stringify(frame.integrity)) {
+        throw new Error(`Decoded proof frame changed while building: ${frame.filename}`);
+      }
     }
     const sourceAfter = await captureSourceEvidence();
     if (stableEvidenceSnapshot(sourceBefore) !== stableEvidenceSnapshot(sourceAfter)) {
@@ -357,8 +445,14 @@ export async function buildV004cContactSheetSupplement() {
           reused: false,
           reasonReplacedInSupplement: "fallback Arial lacked Chinese glyphs",
         },
-        frames: sourceBefore.frames.map((item) => ({
-          path: workspaceRelative(resolve(SOURCE_QA_DIRECTORY, item.filename)),
+        frameExtraction: {
+          method: "sequential-decode-exact-local-frame-index",
+          sourceVideoSha256: decodedFrames.sourceVideo.sha256,
+          decoder: decodedFrames.decoder,
+          cachedQaFramesReused: false,
+        },
+        frames: decodedFrames.frames.map((item) => ({
+          path: workspaceRelative(resolve(TARGET_DIRECTORY, "decoded-frames", item.filename)),
           frame: item.frame,
           globalFrame: item.globalFrame,
           tags: item.tags,
@@ -377,6 +471,8 @@ export async function buildV004cContactSheetSupplement() {
         sourceVideoHashMatched: true,
         sourceFrameIndexHashMatched: true,
         everyIndexedFrameHasBoundHash: true,
+        everyIndexedFrameFreshlyDecodedFromBoundVideo: true,
+        cachedQaFramesReused: false,
         sourceCandidateUnchangedBeforeAndAfter: true,
         cjkGlyphRasterProbePassed: true,
         chineseLabelsReadableByContract: true,
@@ -413,6 +509,9 @@ export async function buildV004cContactSheetSupplement() {
       flag: "wx",
     });
     await Promise.all([chmod(stagingOutput, 0o444), chmod(stagingManifest, 0o444)]);
+    await Promise.all(decodedFrames.frames.map((frame) =>
+      chmod(resolve(decodedDirectory, frame.filename), 0o444)));
+    await chmod(decodedDirectory, 0o555);
     await chmod(stagingDirectory, 0o555);
     await atomicPublishDirectoryNoReplace(
       python.path,
@@ -428,6 +527,7 @@ export async function buildV004cContactSheetSupplement() {
   } finally {
     if (!published && (await pathExists(stagingDirectory))) {
       await chmod(stagingDirectory, 0o755).catch(() => {});
+      await chmod(decodedDirectory, 0o755).catch(() => {});
       await rm(stagingDirectory, {recursive: true, force: false});
     }
   }

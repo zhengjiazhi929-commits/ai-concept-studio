@@ -6,6 +6,8 @@ import {
   lstat,
   mkdir,
   readFile,
+  readdir,
+  readlink,
   realpath,
   rm,
   writeFile
@@ -53,7 +55,6 @@ const REUSED_OVERLAY_MANIFEST = resolve(
   REUSED_OVERLAY_ROOT,
   "overlay-manifest-v004c-no-box-proof.json"
 );
-const REUSED_OVERLAY_FRAMES = resolve(REUSED_OVERLAY_ROOT, "frames");
 const FFMPEG_PATH = "/opt/homebrew/bin/ffmpeg";
 const FFPROBE_PATH = "/opt/homebrew/bin/ffprobe";
 const PYTHON =
@@ -124,6 +125,124 @@ async function assertHash(path, expected, label) {
     throw new Error(`${label} SHA-256 漂移：expected=${expected} actual=${actual}`);
   }
   return actual;
+}
+
+const overlayHash = (bytes) => createHash("sha256").update(bytes).digest("hex");
+const overlayIdentity = (details) => Object.fromEntries(
+  ["dev", "ino", "mode", "size", "mtimeNs", "ctimeNs"].map((key) => [key, String(details[key])])
+);
+const sameOverlaySnapshot = (before, after) => JSON.stringify(before) === JSON.stringify(after);
+
+async function readBoundOverlayFile(path, expectedHash) {
+  if (!/^[a-f0-9]{64}$/u.test(expectedHash ?? "")) throw new Error("Invalid overlay SHA-256");
+  const before = await lstat(path, {bigint: true});
+  if (!before.isFile() || before.isSymbolicLink()) throw new Error(`Overlay must be a plain file: ${path}`);
+  const bytes = await readFile(path);
+  const after = await lstat(path, {bigint: true});
+  if (!sameOverlaySnapshot(overlayIdentity(before), overlayIdentity(after)) ||
+      BigInt(bytes.length) !== after.size) throw new Error(`Overlay changed during inspection: ${path}`);
+  const sha256 = overlayHash(bytes);
+  if (sha256 !== expectedHash) throw new Error(`Overlay SHA-256 drift: ${path}`);
+  return {bytes, integrity: {bytes: bytes.length, sha256}, identity: overlayIdentity(after)};
+}
+
+async function overlayDirectoryIdentity(path) {
+  const details = await lstat(path, {bigint: true});
+  if (!details.isDirectory() || details.isSymbolicLink()) throw new Error(`Overlay must be a plain directory: ${path}`);
+  return overlayIdentity(details);
+}
+
+// The historical manifest is immutable evidence, but its PNGs and 600 symlinks
+// are writable assets. Bind the actual sequence, including global-to-local owners.
+export async function captureV004dOverlayAssets(manifestPath, expectedManifestSha256) {
+  const resolvedManifestPath = resolve(manifestPath);
+  const root = dirname(resolvedManifestPath);
+  const frameDirectory = resolve(root, "frames");
+  const directories = [await overlayDirectoryIdentity(root), await overlayDirectoryIdentity(frameDirectory)];
+  const manifestFile = await readBoundOverlayFile(resolvedManifestPath, expectedManifestSha256);
+  const manifest = JSON.parse(manifestFile.bytes.toString("utf8"));
+  const contract = V004D_PACING_BORDER_PROOF;
+  const range = manifest.proofRange;
+  if (manifest.schemaVersion !== "agent-skill-v004c-no-box-proof-overlay-v1" ||
+      range?.fps !== contract.fps || range?.globalStartFrame !== contract.globalStartFrame ||
+      range?.globalEndFrameExclusive !== contract.globalEndFrameInclusive + 1 ||
+      range?.localStartFrame !== 0 || range?.localEndFrameExclusive !== contract.sourceFrameCount ||
+      range?.frameCount !== contract.sourceFrameCount || range?.frameOwnerDomain !== "global-frame-index" ||
+      range?.frameFileDomain !== "proof-local-frame-index" || manifest.frameDirectory !== "frames" ||
+      manifest.blankImageFile !== "blank.png" || !Array.isArray(manifest.displayCues) ||
+      !manifest.displayCues.length || manifest.displayCueCount !== manifest.displayCues.length) {
+    throw new Error("Reused overlay manifest does not describe the fixed 600-frame proof");
+  }
+  const blank = await readBoundOverlayFile(resolve(root, "blank.png"), manifest.blankImageSha256);
+  const owners = Array(contract.sourceFrameCount).fill(null);
+  const cues = [];
+  const identities = [manifestFile.identity, blank.identity];
+  const images = new Map();
+  for (const cue of manifest.displayCues) {
+    const imageFile = `cue-${String(cue?.index).padStart(3, "0")}.png`;
+    const first = Math.max(cue?.startFrame, contract.globalStartFrame) - contract.globalStartFrame;
+    const end = Math.min(cue?.endFrameExclusive, contract.globalEndFrameInclusive + 1) - contract.globalStartFrame;
+    if (!Number.isSafeInteger(cue?.index) || cue.index < 1 || images.has(cue.index) ||
+        cue.imageFile !== imageFile || !Number.isSafeInteger(cue.startFrame) || cue.startFrame < 0 ||
+        !Number.isSafeInteger(cue.endFrameExclusive) || cue.endFrameExclusive <= cue.startFrame ||
+        cue.endFrameExclusive > 18_000 || first < 0 || end > owners.length || first >= end ||
+        cue.proofLocalStartFrame !== first || cue.proofLocalEndFrameExclusive !== end ||
+        cue.proofGlobalStartFrame !== first + contract.globalStartFrame ||
+        cue.proofGlobalEndFrameExclusive !== end + contract.globalStartFrame) {
+      throw new Error("Invalid reused overlay cue or local frame ownership");
+    }
+    const image = await readBoundOverlayFile(resolve(root, imageFile), cue.imageSha256);
+    images.set(cue.index, imageFile);
+    cues.push({index: cue.index, path: imageFile, ...image.integrity});
+    identities.push(image.identity);
+    for (let frame = first; frame < end; frame += 1) {
+      if (owners[frame] !== null) throw new Error(`Overlay cues overlap at local frame ${frame}`);
+      owners[frame] = cue.index;
+    }
+  }
+  const frameOwnerSha256 = overlayHash(JSON.stringify(owners));
+  const captionFrames = owners.filter((owner) => owner !== null).length;
+  if (frameOwnerSha256 !== manifest.frameOwnerSha256 || captionFrames !== manifest.captionFrameCount ||
+      owners.length - captionFrames !== manifest.blankFrameCount) throw new Error("Overlay frame owner binding drift");
+  if ((await readdir(frameDirectory)).length !== owners.length) throw new Error("Overlay requires exactly 600 frame links");
+  const links = [];
+  for (let frame = 0; frame < owners.length; frame += 1) {
+    const file = `frame-${String(frame).padStart(5, "0")}.png`;
+    const path = resolve(frameDirectory, file);
+    const before = await lstat(path, {bigint: true});
+    if (!before.isSymbolicLink()) throw new Error(`Overlay frame ${frame} must be an owner symlink`);
+    const target = await readlink(path);
+    const after = await lstat(path, {bigint: true});
+    const expected = `../${owners[frame] === null ? "blank.png" : images.get(owners[frame])}`;
+    if (target !== expected || !sameOverlaySnapshot(overlayIdentity(before), overlayIdentity(after))) {
+      throw new Error(`Overlay frame ${frame} owner link drift`);
+    }
+    links.push({file, owner: owners[frame], target});
+    identities.push(overlayIdentity(after));
+  }
+  const finalDirectories = [await overlayDirectoryIdentity(root), await overlayDirectoryIdentity(frameDirectory)];
+  if (!sameOverlaySnapshot(directories, finalDirectories)) throw new Error("Overlay directories changed during inspection");
+  return {
+    manifestPath: resolvedManifestPath, expectedManifestSha256,
+    framePattern: resolve(frameDirectory, "frame-%05d.png"), directories, identities,
+    evidence: {
+      manifest: {path: relative(root, resolvedManifestPath), ...manifestFile.integrity},
+      frameCount: owners.length, frameOwnerSha256, frameLinksSha256: overlayHash(JSON.stringify(links)),
+      blank: {path: "blank.png", ...blank.integrity}, cues
+    }
+  };
+}
+
+export async function consumeV004dOverlayAssets(snapshot, consume) {
+  const expectedSnapshot = JSON.stringify(snapshot);
+  const check = async () => {
+    const observed = await captureV004dOverlayAssets(snapshot.manifestPath, snapshot.expectedManifestSha256);
+    if (JSON.stringify(observed) !== expectedSnapshot) throw new Error("Reused overlay assets changed since preflight");
+  };
+  await check();
+  const result = await consume(snapshot.framePattern);
+  await check();
+  return result;
 }
 
 async function run(command, args, timeout = 600_000) {
@@ -221,7 +340,7 @@ async function renderBase(stagingDirectory, inputProps) {
   return {bundleDirectory, outputLocation, composition};
 }
 
-function finalFfmpegArguments(renderBasePath, outputPath) {
+function finalFfmpegArguments(renderBasePath, outputPath, overlayFramePattern) {
   const contract = V004D_PACING_BORDER_PROOF;
   const filter = buildSynchronizedPacingFilterGraph({
     playbackRate: contract.playbackRate,
@@ -235,7 +354,7 @@ function finalFfmpegArguments(renderBasePath, outputPath) {
     "-nostdin", "-hide_banner", "-loglevel", "error", "-n",
     "-i", renderBasePath,
     "-framerate", String(contract.fps), "-start_number", "0",
-    "-i", resolve(REUSED_OVERLAY_FRAMES, "frame-%05d.png"),
+    "-i", overlayFramePattern,
     "-i", VOICE_PATH,
     "-filter_complex_threads", "1",
     "-filter_complex", filter,
@@ -310,16 +429,14 @@ export async function renderV004dPacingBorderProof() {
     assertPlainFile(EPISODE_PATH, "episode"),
     assertHash(TIMELINE_PATH, contract.timelineSha256, "v004c timeline"),
     assertHash(VOICE_PATH, contract.voiceSha256, "临时 Tingting 旁白"),
-    assertHash(
-      REUSED_OVERLAY_MANIFEST,
-      contract.reusedOverlayManifestSha256,
-      "已验收字幕图层 manifest"
-    ),
     assertPlainFile(ffmpeg, "ffmpeg"),
     assertPlainFile(ffprobe, "ffprobe"),
     assertPlainFile(PYTHON, "python"),
     assertPlainFile(CHROME, "Chrome")
   ]);
+  const overlayAssets = await captureV004dOverlayAssets(
+    REUSED_OVERLAY_MANIFEST, contract.reusedOverlayManifestSha256
+  );
   const [episodeRaw, timelineRaw] = await Promise.all([
     readFile(EPISODE_PATH, "utf8"),
     readFile(TIMELINE_PATH, "utf8")
@@ -353,7 +470,9 @@ export async function renderV004dPacingBorderProof() {
   try {
     const base = await renderBase(stagingDirectory, inputProps);
     const outputPath = resolve(stagingDirectory, OUTPUT_FILE_NAME);
-    await run(ffmpeg, finalFfmpegArguments(base.outputLocation, outputPath), 900_000);
+    await consumeV004dOverlayAssets(overlayAssets, (framePattern) =>
+      run(ffmpeg, finalFfmpegArguments(base.outputLocation, outputPath, framePattern), 900_000)
+    );
     const mediaProbe = await probe(outputPath, ffprobe);
     await run(ffmpeg, [
       "-nostdin", "-hide_banner", "-loglevel", "error", "-xerror",
@@ -405,6 +524,7 @@ export async function renderV004dPacingBorderProof() {
         timelineSha256: contract.timelineSha256,
         noContainer: true,
         overlayManifestSha256: contract.reusedOverlayManifestSha256,
+        overlayAssets: overlayAssets.evidence,
         reuseReason: "字幕文字与source-frame时序未变；先合成后等速缩放，避免重新分段引入漂移。"
       },
       qa: {

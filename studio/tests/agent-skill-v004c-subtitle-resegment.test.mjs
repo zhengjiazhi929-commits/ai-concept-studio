@@ -5,10 +5,13 @@ import {execFile} from "node:child_process";
 import {promisify} from "node:util";
 import {
   lstat,
+  mkdir,
   mkdtemp,
   readFile,
   readdir,
+  realpath,
   rm,
+  symlink,
   writeFile
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -377,12 +380,12 @@ test("v004c cue 仍严格绑定原 marker、场景、帧与样本范围", async 
 });
 
 test("v004c 显式发布 Python 不可用时失败关闭，不回退本机运行时", async () => {
-  const root = await mkdtemp(resolve(tmpdir(), "v004c-subtitle-runtime-"));
+  const root = await realpath(await mkdtemp(resolve(tmpdir(), "v004c-subtitle-runtime-")));
   const moduleUrl = new URL("../scripts/resegment-agent-skill-v004c-subtitles.mjs", import.meta.url).href;
   const output = resolve(root, "timeline.json");
   const missingPython = resolve(root, "missing-python");
   try {
-    const code = `import {writeJsonNoReplace} from ${JSON.stringify(moduleUrl)}; await writeJsonNoReplace(${JSON.stringify(output)}, {fixture: true});`;
+    const code = `import {writeJsonNoReplace} from ${JSON.stringify(moduleUrl)}; await writeJsonNoReplace(${JSON.stringify(output)}, {fixture: true}, {outputRoot: ${JSON.stringify(root)}});`;
     await assert.rejects(
       () => promisify(execFile)(process.execPath, ["--input-type=module", "-e", code], {
         env: {...process.env, QA_PYTHON: missingPython}
@@ -396,10 +399,10 @@ test("v004c 显式发布 Python 不可用时失败关闭，不回退本机运行
 });
 
 test("v004c 时间线通过同目录临时文件原子发布并同步为只读", async () => {
-  const root = await mkdtemp(resolve(tmpdir(), "v004c-subtitle-resegment-"));
+  const root = await realpath(await mkdtemp(resolve(tmpdir(), "v004c-subtitle-resegment-")));
   const path = resolve(root, "timeline.json");
   try {
-    const result = await writeJsonNoReplace(path, {version: 1});
+    const result = await writeJsonNoReplace(path, {version: 1}, {outputRoot: root});
     assert.match(result.sha256, /^[a-f0-9]{64}$/u);
     assert.deepEqual(JSON.parse(await readFile(path, "utf8")), {version: 1});
     assert.equal((await lstat(path)).mode & 0o777, 0o444);
@@ -410,12 +413,12 @@ test("v004c 时间线通过同目录临时文件原子发布并同步为只读",
 });
 
 test("v004c 时间线已有目标时原子发布拒绝覆盖并清理本次临时文件", async () => {
-  const root = await mkdtemp(resolve(tmpdir(), "v004c-subtitle-resegment-"));
+  const root = await realpath(await mkdtemp(resolve(tmpdir(), "v004c-subtitle-resegment-")));
   const path = resolve(root, "timeline.json");
   try {
-    await writeJsonNoReplace(path, {version: 1});
+    await writeJsonNoReplace(path, {version: 1}, {outputRoot: root});
     await assert.rejects(
-      () => writeJsonNoReplace(path, {version: 2}),
+      () => writeJsonNoReplace(path, {version: 2}, {outputRoot: root}),
       /拒绝覆盖既有 v004c 时间线/u
     );
     assert.deepEqual(JSON.parse(await readFile(path, "utf8")), {version: 1});
@@ -426,11 +429,12 @@ test("v004c 时间线已有目标时原子发布拒绝覆盖并清理本次临�
 });
 
 test("v004c 时间线发布前崩溃只清理本次 sibling temp 且不留目标占位", async () => {
-  const root = await mkdtemp(resolve(tmpdir(), "v004c-subtitle-resegment-"));
+  const root = await realpath(await mkdtemp(resolve(tmpdir(), "v004c-subtitle-resegment-")));
   const path = resolve(root, "timeline.json");
   try {
     await assert.rejects(
       () => writeJsonNoReplace(path, {version: 1}, {
+        outputRoot: root,
         testOnlyBeforePublish: async ({targetPath, temporaryPath}) => {
           assert.equal(targetPath, path);
           const temporaryDetails = await lstat(temporaryPath);
@@ -449,7 +453,7 @@ test("v004c 时间线发布前崩溃只清理本次 sibling temp 且不留目标
 });
 
 test("v004c 上次进程崩溃遗留的 sibling temp 不阻断续跑也不会被误删", async () => {
-  const root = await mkdtemp(resolve(tmpdir(), "v004c-subtitle-resegment-"));
+  const root = await realpath(await mkdtemp(resolve(tmpdir(), "v004c-subtitle-resegment-")));
   const path = resolve(root, "timeline.json");
   const staleTemporaryPath = resolve(
     root,
@@ -457,7 +461,7 @@ test("v004c 上次进程崩溃遗留的 sibling temp 不阻断续跑也不会被
   );
   try {
     await writeFile(staleTemporaryPath, "{\"partial\":", {flag: "wx"});
-    await writeJsonNoReplace(path, {version: 1});
+    await writeJsonNoReplace(path, {version: 1}, {outputRoot: root});
     assert.deepEqual(JSON.parse(await readFile(path, "utf8")), {version: 1});
     assert.equal(await readFile(staleTemporaryPath, "utf8"), "{\"partial\":");
     assert.deepEqual((await readdir(root)).sort(), [
@@ -467,4 +471,84 @@ test("v004c 上次进程崩溃遗留的 sibling temp 不阻断续跑也不会被
   } finally {
     await rm(root, {recursive: true, force: true});
   }
+});
+
+async function outputScopeFixture(t) {
+  const root = await realpath(await mkdtemp(resolve(tmpdir(), "v004c-output-scope-")));
+  t.after(() => rm(root, {recursive: true, force: true}));
+  const outputRoot = resolve(root, "allowed");
+  const outside = resolve(root, "outside");
+  await mkdir(outputRoot);
+  await mkdir(outside);
+  return {root, outputRoot, outside};
+}
+
+test("v004c 输出边界在创建目录或临时文件前拒绝父目录符号链接", async (t) => {
+  const {outputRoot, outside} = await outputScopeFixture(t);
+  await symlink(outside, resolve(outputRoot, "alias"));
+  await assert.rejects(
+    writeJsonNoReplace(resolve(outputRoot, "alias/new/timeline.json"), {fixture: true}, {outputRoot}),
+    /符号链接/u
+  );
+  assert.deepEqual(await readdir(outside), []);
+  assert.deepEqual(await readdir(outputRoot), ["alias"]);
+});
+
+test("v004c 输出边界拒绝符号链接根目录", async (t) => {
+  const {root, outputRoot, outside} = await outputScopeFixture(t);
+  const alias = resolve(root, "alias-root");
+  await symlink(outside, alias);
+  await assert.rejects(
+    writeJsonNoReplace(resolve(alias, "new/timeline.json"), {fixture: true}, {outputRoot: alias}),
+    /符号链接/u
+  );
+  assert.deepEqual(await readdir(outside), []);
+  assert.deepEqual(await readdir(outputRoot), []);
+});
+
+test("v004c 输出边界在写入前拒绝范围外的最终目标", async (t) => {
+  const {outputRoot, outside} = await outputScopeFixture(t);
+  await assert.rejects(
+    writeJsonNoReplace(resolve(outside, "new/timeline.json"), {fixture: true}, {outputRoot}),
+    /输出范围/u
+  );
+  assert.deepEqual(await readdir(outside), []);
+  assert.deepEqual(await readdir(outputRoot), []);
+});
+
+test("v004c 输出边界在序列化或临时写入前拒绝最终目标符号链接", async (t) => {
+  const {outputRoot, outside} = await outputScopeFixture(t);
+  const target = resolve(outputRoot, "timeline.json");
+  await symlink(resolve(outside, "missing.json"), target);
+  let serialized = false;
+  await assert.rejects(
+    writeJsonNoReplace(target, {toJSON() {serialized = true; return {fixture: true};}}, {outputRoot}),
+    /符号链接/u
+  );
+  assert.equal(serialized, false);
+  assert.equal((await lstat(target)).isSymbolicLink(), true);
+  assert.deepEqual(await readdir(outside), []);
+  assert.deepEqual(await readdir(outputRoot), ["timeline.json"]);
+});
+
+test("v004c 输出边界允许新建范围内的普通嵌套目录", async (t) => {
+  const {outputRoot, outside} = await outputScopeFixture(t);
+  const target = resolve(outputRoot, "attempt/nested/timeline.json");
+  await writeJsonNoReplace(target, {fixture: true}, {outputRoot});
+  assert.deepEqual(JSON.parse(await readFile(target, "utf8")), {fixture: true});
+  assert.equal((await lstat(target)).mode & 0o777, 0o444);
+  assert.deepEqual(await readdir(outside), []);
+});
+
+test("v004c CLI 在读取源时间线或测量前执行默认输出边界检查", async (t) => {
+  const {root, outputRoot} = await outputScopeFixture(t);
+  const script = resolve(import.meta.dirname, "../scripts/resegment-agent-skill-v004c-subtitles.mjs");
+  const missingSource = resolve(root, "must-not-read-source.json");
+  await assert.rejects(
+    promisify(execFile)(process.execPath, [
+      script, "--source", missingSource, "--output", resolve(outputRoot, "timeline.json")
+    ]),
+    (error) => error.code === 1 && /输出范围/u.test(error.stderr) && !error.stderr.includes(missingSource)
+  );
+  assert.deepEqual(await readdir(outputRoot), []);
 });

@@ -221,7 +221,9 @@ function importedBatchPaths(episode, batchId) {
     ?? (episode.research?.lastImportedBatch === batchId ? versions.at(-1) : null);
   return {
     batchPath: version?.batchPath ? resolve(workspaceRoot, version.batchPath) : null,
-    runPath: resolve(workspaceRoot, version?.packPath ?? episode.research.packPath)
+    // Retry publishes and returns the current Episode pack, which may already
+    // include later batches. Only the batch artifact belongs to this old version.
+    runPath: resolve(workspaceRoot, episode.research.packPath ?? version?.packPath)
   };
 }
 
