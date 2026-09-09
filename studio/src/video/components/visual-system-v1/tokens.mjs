@@ -1,8 +1,42 @@
+import { VIDEO_SANS_FONT_FAMILY } from "../../font-system.mjs";
+
 export const VISUAL_SYSTEM_V1_DEPTH_ROLES = Object.freeze([
   "active-node",
   "key-result",
   "human-confirmation"
 ]);
+
+export const VISUAL_SYSTEM_V1_FONT_WEIGHTS = Object.freeze({
+  display: 760,
+  primaryLabel: 680,
+  sectionLabel: 600,
+  subtitle: 600,
+  technicalLabel: 600,
+  supporting: 520,
+  explanatory: 520,
+  detail: 500,
+  navigation: 500
+});
+
+export const VISUAL_SYSTEM_V1_SURFACE_BORDER = Object.freeze({
+  minimumContrastRatio: 3,
+  informationCard: Object.freeze({
+    mode: "full-outline",
+    widthPx: 3,
+    restingColor: "#5A8A77",
+    mintFocusColor: "#17795D",
+    purpleFocusColor: "#5B45AA",
+    flatSurfaceAlpha: 0.76,
+    semanticSurfaceAlpha: 0.92,
+    semanticBorderFocusScale: 0.82
+  }),
+  semanticGroup: Object.freeze({
+    mode: "full-outline",
+    widthPx: 2,
+    contextualColor: "#5F927D",
+    completeBoundaryColor: "#17795D"
+  })
+});
 
 export const VISUAL_SYSTEM_V1 = Object.freeze({
   schemaVersion: "visual-system-v1",
@@ -142,7 +176,7 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
         horizontalPaddingPx: 26
       }),
       labelLetterSpacingPx: -0.8,
-      detailFontWeight: 620,
+      detailFontWeight: VISUAL_SYSTEM_V1_FONT_WEIGHTS.detail,
       detailLineHeight: 1.22
     }),
     longformEmphasis: Object.freeze({
@@ -163,10 +197,11 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
         horizontalPaddingPx: 26
       }),
       labelLetterSpacingPx: -0.8,
-      detailFontWeight: 650,
+      detailFontWeight: VISUAL_SYSTEM_V1_FONT_WEIGHTS.detail,
       detailLineHeight: 1.26
     })
   }),
+  surfaceBorder: VISUAL_SYSTEM_V1_SURFACE_BORDER,
   palette: Object.freeze({
     paper: "#F2F6F3",
     paperWarm: "#F8FAF8",
@@ -189,7 +224,8 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
     whiteHighlight: "rgba(255, 255, 255, 0.88)"
   }),
   typography: Object.freeze({
-    fontFamily: '"PingFang SC", "HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif',
+    fontFamily: VIDEO_SANS_FONT_FAMILY,
+    fontWeights: VISUAL_SYSTEM_V1_FONT_WEIGHTS,
     headlineWidePx: 84,
     headlineVerticalPx: 68,
     supportingWidePx: 34,
@@ -205,7 +241,8 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
     driftPeriodSeconds: 20,
     maximumDriftFraction: 0.015,
     maximumLuminanceDelta: 0.06,
-    blurPx: 72,
+    feathering: "radial-gradient-stops",
+    compositorPolicy: "no-viewport-filter-no-viewport-will-change",
     mintOpacity: 0.2,
     purpleOpacity: 0.08
   }),
@@ -230,7 +267,8 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
       contentPaddingX: 54,
       contentPaddingY: 68
     }),
-    border: "rgba(95, 126, 113, 0.22)",
+    border: VISUAL_SYSTEM_V1_SURFACE_BORDER.semanticGroup.contextualColor,
+    borderWidthPx: VISUAL_SYSTEM_V1_SURFACE_BORDER.semanticGroup.widthPx,
     shadow: "0 28px 72px rgba(40, 76, 62, 0.13), inset 0 1px 0 rgba(255,255,255,0.92)"
   }),
   depth: Object.freeze({
@@ -279,6 +317,8 @@ export const VISUAL_SYSTEM_V1 = Object.freeze({
     "default-vertical-output",
     "large-content-wrapper",
     "default-top-header",
-    "chapter-duration-text"
+    "chapter-duration-text",
+    "viewport-scale-filter-blur",
+    "viewport-scale-will-change"
   ])
 });

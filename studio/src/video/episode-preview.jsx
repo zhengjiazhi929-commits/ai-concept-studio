@@ -22,6 +22,7 @@ import { AgentSkillShortExplainer } from "./agent-skill-short.jsx";
 import { AGENT_SKILL_SHORT_EPISODE_ID } from "./agent-skill-short-plan.mjs";
 import { ProductionSemanticPreview } from "./production-semantic-preview.jsx";
 import { isProductionSemanticScene } from "./production-semantic-preview.mjs";
+import { VIDEO_SANS_FONT_FAMILY } from "./font-system.mjs";
 
 function activeItem(items, currentTime) {
   return items.find((item) => currentTime >= item.start && currentTime < item.end);
@@ -245,7 +246,7 @@ export function GenericEpisodePreview({ episode }) {
       style={{
         backgroundColor: colors.paper,
         color: colors.ink,
-        fontFamily: '"Microsoft YaHei", "Noto Sans CJK SC", sans-serif'
+        fontFamily: VIDEO_SANS_FONT_FAMILY
       }}
     >
       {episode.voice?.publicPath ? <Audio src={staticFile(episode.voice.publicPath)} /> : null}

@@ -1,10 +1,13 @@
-import {spawn} from "node:child_process";
-import {createHash} from "node:crypto";
-import {constants as fsConstants, createReadStream} from "node:fs";
+import {execFile, spawn} from "node:child_process";
+import {createHash, randomUUID} from "node:crypto";
+import {
+  constants as fsConstants,
+} from "node:fs";
 import {
   access,
   appendFile,
   copyFile,
+  link,
   lstat,
   mkdir,
   open,
@@ -15,15 +18,15 @@ import {
   unlink,
   writeFile,
 } from "node:fs/promises";
-import {basename, dirname, relative, resolve, sep} from "node:path";
+import {basename, dirname, extname, relative, resolve, sep} from "node:path";
 import {fileURLToPath} from "node:url";
 import {promisify} from "node:util";
-import {execFile} from "node:child_process";
 
 import {bundle} from "@remotion/bundler";
 import {
   RenderInternals,
   makeCancelSignal,
+  openBrowser,
   renderMedia,
   selectComposition,
 } from "@remotion/renderer";
@@ -34,40 +37,75 @@ import {
   captureWideV004ProtectedBaselines,
   captureWideV004ReviewInputs,
 } from "./render-agent-skill-long-review-wide-v004.mjs";
+import {
+  acquireLongReviewRenderJobLock,
+  assertLongReviewRenderJobFilesystemSafety,
+  bindLongReviewRenderWorkerToParent,
+  captureContentAwareGitIdentity,
+  LONG_REVIEW_RENDER_PARENT_BINDING_PROTOCOL,
+  longReviewSourceInputs,
+  syncLongReviewRenderDirectory,
+  syncLongReviewRenderFile,
+  validateLongReviewRenderJob,
+} from "../src/server/production/long-render-job.mjs";
 
-const execFileAsync = promisify(execFile);
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const STUDIO_ROOT = resolve(dirname(SCRIPT_PATH), "..");
 const WORKSPACE_ROOT = resolve(STUDIO_ROOT, "..");
 const PUBLIC_ROOT = resolve(STUDIO_ROOT, "public");
 const VIDEO_ROOT = resolve(STUDIO_ROOT, "src", "video");
-const ENTRY_POINT = resolve(VIDEO_ROOT, "agent-skill-long-review-index.jsx");
-const EPISODE_PATH = resolve(
+const RENDER_JOB_ENVIRONMENT_KEY = "AI_CONCEPT_STUDIO_LONG_REVIEW_RENDER_JOB";
+const execFileAsync = promisify(execFile);
+const RENDER_JOB_CONFIG_PATH = process.env[RENDER_JOB_ENVIRONMENT_KEY]
+  ? resolve(process.env[RENDER_JOB_ENVIRONMENT_KEY])
+  : null;
+const CONFIGURED_RENDER_JOB = await (async () => {
+  if (!RENDER_JOB_CONFIG_PATH) return null;
+  assertInside(WORKSPACE_ROOT, RENDER_JOB_CONFIG_PATH, "render job config");
+  const stat = await lstat(RENDER_JOB_CONFIG_PATH);
+  if (!stat.isFile() || stat.isSymbolicLink()) {
+    throw new Error("Render job config must be a regular, non-symlink file");
+  }
+  const job = validateLongReviewRenderJob(
+    JSON.parse(await readFile(RENDER_JOB_CONFIG_PATH, "utf8")),
+    {workspaceRoot: WORKSPACE_ROOT},
+  );
+  await assertLongReviewRenderJobFilesystemSafety(job, {
+    workspaceRoot: WORKSPACE_ROOT,
+    jobConfigPath: RENDER_JOB_CONFIG_PATH,
+  });
+  return job;
+})();
+const ENTRY_POINT = CONFIGURED_RENDER_JOB?.resolvedPaths.entryPoint ??
+  resolve(VIDEO_ROOT, "agent-skill-long-review-index.jsx");
+const EPISODE_PATH = CONFIGURED_RENDER_JOB?.resolvedPaths.episode ?? resolve(
   STUDIO_ROOT,
   "data",
   "episodes",
   "agent-skill-20260806",
   "episode.json",
 );
-const VOICE_PATH = resolve(
+const VOICE_PATH = CONFIGURED_RENDER_JOB?.resolvedPaths.voice ?? resolve(
   PUBLIC_ROOT,
   "episodes",
   "agent-skill-20260806",
   "voice-v001.wav",
 );
-const REVIEW_CANDIDATES_ROOT = resolve(
-  WORKSPACE_ROOT,
-  "outputs",
-  "studio",
-  "agent-skill-20260806",
-  "review-candidates",
-);
-const FINAL_DIRECTORY = resolve(
+const REVIEW_CANDIDATES_ROOT = CONFIGURED_RENDER_JOB
+  ? dirname(CONFIGURED_RENDER_JOB.resolvedPaths.finalDirectory)
+  : resolve(
+      WORKSPACE_ROOT,
+      "outputs",
+      "studio",
+      "agent-skill-20260806",
+      "review-candidates",
+    );
+const FINAL_DIRECTORY = CONFIGURED_RENDER_JOB?.resolvedPaths.finalDirectory ?? resolve(
   REVIEW_CANDIDATES_ROOT,
   "full-video-current-visual-upgrade-v004",
 );
 const FINAL_OUTPUT_PATH = resolve(FINAL_DIRECTORY, "review-10m.mp4");
-const WORK_DIRECTORY = resolve(
+const WORK_DIRECTORY = CONFIGURED_RENDER_JOB?.resolvedPaths.workDirectory ?? resolve(
   REVIEW_CANDIDATES_ROOT,
   ".full-video-current-visual-upgrade-v004-chunked-work",
 );
@@ -76,19 +114,51 @@ const STAGING_DIRECTORY = resolve(WORK_DIRECTORY, "staging");
 const LOGS_DIRECTORY = resolve(WORK_DIRECTORY, "logs");
 const BUNDLE_DIRECTORY = resolve(WORK_DIRECTORY, "bundle");
 const RUN_MANIFEST_PATH = resolve(WORK_DIRECTORY, "render-manifest.json");
+const FIRST_CHUNK_ETA_PATH = resolve(WORK_DIRECTORY, "first-chunk-eta.json");
 const CHROME_EXECUTABLE =
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+export const CHUNKED_REMOTION_TIMEOUT_MS = 180_000;
+export const CHUNKED_CHROMIUM_OPTIONS = Object.freeze({
+  headless: true,
+  darkMode: false,
+});
 
 export const CHUNKED_V004_CONTRACT = Object.freeze({
-  schemaVersion: "agent-skill-long-review-wide-v004-chunked-v1",
-  episodeId: "agent-skill-20260806",
-  compositionId: "AgentSkillLongReview",
-  width: 1920,
-  height: 1080,
-  fps: 30,
-  durationInFrames: 18_000,
+  schemaVersion: CONFIGURED_RENDER_JOB
+    ? "agent-skill-long-review-chunked-v1"
+    : "agent-skill-long-review-wide-v004-chunked-v1",
+  jobId: CONFIGURED_RENDER_JOB?.jobId ?? "legacy-agent-skill-v004",
+  candidateVersion: CONFIGURED_RENDER_JOB?.candidateVersion ?? 4,
+  episodeId: CONFIGURED_RENDER_JOB?.episodeId ?? "agent-skill-20260806",
+  compositionId: CONFIGURED_RENDER_JOB?.compositionId ?? "AgentSkillLongReview",
+  width: CONFIGURED_RENDER_JOB?.width ?? 1920,
+  height: CONFIGURED_RENDER_JOB?.height ?? 1080,
+  fps: CONFIGURED_RENDER_JOB?.fps ?? 30,
+  durationInFrames: CONFIGURED_RENDER_JOB?.durationInFrames ?? 18_000,
   durationSeconds: 600,
-  defaultChunkFrames: 1_800,
+  defaultChunkFrames: 900,
+  defaultInterChunkPauseMs: 5_000,
+  ...(CONFIGURED_RENDER_JOB?.renderProfile
+    ? {
+        renderProfileSchemaVersion:
+          CONFIGURED_RENDER_JOB.renderProfile.schemaVersion,
+        artifactRole: CONFIGURED_RENDER_JOB.renderProfile.artifactRole,
+        formalCandidate: CONFIGURED_RENDER_JOB.renderProfile.formalCandidate,
+        visualSource: CONFIGURED_RENDER_JOB.renderProfile.visualSource,
+        voice: CONFIGURED_RENDER_JOB.renderProfile.voice,
+        subtitleStyle: CONFIGURED_RENDER_JOB.renderProfile.subtitleStyle,
+        subtitleDelivery: CONFIGURED_RENDER_JOB.renderProfile.subtitleDelivery,
+        burnInSubtitle: CONFIGURED_RENDER_JOB.renderProfile.burnInSubtitle,
+      }
+    : {burnInSubtitle: true}),
+  remotionTimeoutMs: CHUNKED_REMOTION_TIMEOUT_MS,
+  fontAssetDelivery: "bundled-resource",
+  fontReadiness: "remotion-document-fonts-ready",
+  renderBrowserExecutable: "system-google-chrome",
+  renderChromeMode: "chrome-for-testing",
+  renderBrowserSession: "one-worker-one-reused-browser",
+  renderBrowserCapture: "from-surface",
+  wallpaperCompositorPolicy: "no-viewport-filter-no-viewport-will-change",
   codec: "h264",
   pixelFormat: "yuv420p",
   crf: 22,
@@ -100,6 +170,9 @@ export const CHUNKED_V004_CONTRACT = Object.freeze({
   audioCodec: "aac",
   audioBitrate: "192k",
   outputFileName: "review-10m.mp4",
+  temporaryVoice: CONFIGURED_RENDER_JOB?.temporaryVoice ?? true,
+  temporaryVoiceIsFinalHumanRecording:
+    CONFIGURED_RENDER_JOB?.temporaryVoiceIsFinalHumanRecording ?? false,
 });
 
 export const CHUNKED_V004_PATHS = Object.freeze({
@@ -109,27 +182,149 @@ export const CHUNKED_V004_PATHS = Object.freeze({
   logsDirectory: LOGS_DIRECTORY,
   bundleDirectory: BUNDLE_DIRECTORY,
   runManifestPath: RUN_MANIFEST_PATH,
+  firstChunkEtaPath: FIRST_CHUNK_ETA_PATH,
   finalDirectory: FINAL_DIRECTORY,
   finalOutputPath: FINAL_OUTPUT_PATH,
   voicePath: VOICE_PATH,
 });
 
-const SOURCE_INPUTS = Object.freeze([
-  SCRIPT_PATH,
-  resolve(dirname(SCRIPT_PATH), "render-agent-skill-long-review-wide-v004.mjs"),
-  VIDEO_ROOT,
-  resolve(STUDIO_ROOT, "config", "visual-system.json"),
-  resolve(STUDIO_ROOT, "src", "shared", "technical-diagram-contract.mjs"),
-  EPISODE_PATH,
-]);
+const SOURCE_INPUTS = Object.freeze(
+  CONFIGURED_RENDER_JOB
+    ? [
+        ...longReviewSourceInputs(CONFIGURED_RENDER_JOB, {
+          workspaceRoot: WORKSPACE_ROOT,
+          scriptPath: SCRIPT_PATH,
+          jobConfigPath: RENDER_JOB_CONFIG_PATH,
+        }),
+        resolve(dirname(SCRIPT_PATH), "render-agent-skill-long-review-chunked.mjs"),
+      ]
+    : [
+        SCRIPT_PATH,
+        resolve(dirname(SCRIPT_PATH), "render-agent-skill-long-review-wide-v004.mjs"),
+        resolve(STUDIO_ROOT, "src"),
+        PUBLIC_ROOT,
+        resolve(WORKSPACE_ROOT, ".node-version"),
+        resolve(STUDIO_ROOT, "package.json"),
+        resolve(STUDIO_ROOT, "pnpm-lock.yaml"),
+        resolve(STUDIO_ROOT, "config", "visual-system.json"),
+        EPISODE_PATH,
+      ],
+);
 
-const BUNDLE_CONTEXT_FILE = ".v004-chunked-bundle-context.json";
+const BUNDLE_CONTEXT_FILE = CONFIGURED_RENDER_JOB
+  ? ".long-review-chunked-bundle-context.json"
+  : ".v004-chunked-bundle-context.json";
+const CHUNK_RECORD_SCHEMA_VERSION = CONFIGURED_RENDER_JOB
+  ? "agent-skill-long-review-chunk-v1"
+  : "agent-skill-long-review-wide-v004-chunk-v1";
+const FINAL_MANIFEST_SCHEMA_VERSION = CONFIGURED_RENDER_JOB
+  ? "agent-skill-long-review-chunked-final-v1"
+  : "agent-skill-long-review-wide-v004-chunked-final-v1";
+const CONCAT_RECORD_SCHEMA_VERSION = CONFIGURED_RENDER_JOB
+  ? "agent-skill-long-review-concat-v1"
+  : "agent-skill-long-review-wide-v004-concat-v1";
+const FINAL_MEDIA_RECORD_SCHEMA_VERSION = CONFIGURED_RENDER_JOB
+  ? "agent-skill-long-review-final-media-v1"
+  : "agent-skill-long-review-wide-v004-final-media-v1";
+const PUBLICATION_STATE_SCHEMA_VERSION = CONFIGURED_RENDER_JOB
+  ? "agent-skill-long-review-publication-state-v1"
+  : "agent-skill-long-review-wide-v004-publication-state-v1";
+const PUBLICATION_PENDING_FILE_NAME = "publication-durability-unknown.json";
+const PUBLICATION_RECEIPT_FILE_NAME = "publication-durable-receipt.json";
+export const LONG_REVIEW_PUBLICATION_DURABILITY_UNKNOWN =
+  "long_review_publication_durability_unknown";
+const PUBLICATION_PART_PREFIX = CONFIGURED_RENDER_JOB
+  ? ".long-review-publication"
+  : ".v004-publication";
+export const CHUNKED_LONG_REVIEW_SCHEMAS = Object.freeze({
+  chunk: CHUNK_RECORD_SCHEMA_VERSION,
+  finalManifest: FINAL_MANIFEST_SCHEMA_VERSION,
+  concat: CONCAT_RECORD_SCHEMA_VERSION,
+  finalMedia: FINAL_MEDIA_RECORD_SCHEMA_VERSION,
+  publicationState: PUBLICATION_STATE_SCHEMA_VERSION,
+  publicationPendingFileName: PUBLICATION_PENDING_FILE_NAME,
+  publicationReceiptFileName: PUBLICATION_RECEIPT_FILE_NAME,
+  publicationPartPrefix: PUBLICATION_PART_PREFIX,
+});
 const HASH_PATTERN = /^[a-f0-9]{64}$/u;
-const activePartPaths = new Set();
+const activePartPaths = new Map();
 const activeCancellations = new Set();
+const activeBrowsers = new Set();
 let activeWorker = null;
+let activeAttemptCapability = null;
+let browserOpening = false;
 let terminating = false;
 let terminationSignal = null;
+
+function assertAttemptToken(attemptToken) {
+  if (typeof attemptToken !== "string" || !/^[a-f0-9-]{8,80}$/u.test(attemptToken)) {
+    throw new Error("A lowercase UUID-like render attempt token is required");
+  }
+  return attemptToken;
+}
+
+export function attemptScopedPartPath(filePath, attemptToken) {
+  const token = assertAttemptToken(attemptToken);
+  const extension = extname(filePath);
+  return extension
+    ? `${filePath.slice(0, -extension.length)}.attempt-${token}${extension}`
+    : `${filePath}.attempt-${token}`;
+}
+
+function activateAttempt(attemptToken) {
+  const token = assertAttemptToken(attemptToken);
+  if (activeAttemptCapability !== null) {
+    throw new Error("A render attempt is already active in this process");
+  }
+  const capability = Object.freeze({
+    token,
+    workDirectory: resolve(WORK_DIRECTORY),
+  });
+  activeAttemptCapability = capability;
+  return capability;
+}
+
+function assertActiveAttempt(attemptToken) {
+  const token = assertAttemptToken(attemptToken);
+  if (
+    activeAttemptCapability === null ||
+    activeAttemptCapability.token !== token
+  ) {
+    throw new Error("Part path registration requires the active render attempt capability");
+  }
+  return activeAttemptCapability;
+}
+
+function assertAttemptPartPath(filePath, attemptToken) {
+  const token = assertAttemptToken(attemptToken);
+  const resolvedPath = assertInside(WORK_DIRECTORY, filePath, "attempt part");
+  if (resolvedPath === resolve(WORK_DIRECTORY)) {
+    throw new Error("Refusing to track the render work directory itself");
+  }
+  if (!basename(resolvedPath).includes(`.attempt-${token}`)) {
+    throw new Error(`Refusing to track a part path not owned by attempt ${token}`);
+  }
+  return resolvedPath;
+}
+
+function registerActivePart(filePath, attemptToken) {
+  const capability = assertActiveAttempt(attemptToken);
+  const resolvedPath = assertAttemptPartPath(filePath, capability.token);
+  const existingOwner = activePartPaths.get(resolvedPath);
+  if (existingOwner && existingOwner !== capability) {
+    throw new Error(`Part path is already owned by another render attempt: ${resolvedPath}`);
+  }
+  activePartPaths.set(resolvedPath, capability);
+  return resolvedPath;
+}
+
+function unregisterActivePart(filePath, attemptToken) {
+  const capability = assertActiveAttempt(attemptToken);
+  const resolvedPath = assertAttemptPartPath(filePath, capability.token);
+  if (activePartPaths.get(resolvedPath) !== capability) return false;
+  activePartPaths.delete(resolvedPath);
+  return true;
+}
 
 function stableValue(value) {
   if (Array.isArray(value)) return value.map(stableValue);
@@ -145,6 +340,66 @@ function stableValue(value) {
 
 export function stableStringify(value) {
   return JSON.stringify(stableValue(value));
+}
+
+const RUN_FINGERPRINT_PAYLOAD_KEYS = Object.freeze([
+  "contract",
+  "renderConfig",
+  "renderJob",
+  "source",
+  "git",
+  "runtime",
+  "voice",
+  "safety",
+  "inputFingerprint",
+  "runtimeFingerprint",
+  "bundle",
+  "tools",
+  "ranges",
+]);
+
+function runFingerprintPayloadFromManifest(manifest) {
+  return Object.fromEntries(
+    RUN_FINGERPRINT_PAYLOAD_KEYS
+      .filter((key) => Object.hasOwn(manifest, key))
+      .map((key) => [key, manifest[key]]),
+  );
+}
+
+export function assertResumableRunManifest(existing, expected) {
+  if (!existing || typeof existing !== "object" || Array.isArray(existing)) {
+    throw new Error("Resume manifest must be a JSON object");
+  }
+  if (existing.schemaVersion !== expected.schemaVersion) {
+    throw new Error("Resume manifest schema does not match this renderer");
+  }
+  if (Number.isNaN(Date.parse(existing.createdAt ?? ""))) {
+    throw new Error("Resume manifest createdAt is invalid");
+  }
+  const pause = existing.scheduleConfig?.interChunkPauseMs;
+  if (!Number.isSafeInteger(pause) || pause < 0 || pause > 60_000) {
+    throw new Error("Resume manifest scheduleConfig is invalid");
+  }
+  const recomputedFingerprint = sha256Text(
+    stableStringify(runFingerprintPayloadFromManifest(existing)),
+  );
+  if (recomputedFingerprint !== existing.runFingerprint) {
+    throw new Error("Resume manifest payload does not match its runFingerprint");
+  }
+  const {
+    createdAt: _existingCreatedAt,
+    scheduleConfig: _existingScheduleConfig,
+    ...existingImmutable
+  } = existing;
+  const {
+    createdAt: _expectedCreatedAt,
+    scheduleConfig: _expectedScheduleConfig,
+    ...expectedImmutable
+  } = expected;
+  if (stableStringify(existingImmutable) !== stableStringify(expectedImmutable)) {
+    throw new Error("Resume manifest immutable fields do not match current inputs");
+  }
+  return existing;
 }
 
 export function sha256Text(value) {
@@ -185,6 +440,54 @@ async function assertPlainFile(filePath, label = workspaceRelative(filePath)) {
   return fileStat;
 }
 
+function sameStableFileStat(left, right) {
+  return left.dev === right.dev &&
+    left.ino === right.ino &&
+    left.mode === right.mode &&
+    left.size === right.size &&
+    left.mtimeNs === right.mtimeNs;
+}
+
+async function readStablePlainFileIfPresent(filePath, label) {
+  let pathBefore;
+  try {
+    pathBefore = await lstat(filePath, {bigint: true});
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+  if (!pathBefore.isFile() || pathBefore.isSymbolicLink()) {
+    throw new Error(`${label} must be a regular, non-symlink file`);
+  }
+  const handle = await open(
+    filePath,
+    fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0),
+  );
+  try {
+    const opened = await handle.stat({bigint: true});
+    if (!opened.isFile() || !sameStableFileStat(pathBefore, opened)) {
+      throw new Error(`${label} changed before it was opened`);
+    }
+    const contents = await handle.readFile();
+    const [handleAfter, pathAfter] = await Promise.all([
+      handle.stat({bigint: true}),
+      lstat(filePath, {bigint: true}),
+    ]);
+    if (
+      pathAfter.isSymbolicLink() ||
+      !pathAfter.isFile() ||
+      !sameStableFileStat(opened, handleAfter) ||
+      !sameStableFileStat(handleAfter, pathAfter) ||
+      BigInt(contents.length) !== handleAfter.size
+    ) {
+      throw new Error(`${label} changed while being read`);
+    }
+    return contents;
+  } finally {
+    await handle.close();
+  }
+}
+
 async function assertAbsent(filePath, label = workspaceRelative(filePath)) {
   if (await pathExists(filePath)) {
     throw new Error(`${label} already exists; refusing to overwrite it`);
@@ -192,23 +495,43 @@ async function assertAbsent(filePath, label = workspaceRelative(filePath)) {
 }
 
 export async function inspectFile(filePath) {
-  const before = await assertPlainFile(filePath);
-  const hash = createHash("sha256");
-  let bytes = 0;
-  for await (const chunk of createReadStream(filePath)) {
-    hash.update(chunk);
-    bytes += chunk.length;
+  const label = workspaceRelative(filePath);
+  const pathBefore = await lstat(filePath, {bigint: true});
+  if (!pathBefore.isFile() || pathBefore.isSymbolicLink()) {
+    throw new Error(`${label} must be a regular, non-symlink file`);
   }
-  const after = await assertPlainFile(filePath);
-  if (
-    before.dev !== after.dev ||
-    before.ino !== after.ino ||
-    before.size !== after.size ||
-    before.mtimeMs !== after.mtimeMs
-  ) {
-    throw new Error(`File changed while hashing: ${workspaceRelative(filePath)}`);
+  const handle = await open(
+    filePath,
+    fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0),
+  );
+  try {
+    const opened = await handle.stat({bigint: true});
+    if (!opened.isFile() || !sameStableFileStat(pathBefore, opened)) {
+      throw new Error(`File changed before hashing: ${label}`);
+    }
+    const hash = createHash("sha256");
+    let bytes = 0;
+    for await (const chunk of handle.createReadStream({autoClose: false})) {
+      hash.update(chunk);
+      bytes += chunk.length;
+    }
+    const [handleAfter, pathAfter] = await Promise.all([
+      handle.stat({bigint: true}),
+      lstat(filePath, {bigint: true}),
+    ]);
+    if (
+      pathAfter.isSymbolicLink() ||
+      !pathAfter.isFile() ||
+      !sameStableFileStat(opened, handleAfter) ||
+      !sameStableFileStat(handleAfter, pathAfter) ||
+      BigInt(bytes) !== handleAfter.size
+    ) {
+      throw new Error(`File changed while hashing: ${label}`);
+    }
+    return {bytes, sha256: hash.digest("hex")};
+  } finally {
+    await handle.close();
   }
-  return {bytes, sha256: hash.digest("hex")};
 }
 
 async function listFiles(inputPath) {
@@ -265,25 +588,7 @@ async function fingerprintPaths(inputPaths, {baseDirectory, includeFiles = true}
 }
 
 async function captureGitIdentity() {
-  const [{stdout: headOutput}, {stdout: statusOutput}] = await Promise.all([
-    execFileAsync("git", ["rev-parse", "HEAD"], {
-      cwd: WORKSPACE_ROOT,
-      encoding: "utf8",
-    }),
-    execFileAsync(
-      "git",
-      ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
-      {cwd: WORKSPACE_ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024},
-    ),
-  ]);
-  const headSha = headOutput.trim();
-  if (!/^[a-f0-9]{40,64}$/u.test(headSha)) {
-    throw new Error(`Unexpected Git HEAD hash: ${headSha}`);
-  }
-  return {
-    headSha,
-    statusSha256: sha256Text(statusOutput),
-  };
+  return captureContentAwareGitIdentity({workspaceRoot: WORKSPACE_ROOT});
 }
 
 export function buildChunkRanges({
@@ -332,10 +637,12 @@ export function parseCliArguments(argv) {
     help: false,
     worker: false,
     chunkFrames: CHUNKED_V004_CONTRACT.defaultChunkFrames,
-    interChunkPauseMs: 0,
+    interChunkPauseMs: CHUNKED_V004_CONTRACT.defaultInterChunkPauseMs,
     manifestPath: null,
+    expectedManifestSha256: null,
     chunkIndex: null,
     expectedCodecBase64: null,
+    attemptToken: null,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -368,6 +675,11 @@ export function parseCliArguments(argv) {
     } else if (argument === "--manifest" || argument.startsWith("--manifest=")) {
       options.manifestPath = resolve(takeValue("--manifest"));
     } else if (
+      argument === "--expected-manifest-sha256" ||
+      argument.startsWith("--expected-manifest-sha256=")
+    ) {
+      options.expectedManifestSha256 = takeValue("--expected-manifest-sha256");
+    } else if (
       argument === "--chunk-index" ||
       argument.startsWith("--chunk-index=")
     ) {
@@ -381,12 +693,59 @@ export function parseCliArguments(argv) {
       argument.startsWith("--expected-codec-base64=")
     ) {
       options.expectedCodecBase64 = takeValue("--expected-codec-base64");
+    } else if (
+      argument === "--attempt-token" ||
+      argument.startsWith("--attempt-token=")
+    ) {
+      options.attemptToken = assertAttemptToken(takeValue("--attempt-token"));
     } else {
       throw new Error(`Unknown option: ${argument}`);
     }
   }
   buildChunkRanges({chunkFrames: options.chunkFrames});
   return options;
+}
+
+export function assertConfiguredLongReviewRenderProfile({
+  chunkFrames,
+  interChunkPauseMs,
+} = {}) {
+  const profile = CONFIGURED_RENDER_JOB?.renderProfile;
+  if (!profile) return true;
+  if (chunkFrames !== profile.chunkFrames) {
+    throw new Error(
+      `render profile requires ${profile.chunkFrames}-frame chunks; single-pass or alternate chunking is forbidden`,
+    );
+  }
+  if (interChunkPauseMs !== profile.interChunkPauseMs) {
+    throw new Error(
+      `render profile requires an exact ${profile.interChunkPauseMs}ms inter-chunk pause`,
+    );
+  }
+  if (
+    profile.concurrency !== 1 ||
+    CHUNKED_V004_CONTRACT.concurrency !== 1
+  ) {
+    throw new Error("render profile requires concurrency=1");
+  }
+  return true;
+}
+
+export function buildLongReviewRenderInputProps(
+  episode,
+  burnInSubtitle = CHUNKED_V004_CONTRACT.burnInSubtitle,
+  renderAudio = !CHUNKED_V004_CONTRACT.muted,
+) {
+  if (!episode || typeof episode !== "object" || Array.isArray(episode)) {
+    throw new TypeError("episode render input must be an object");
+  }
+  if (typeof burnInSubtitle !== "boolean") {
+    throw new TypeError("burnInSubtitle render input must be boolean");
+  }
+  if (typeof renderAudio !== "boolean") {
+    throw new TypeError("renderAudio render input must be boolean");
+  }
+  return Object.freeze({episode, burnInSubtitle, renderAudio});
 }
 
 export function usageText() {
@@ -396,9 +755,8 @@ export function usageText() {
     `Usage: node ${workspaceRelative(SCRIPT_PATH)} [options]`,
     "",
     "Options:",
-    "  --chunk-frames <frames>          Frames per child process (default: 1800).",
-    "                                    Use 900 for 20 chunks of 30 seconds.",
-    "  --inter-chunk-pause-ms <ms>      Pause between child processes (0..60000).",
+    "  --chunk-frames <frames>          Frames per child process (default: 900).",
+    "  --inter-chunk-pause-ms <ms>      Pause between child processes (default: 5000).",
     "  --help                            Show this help.",
     "",
     "For lower scheduling priority, launch this script externally with:",
@@ -577,7 +935,6 @@ export function isChunkResumeEligible({
   validation,
   expectedCodecMetadata = null,
   chunkFrames,
-  interChunkPauseMs,
 }) {
   if (!record || !validation?.valid) return false;
   const sameRange =
@@ -586,15 +943,18 @@ export function isChunkResumeEligible({
     record.range?.end === range.end &&
     record.range?.frameCount === range.frameCount;
   return (
-    record.schemaVersion === "agent-skill-long-review-wide-v004-chunk-v1" &&
+    record.schemaVersion === CHUNK_RECORD_SCHEMA_VERSION &&
     record.runFingerprint === runFingerprint &&
     record.chunkFrames === chunkFrames &&
-    record.interChunkPauseMs === interChunkPauseMs &&
     sameRange &&
     record.file?.bytes === integrity?.bytes &&
     record.file?.sha256 === integrity?.sha256 &&
     HASH_PATTERN.test(record.file?.sha256 ?? "") &&
     record.probeSha256 === validation.probeSha256 &&
+    record.decoding?.videoDecodedWithoutError === true &&
+    record.decoding?.mode === "sequential-rawvideo-null" &&
+    Number.isFinite(record.timing?.parentWorkerElapsedSeconds) &&
+    record.timing.parentWorkerElapsedSeconds > 0 &&
     sameCodecMetadata(record.codecMetadata, validation.media.codecMetadata) &&
     (expectedCodecMetadata === null ||
       sameCodecMetadata(record.codecMetadata, expectedCodecMetadata))
@@ -610,38 +970,84 @@ function chunkStem(range) {
   ].join("-");
 }
 
-function chunkPaths(range) {
+function chunkPaths(range, attemptToken = null) {
   const stem = chunkStem(range);
+  const part = resolve(CHUNKS_DIRECTORY, `${stem}.part.mp4`);
+  const metadataPart = resolve(CHUNKS_DIRECTORY, `${stem}.metadata.part.json`);
   return {
     output: resolve(CHUNKS_DIRECTORY, `${stem}.mp4`),
-    part: resolve(CHUNKS_DIRECTORY, `${stem}.part.mp4`),
+    part: attemptToken ? attemptScopedPartPath(part, attemptToken) : part,
     metadata: resolve(CHUNKS_DIRECTORY, `${stem}.metadata.json`),
-    metadataPart: resolve(CHUNKS_DIRECTORY, `${stem}.metadata.part.json`),
+    metadataPart: attemptToken
+      ? attemptScopedPartPath(metadataPart, attemptToken)
+      : metadataPart,
     log: resolve(LOGS_DIRECTORY, `${stem}.log`),
   };
 }
 
-async function removeExactPart(filePath) {
-  if (!activePartPaths.has(filePath)) return;
-  try {
-    const fileStat = await lstat(filePath);
-    if (fileStat.isSymbolicLink()) {
-      throw new Error(`Refusing to remove symlink part: ${filePath}`);
+async function assertSafeAttemptPartParent(filePath, attemptToken) {
+  const resolvedPath = assertAttemptPartPath(filePath, attemptToken);
+  const resolvedWorkDirectory = resolve(WORK_DIRECTORY);
+  const workStat = await lstat(resolvedWorkDirectory);
+  if (!workStat.isDirectory() || workStat.isSymbolicLink()) {
+    throw new Error("Render work directory must be a regular, non-symlink directory");
+  }
+  const parentPath = dirname(resolvedPath);
+  const relativeParent = relative(resolvedWorkDirectory, parentPath);
+  let currentPath = resolvedWorkDirectory;
+  for (const segment of relativeParent.split(sep).filter(Boolean)) {
+    currentPath = resolve(currentPath, segment);
+    const currentStat = await lstat(currentPath);
+    if (!currentStat.isDirectory() || currentStat.isSymbolicLink()) {
+      throw new Error(`Attempt part parent must be a regular directory: ${currentPath}`);
     }
-    if (fileStat.isDirectory()) await rm(filePath, {recursive: true});
-    else if (fileStat.isFile()) await unlink(filePath);
-    else throw new Error(`Refusing to remove non-file part: ${filePath}`);
+  }
+  return resolvedPath;
+}
+
+async function removeExactPart(filePath, capability) {
+  if (activeAttemptCapability !== capability) {
+    throw new Error("Attempt cleanup requires the active render attempt capability");
+  }
+  const resolvedPath = assertAttemptPartPath(filePath, capability.token);
+  if (activePartPaths.get(resolvedPath) !== capability) return false;
+  try {
+    await assertSafeAttemptPartParent(resolvedPath, capability.token);
+    const fileStat = await lstat(resolvedPath);
+    if (fileStat.isSymbolicLink()) {
+      throw new Error(`Refusing to remove symlink part: ${resolvedPath}`);
+    }
+    if (fileStat.isDirectory()) await rm(resolvedPath, {recursive: true});
+    else if (fileStat.isFile()) await unlink(resolvedPath);
+    else throw new Error(`Refusing to remove non-file part: ${resolvedPath}`);
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   } finally {
-    activePartPaths.delete(filePath);
+    unregisterActivePart(resolvedPath, capability.token);
+  }
+  return true;
+}
+
+async function cleanupActiveParts(capability) {
+  if (activeAttemptCapability !== capability) {
+    throw new Error("Attempt cleanup requires the active render attempt capability");
+  }
+  for (const [partPath, ownerToken] of [...activePartPaths]) {
+    if (ownerToken !== capability) continue;
+    await removeExactPart(partPath, capability);
   }
 }
 
-async function cleanupActiveParts() {
-  for (const partPath of [...activePartPaths]) {
-    await removeExactPart(partPath);
+async function closeTrackedBrowser(browser) {
+  if (!activeBrowsers.delete(browser)) return;
+  await browser.close({silent: true});
+}
+
+function deactivateAttempt(capability) {
+  if (activeAttemptCapability !== capability) {
+    throw new Error("Cannot deactivate a different render attempt");
   }
+  activeAttemptCapability = null;
 }
 
 async function terminate(signal) {
@@ -650,10 +1056,23 @@ async function terminate(signal) {
   terminationSignal = signal;
   for (const cancel of activeCancellations) cancel();
   if (activeWorker && !activeWorker.killed) activeWorker.kill(signal);
-  process.exitCode = signal === "SIGINT" ? 130 : 143;
-  if (activeCancellations.size === 0 && activeWorker === null) {
+  const browserClosures = [...activeBrowsers].map(async (browser) => {
     try {
-      await cleanupActiveParts();
+      await closeTrackedBrowser(browser);
+    } catch (error) {
+      process.stderr.write(`browser cleanup failed: ${error.stack ?? error}\n`);
+    }
+  });
+  await Promise.all(browserClosures);
+  process.exitCode = signal === "SIGINT" ? 130 : 143;
+  if (
+    activeCancellations.size === 0 &&
+    activeWorker === null &&
+    activeBrowsers.size === 0 &&
+    !browserOpening
+  ) {
+    try {
+      if (activeAttemptCapability) await cleanupActiveParts(activeAttemptCapability);
     } catch (error) {
       process.stderr.write(`part cleanup failed: ${error.stack ?? error}\n`);
     } finally {
@@ -662,21 +1081,29 @@ async function terminate(signal) {
   }
 }
 
+export function assertLongReviewFromSurfaceEnvironment(environment = process.env) {
+  if (environment.DISABLE_FROM_SURFACE) {
+    throw new Error(
+      "DISABLE_FROM_SURFACE is incompatible with the immutable from-surface render contract",
+    );
+  }
+}
+
 function installSignalHandlers() {
   process.once("SIGINT", () => void terminate("SIGINT"));
   process.once("SIGTERM", () => void terminate("SIGTERM"));
 }
 
-async function writeJsonAtomically(filePath, value, partPath) {
+async function writeJsonAtomically(filePath, value, partPath, attemptToken) {
   await assertAbsent(partPath, workspaceRelative(partPath));
-  activePartPaths.add(partPath);
+  registerActivePart(partPath, attemptToken);
   await writeFile(partPath, `${JSON.stringify(value, null, 2)}\n`, {
     encoding: "utf8",
     flag: "wx",
   });
   await assertAbsent(filePath, workspaceRelative(filePath));
   await rename(partPath, filePath);
-  activePartPaths.delete(partPath);
+  unregisterActivePart(partPath, attemptToken);
 }
 
 async function callBundledTool(bin, args, logPath = null) {
@@ -714,6 +1141,60 @@ async function callBundledTool(bin, args, logPath = null) {
   }
 }
 
+export function buildVideoDecodeFfmpegArgs(filePath) {
+  return [
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-xerror",
+    "-i",
+    filePath,
+    "-map",
+    "0:v:0",
+    "-an",
+    "-c:v",
+    "rawvideo",
+    "-f",
+    "null",
+    "-",
+  ];
+}
+
+export function buildAudioDecodeFfmpegArgs(filePath) {
+  return [
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-xerror",
+    "-i",
+    filePath,
+    "-map",
+    "0:a:0",
+    "-vn",
+    "-c:a",
+    "pcm_s16le",
+    "-f",
+    "null",
+    "-",
+  ];
+}
+
+async function assertVideoFullyDecodable(filePath, logPath) {
+  await callBundledTool(
+    "ffmpeg",
+    buildVideoDecodeFfmpegArgs(filePath),
+    logPath,
+  );
+}
+
+async function assertAudioFullyDecodable(filePath, logPath) {
+  await callBundledTool(
+    "ffmpeg",
+    buildAudioDecodeFfmpegArgs(filePath),
+    logPath,
+  );
+}
+
 export async function probeMedia(filePath, logPath = null) {
   const {stdout} = await callBundledTool(
     "ffprobe",
@@ -741,16 +1222,46 @@ function assertValidation(label, validation) {
 }
 
 async function captureRuntimeContext(renderConfig) {
-  const [source, git, voice] = await Promise.all([
+  const [source, git, voice, chrome] = await Promise.all([
     fingerprintPaths(SOURCE_INPUTS, {baseDirectory: WORKSPACE_ROOT}),
     captureGitIdentity(),
     inspectFile(VOICE_PATH),
+    captureLocalChromeIdentity(),
   ]);
+  const {
+    defaultInterChunkPauseMs: _defaultInterChunkPauseMs,
+    ...mediaContract
+  } = CHUNKED_V004_CONTRACT;
   const context = {
-    contract: CHUNKED_V004_CONTRACT,
-    renderConfig,
+    contract: mediaContract,
+    renderConfig: {chunkFrames: renderConfig.chunkFrames},
+    ...(CONFIGURED_RENDER_JOB
+      ? {
+          renderJob: {
+            schemaVersion: CONFIGURED_RENDER_JOB.schemaVersion,
+            jobId: CONFIGURED_RENDER_JOB.jobId,
+            candidateVersion: CONFIGURED_RENDER_JOB.candidateVersion,
+            paths: CONFIGURED_RENDER_JOB.paths,
+            temporaryVoice: CONFIGURED_RENDER_JOB.temporaryVoice,
+            temporaryVoiceIsFinalHumanRecording:
+              CONFIGURED_RENDER_JOB.temporaryVoiceIsFinalHumanRecording,
+            ...(CONFIGURED_RENDER_JOB.renderProfile
+              ? {renderProfile: CONFIGURED_RENDER_JOB.renderProfile}
+              : {}),
+          },
+        }
+      : {}),
     source,
     git,
+    runtime: {
+      node: {
+        executable: process.execPath,
+        version: process.version,
+        platform: process.platform,
+        arch: process.arch,
+      },
+      chrome,
+    },
     voice: {
       path: workspaceRelative(VOICE_PATH),
       ...voice,
@@ -758,19 +1269,57 @@ async function captureRuntimeContext(renderConfig) {
   };
   return {
     ...context,
+    scheduleConfig: {interChunkPauseMs: renderConfig.interChunkPauseMs},
     runtimeFingerprint: sha256Text(stableStringify(context)),
   };
 }
 
+async function captureConfiguredProtectedArtifacts() {
+  const records = [];
+  for (const artifact of CONFIGURED_RENDER_JOB.protectedArtifacts) {
+    const integrity = await inspectFile(artifact.path);
+    if (
+      integrity.bytes !== artifact.bytes ||
+      integrity.sha256 !== artifact.sha256
+    ) {
+      throw new Error(
+        `Protected render artifact changed: ${workspaceRelative(artifact.path)}`,
+      );
+    }
+    records.push({
+      path: workspaceRelative(artifact.path),
+      ...integrity,
+    });
+  }
+  return records;
+}
+
 async function captureBaseContext(renderConfig) {
+  if (CONFIGURED_RENDER_JOB) {
+    const [runtime, protectedArtifacts] = await Promise.all([
+      captureRuntimeContext(renderConfig),
+      captureConfiguredProtectedArtifacts(),
+    ]);
+    const {scheduleConfig, ...runtimeMedia} = runtime;
+    const context = {
+      ...runtimeMedia,
+      safety: {protectedArtifacts},
+    };
+    return {
+      ...context,
+      scheduleConfig,
+      inputFingerprint: sha256Text(stableStringify(context)),
+    };
+  }
   const [runtime, protectedBaselines, reviewInputs] = await Promise.all([
     captureRuntimeContext(renderConfig),
     captureWideV004ProtectedBaselines(),
     captureWideV004ReviewInputs(),
   ]);
   const changedPathsFromV003 = assertWideV004InputsChanged(reviewInputs);
+  const {scheduleConfig, ...runtimeMedia} = runtime;
   const context = {
-    ...runtime,
+    ...runtimeMedia,
     safety: {
       protectedBaselines,
       reviewInputs,
@@ -779,6 +1328,7 @@ async function captureBaseContext(renderConfig) {
   };
   return {
     ...context,
+    scheduleConfig,
     inputFingerprint: sha256Text(stableStringify(context)),
   };
 }
@@ -789,6 +1339,24 @@ async function assertLocalChrome() {
     throw new Error("The configured local Chrome executable is not a regular file");
   }
   await access(CHROME_EXECUTABLE, fsConstants.R_OK | fsConstants.X_OK);
+}
+
+async function captureLocalChromeIdentity() {
+  await assertLocalChrome();
+  const details = await lstat(CHROME_EXECUTABLE);
+  const {stdout, stderr} = await execFileAsync(CHROME_EXECUTABLE, ["--version"], {
+    encoding: "utf8",
+    timeout: 10_000,
+    maxBuffer: 1024 * 1024,
+  });
+  const version = `${stdout ?? ""}${stderr ?? ""}`.trim();
+  if (!version) throw new Error("Local Chrome did not report a version");
+  return {
+    path: CHROME_EXECUTABLE,
+    version,
+    bytes: details.size,
+    modifiedAt: details.mtime.toISOString(),
+  };
 }
 
 function assertLocalMediaDownload(src) {
@@ -803,7 +1371,7 @@ function assertLocalMediaDownload(src) {
   }
 }
 
-async function ensureBundle(baseContext) {
+async function ensureBundle(baseContext, attemptToken) {
   const sentinelPath = resolve(BUNDLE_DIRECTORY, BUNDLE_CONTEXT_FILE);
   if (await pathExists(BUNDLE_DIRECTORY)) {
     const sentinel = JSON.parse(await readFile(sentinelPath, "utf8"));
@@ -813,10 +1381,10 @@ async function ensureBundle(baseContext) {
       );
     }
   } else {
-    const partDirectory = `${BUNDLE_DIRECTORY}.part-${process.pid}`;
+    const partDirectory = attemptScopedPartPath(`${BUNDLE_DIRECTORY}.part`, attemptToken);
     assertInside(WORK_DIRECTORY, partDirectory, "bundle part");
     await assertAbsent(partDirectory);
-    activePartPaths.add(partDirectory);
+    registerActivePart(partDirectory, attemptToken);
     await bundle({
       entryPoint: ENTRY_POINT,
       publicDir: PUBLIC_ROOT,
@@ -840,7 +1408,7 @@ async function ensureBundle(baseContext) {
       "utf8",
     );
     await rename(partDirectory, BUNDLE_DIRECTORY);
-    activePartPaths.delete(partDirectory);
+    unregisterActivePart(partDirectory, attemptToken);
   }
   return fingerprintPaths([BUNDLE_DIRECTORY], {
     baseDirectory: BUNDLE_DIRECTORY,
@@ -862,13 +1430,14 @@ async function mediaToolIdentity() {
   };
 }
 
-async function loadOrCreateRunManifest(renderConfig) {
+async function loadOrCreateRunManifest(renderConfig, attemptToken) {
   const baseContext = await captureBaseContext(renderConfig);
-  const bundleFingerprint = await ensureBundle(baseContext);
+  const bundleFingerprint = await ensureBundle(baseContext, attemptToken);
   const tools = await mediaToolIdentity();
   const ranges = buildChunkRanges({chunkFrames: renderConfig.chunkFrames});
+  const {scheduleConfig, ...immutableBaseContext} = baseContext;
   const fingerprintPayload = {
-    ...baseContext,
+    ...immutableBaseContext,
     bundle: bundleFingerprint,
     tools,
     ranges,
@@ -879,6 +1448,7 @@ async function loadOrCreateRunManifest(renderConfig) {
     createdAt: new Date().toISOString(),
     runFingerprint,
     ...fingerprintPayload,
+    scheduleConfig,
     paths: {
       workDirectory: workspaceRelative(WORK_DIRECTORY),
       chunksDirectory: workspaceRelative(CHUNKS_DIRECTORY),
@@ -911,21 +1481,13 @@ async function loadOrCreateRunManifest(renderConfig) {
   };
   if (await pathExists(RUN_MANIFEST_PATH)) {
     const existing = JSON.parse(await readFile(RUN_MANIFEST_PATH, "utf8"));
-    if (
-      existing.runFingerprint !== runFingerprint ||
-      existing.renderConfig?.chunkFrames !== renderConfig.chunkFrames ||
-      existing.renderConfig?.interChunkPauseMs !== renderConfig.interChunkPauseMs
-    ) {
-      throw new Error(
-        "Resume manifest does not match source/git/bundle/voice/chunk/pause settings",
-      );
-    }
-    return existing;
+    return assertResumableRunManifest(existing, expected);
   }
   await writeJsonAtomically(
     RUN_MANIFEST_PATH,
     expected,
-    `${RUN_MANIFEST_PATH}.part-${process.pid}`,
+    attemptScopedPartPath(`${RUN_MANIFEST_PATH}.part`, attemptToken),
+    attemptToken,
   );
   return expected;
 }
@@ -945,6 +1507,16 @@ async function assertManifestStillCurrent(manifest) {
 }
 
 async function assertSafetyStillCurrent(manifest) {
+  if (CONFIGURED_RENDER_JOB) {
+    const protectedArtifacts = await captureConfiguredProtectedArtifacts();
+    if (
+      stableStringify(protectedArtifacts) !==
+      stableStringify(manifest.safety.protectedArtifacts)
+    ) {
+      throw new Error("Protected render artifacts changed during the run");
+    }
+    return;
+  }
   const [protectedBaselines, reviewInputs] = await Promise.all([
     captureWideV004ProtectedBaselines(),
     captureWideV004ReviewInputs(),
@@ -1006,7 +1578,6 @@ async function inspectChunkForResume(
         validation,
         expectedCodecMetadata,
         chunkFrames: manifest.renderConfig.chunkFrames,
-        interChunkPauseMs: manifest.renderConfig.interChunkPauseMs,
       }),
       paths,
       record,
@@ -1018,176 +1589,23 @@ async function inspectChunkForResume(
   }
 }
 
-async function runChunkWorker(manifest, range, expectedCodecMetadata) {
-  const paths = chunkPaths(range);
-  await preserveStale(
-    [paths.output, paths.metadata, paths.part, paths.metadataPart],
-    "not-resumable",
-  );
-  const codecArgument = expectedCodecMetadata
-    ? Buffer.from(JSON.stringify(expectedCodecMetadata)).toString("base64url")
-    : "none";
-  const logHandle = await open(paths.log, "a");
-  try {
-    await appendFile(
-      paths.log,
-      `\n=== worker start ${new Date().toISOString()} range ${range.start}-${range.end} ===\n`,
-      "utf8",
-    );
-    const child = spawn(
-      process.execPath,
-      [
-        SCRIPT_PATH,
-        "--worker",
-        "--manifest",
-        RUN_MANIFEST_PATH,
-        "--chunk-index",
-        String(range.index),
-        "--chunk-frames",
-        String(manifest.renderConfig.chunkFrames),
-        "--inter-chunk-pause-ms",
-        String(manifest.renderConfig.interChunkPauseMs),
-        "--expected-codec-base64",
-        codecArgument,
-      ],
-      {
-        cwd: STUDIO_ROOT,
-        stdio: ["ignore", logHandle.fd, logHandle.fd],
-      },
-    );
-    activeWorker = child;
-    const exitCode = await new Promise((resolveExit, reject) => {
-      child.once("error", reject);
-      child.once("exit", (code, signal) => {
-        if (signal) reject(new Error(`Chunk worker stopped by ${signal}`));
-        else resolveExit(code);
-      });
-    });
-    if (exitCode !== 0) {
-      throw new Error(
-        `Chunk ${range.index} worker exited with ${exitCode}; see ${workspaceRelative(paths.log)}`,
-      );
-    }
-  } finally {
-    activeWorker = null;
-    await logHandle.close();
-  }
-}
-
-async function renderChunkWorker(options) {
-  if (!options.manifestPath || options.chunkIndex === null) {
-    throw new Error("Worker mode requires --manifest and --chunk-index");
-  }
-  const manifest = JSON.parse(await readFile(options.manifestPath, "utf8"));
-  if (
-    manifest.renderConfig?.chunkFrames !== options.chunkFrames ||
-    manifest.renderConfig?.interChunkPauseMs !== options.interChunkPauseMs
-  ) {
-    throw new Error("Worker CLI settings do not match the immutable run manifest");
-  }
-  const range = manifest.ranges?.[options.chunkIndex];
-  if (!range) throw new Error(`Unknown chunk index ${options.chunkIndex}`);
-  const expectedCodecMetadata =
-    options.expectedCodecBase64 && options.expectedCodecBase64 !== "none"
-      ? JSON.parse(
-          Buffer.from(options.expectedCodecBase64, "base64url").toString("utf8"),
-        )
-      : null;
-  const paths = chunkPaths(range);
-  assertInside(CHUNKS_DIRECTORY, paths.part, "chunk part");
-  activePartPaths.add(paths.part);
-  activePartPaths.add(paths.metadataPart);
-  installSignalHandlers();
-  await assertManifestStillCurrent(manifest);
-  await assertLocalChrome();
-  await assertAbsent(paths.output);
-  await assertAbsent(paths.metadata);
-  await assertAbsent(paths.part);
-  await assertAbsent(paths.metadataPart);
-
-  const episode = JSON.parse(await readFile(EPISODE_PATH, "utf8"));
-  const inputProps = {episode};
-  const composition = await selectComposition({
-    serveUrl: BUNDLE_DIRECTORY,
-    id: CHUNKED_V004_CONTRACT.compositionId,
-    inputProps,
-    browserExecutable: CHROME_EXECUTABLE,
-    chromeMode: "chrome-for-testing",
-    onBrowserDownload: () => {
-      throw new Error("Browser download is disabled; local Chrome is required");
-    },
-    logLevel: "warn",
-  });
-  const compositionContract = {
-    id: composition.id,
-    width: composition.width,
-    height: composition.height,
-    fps: composition.fps,
-    durationInFrames: composition.durationInFrames,
-  };
-  const expectedComposition = {
-    id: CHUNKED_V004_CONTRACT.compositionId,
-    width: 1920,
-    height: 1080,
-    fps: 30,
-    durationInFrames: 18_000,
-  };
-  if (stableStringify(compositionContract) !== stableStringify(expectedComposition)) {
-    throw new Error(`Composition contract changed: ${JSON.stringify(compositionContract)}`);
-  }
-
-  const {cancel, cancelSignal} = makeCancelSignal();
-  activeCancellations.add(cancel);
-  try {
-    await renderMedia({
-      composition,
-      serveUrl: BUNDLE_DIRECTORY,
-      outputLocation: paths.part,
-      inputProps,
-      browserExecutable: CHROME_EXECUTABLE,
-      chromeMode: "chrome-for-testing",
-      onBrowserDownload: () => {
-        throw new Error("Browser download is disabled; local Chrome is required");
-      },
-      codec: "h264",
-      pixelFormat: "yuv420p",
-      crf: CHUNKED_V004_CONTRACT.crf,
-      concurrency: 1,
-      frameRange: [range.start, range.end],
-      imageFormat: "png",
-      muted: true,
-      enforceAudioTrack: false,
-      onDownload: assertLocalMediaDownload,
-      overwrite: false,
-      logLevel: "warn",
-      cancelSignal,
-    });
-  } finally {
-    activeCancellations.delete(cancel);
-  }
-
-  const rawProbe = await probeMedia(paths.part, paths.log);
-  const validation = evaluateChunkProbe(
-    rawProbe,
-    range,
-    expectedCodecMetadata,
-  );
-  assertValidation(`Chunk ${range.index}`, validation);
-  const integrity = await inspectFile(paths.part);
-  await rename(paths.part, paths.output);
-  activePartPaths.delete(paths.part);
-  const record = {
-    schemaVersion: "agent-skill-long-review-wide-v004-chunk-v1",
+function buildChunkRecord(manifest, range, integrity, validation, timing) {
+  return {
+    schemaVersion: CHUNK_RECORD_SCHEMA_VERSION,
     runFingerprint: manifest.runFingerprint,
     chunkFrames: manifest.renderConfig.chunkFrames,
-    interChunkPauseMs: manifest.renderConfig.interChunkPauseMs,
     range,
     file: {
-      path: workspaceRelative(paths.output),
+      path: workspaceRelative(chunkPaths(range).output),
       ...integrity,
     },
     probeSha256: validation.probeSha256,
     codecMetadata: validation.media.codecMetadata,
+    decoding: {
+      videoDecodedWithoutError: true,
+      mode: "sequential-rawvideo-null",
+    },
+    timing,
     media: {
       durationSeconds: validation.media.durationSeconds,
       frameCount: validation.media.frameCount,
@@ -1200,8 +1618,297 @@ async function renderChunkWorker(options) {
     },
     validatedAt: new Date().toISOString(),
   };
-  await writeJsonAtomically(paths.metadata, record, paths.metadataPart);
-  activePartPaths.delete(paths.metadataPart);
+}
+
+async function runChunkWorker(
+  manifest,
+  range,
+  expectedCodecMetadata,
+  attemptToken,
+  jobLock,
+) {
+  const workerObservationStartedMs = Date.now();
+  const workerStartedAt = new Date(workerObservationStartedMs).toISOString();
+  const paths = chunkPaths(range, attemptToken);
+  await preserveStale(
+    [paths.output, paths.metadata],
+    "not-resumable",
+  );
+  await assertAbsent(paths.part, workspaceRelative(paths.part));
+  await assertAbsent(paths.metadataPart, workspaceRelative(paths.metadataPart));
+  registerActivePart(paths.part, attemptToken);
+  registerActivePart(paths.metadataPart, attemptToken);
+  const codecArgument = expectedCodecMetadata
+    ? Buffer.from(JSON.stringify(expectedCodecMetadata)).toString("base64url")
+    : "none";
+  const rawManifest = await readFile(RUN_MANIFEST_PATH);
+  const currentManifest = JSON.parse(rawManifest.toString("utf8"));
+  if (stableStringify(currentManifest) !== stableStringify(manifest)) {
+    throw new Error("Immutable run manifest changed before worker dispatch");
+  }
+  const manifestSha256 = sha256Text(rawManifest);
+  const logHandle = await open(paths.log, "a");
+  let child = null;
+  try {
+    await appendFile(
+      paths.log,
+      `\n=== worker start ${new Date().toISOString()} range ${range.start}-${range.end} ===\n`,
+      "utf8",
+    );
+    child = spawn(
+      process.execPath,
+      [
+        SCRIPT_PATH,
+        "--worker",
+        "--manifest",
+        RUN_MANIFEST_PATH,
+        "--expected-manifest-sha256",
+        manifestSha256,
+        "--chunk-index",
+        String(range.index),
+        "--chunk-frames",
+        String(manifest.renderConfig.chunkFrames),
+        "--expected-codec-base64",
+        codecArgument,
+        "--attempt-token",
+        attemptToken,
+      ],
+      {
+        cwd: STUDIO_ROOT,
+        stdio: ["ignore", logHandle.fd, logHandle.fd, "ipc"],
+      },
+    );
+    activeWorker = child;
+    const exitPromise = new Promise((resolveExit, reject) => {
+      child.once("error", reject);
+      child.once("exit", (code, signal) => {
+        if (signal) reject(new Error(`Chunk worker stopped by ${signal}`));
+        else resolveExit(code);
+      });
+    });
+    const bindingPromise = new Promise((resolveBinding, rejectBinding) => {
+      child.send(
+        {
+          protocol: LONG_REVIEW_RENDER_PARENT_BINDING_PROTOCOL,
+          attemptToken,
+        },
+        (error) => error ? rejectBinding(error) : resolveBinding(),
+      );
+    });
+    const [exitCode] = await Promise.all([exitPromise, bindingPromise]);
+    if (exitCode !== 0) {
+      throw new Error(
+        `Chunk ${range.index} worker exited with ${exitCode}; see ${workspaceRelative(paths.log)}`,
+      );
+    }
+    jobLock.assertOwned();
+    await assertManifestStillCurrent(manifest);
+    const rawProbe = await probeMedia(paths.part, paths.log);
+    const validation = evaluateChunkProbe(
+      rawProbe,
+      range,
+      expectedCodecMetadata,
+    );
+    assertValidation(`Chunk ${range.index}`, validation);
+    await assertVideoFullyDecodable(paths.part, paths.log);
+    jobLock.assertOwned();
+    const decodedAtMs = Date.now();
+    const integrity = await inspectFile(paths.part);
+    const record = buildChunkRecord(manifest, range, integrity, validation, {
+      workerStartedAt,
+      decodedAt: new Date(decodedAtMs).toISOString(),
+      parentWorkerElapsedSeconds:
+        (decodedAtMs - workerObservationStartedMs) / 1_000,
+    });
+    await writeFile(paths.metadataPart, `${JSON.stringify(record, null, 2)}\n`, {
+      encoding: "utf8",
+      flag: "wx",
+    });
+    jobLock.assertOwned();
+    await jobLock.publishAttemptPair({
+      attemptToken,
+      videoPartPath: paths.part,
+      videoPath: paths.output,
+      metadataPartPath: paths.metadataPart,
+      metadataPath: paths.metadata,
+    });
+    unregisterActivePart(paths.part, attemptToken);
+    unregisterActivePart(paths.metadataPart, attemptToken);
+  } finally {
+    if (child && child.exitCode === null && child.signalCode === null) {
+      child.kill("SIGTERM");
+    }
+    activeWorker = null;
+    await logHandle.close();
+  }
+}
+
+async function renderChunkWorker(options) {
+  if (!options.manifestPath || options.chunkIndex === null) {
+    throw new Error("Worker mode requires --manifest and --chunk-index");
+  }
+  if (resolve(options.manifestPath) !== RUN_MANIFEST_PATH) {
+    throw new Error("Worker --manifest must match the configured immutable run manifest");
+  }
+  await assertPlainFile(RUN_MANIFEST_PATH, "worker run manifest");
+  if (!HASH_PATTERN.test(options.expectedManifestSha256 ?? "")) {
+    throw new Error("Worker mode requires --expected-manifest-sha256");
+  }
+  const attemptToken = assertAttemptToken(options.attemptToken);
+  const attemptCapability = activateAttempt(attemptToken);
+  const parentBinding = bindLongReviewRenderWorkerToParent({
+    attemptToken,
+    handshakeTimeoutMs: 30_000,
+    onParentLost() {
+      terminating = true;
+      terminationSignal = "PARENT_DISCONNECT";
+      for (const cancel of activeCancellations) cancel();
+    },
+  });
+  try {
+    await parentBinding.ready;
+    parentBinding.assertConnected();
+    return await renderBoundChunkWorker(options, attemptToken, parentBinding);
+  } finally {
+    parentBinding.dispose();
+    if (process.connected) process.disconnect();
+    try {
+      await cleanupActiveParts(attemptCapability);
+    } finally {
+      deactivateAttempt(attemptCapability);
+    }
+  }
+}
+
+async function renderBoundChunkWorker(options, attemptToken, parentBinding) {
+  assertLongReviewFromSurfaceEnvironment();
+  const rawManifest = await readFile(RUN_MANIFEST_PATH);
+  if (sha256Text(rawManifest) !== options.expectedManifestSha256) {
+    throw new Error("Worker run manifest changed after parent validation");
+  }
+  const manifest = JSON.parse(rawManifest.toString("utf8"));
+  if (
+    manifest.renderConfig?.chunkFrames !== options.chunkFrames
+  ) {
+    throw new Error("Worker CLI settings do not match the immutable run manifest");
+  }
+  const range = manifest.ranges?.[options.chunkIndex];
+  if (!range) throw new Error(`Unknown chunk index ${options.chunkIndex}`);
+  const expectedCodecMetadata =
+    options.expectedCodecBase64 && options.expectedCodecBase64 !== "none"
+      ? JSON.parse(
+          Buffer.from(options.expectedCodecBase64, "base64url").toString("utf8"),
+        )
+      : null;
+  const paths = chunkPaths(range, attemptToken);
+  assertInside(CHUNKS_DIRECTORY, paths.part, "chunk part");
+  registerActivePart(paths.part, attemptToken);
+  installSignalHandlers();
+  await assertManifestStillCurrent(manifest);
+  await assertLocalChrome();
+  await assertAbsent(paths.part);
+  parentBinding.assertConnected();
+
+  const episode = JSON.parse(await readFile(EPISODE_PATH, "utf8"));
+  const inputProps = buildLongReviewRenderInputProps(episode);
+  browserOpening = true;
+  let browser;
+  try {
+    browser = await openBrowser("chrome", {
+      browserExecutable: CHROME_EXECUTABLE,
+      chromeMode: "chrome-for-testing",
+      chromiumOptions: CHUNKED_CHROMIUM_OPTIONS,
+      logLevel: "warn",
+    });
+    activeBrowsers.add(browser);
+  } finally {
+    browserOpening = false;
+  }
+  try {
+    if (terminating) {
+      throw new Error(`Render worker interrupted by ${terminationSignal ?? "signal"}`);
+    }
+    const composition = await selectComposition({
+      serveUrl: BUNDLE_DIRECTORY,
+      id: CHUNKED_V004_CONTRACT.compositionId,
+      inputProps,
+      browserExecutable: CHROME_EXECUTABLE,
+      chromeMode: "chrome-for-testing",
+      chromiumOptions: CHUNKED_CHROMIUM_OPTIONS,
+      puppeteerInstance: browser,
+      timeoutInMilliseconds: CHUNKED_REMOTION_TIMEOUT_MS,
+      onBrowserDownload: () => {
+        throw new Error("Browser download is disabled; local Chrome is required");
+      },
+      logLevel: "warn",
+    });
+    const compositionContract = {
+      id: composition.id,
+      width: composition.width,
+      height: composition.height,
+      fps: composition.fps,
+      durationInFrames: composition.durationInFrames,
+    };
+    const expectedComposition = {
+      id: CHUNKED_V004_CONTRACT.compositionId,
+      width: CHUNKED_V004_CONTRACT.width,
+      height: CHUNKED_V004_CONTRACT.height,
+      fps: CHUNKED_V004_CONTRACT.fps,
+      durationInFrames: CHUNKED_V004_CONTRACT.durationInFrames,
+    };
+    if (stableStringify(compositionContract) !== stableStringify(expectedComposition)) {
+      throw new Error(`Composition contract changed: ${JSON.stringify(compositionContract)}`);
+    }
+
+    const {cancel, cancelSignal} = makeCancelSignal();
+    activeCancellations.add(cancel);
+    try {
+      parentBinding.assertConnected();
+      await renderMedia({
+        composition,
+        serveUrl: BUNDLE_DIRECTORY,
+        outputLocation: paths.part,
+        inputProps,
+        browserExecutable: CHROME_EXECUTABLE,
+        chromeMode: "chrome-for-testing",
+        chromiumOptions: CHUNKED_CHROMIUM_OPTIONS,
+        puppeteerInstance: browser,
+        timeoutInMilliseconds: CHUNKED_REMOTION_TIMEOUT_MS,
+        onBrowserDownload: () => {
+          throw new Error("Browser download is disabled; local Chrome is required");
+        },
+        codec: "h264",
+        pixelFormat: "yuv420p",
+        crf: CHUNKED_V004_CONTRACT.crf,
+        concurrency: 1,
+        frameRange: [range.start, range.end],
+        imageFormat: "png",
+        hardwareAcceleration: "disable",
+        muted: true,
+        enforceAudioTrack: false,
+        onDownload: assertLocalMediaDownload,
+        overwrite: false,
+        logLevel: "warn",
+        cancelSignal,
+      });
+    } finally {
+      activeCancellations.delete(cancel);
+    }
+  } finally {
+    await closeTrackedBrowser(browser);
+  }
+
+  parentBinding.assertConnected();
+  const rawProbe = await probeMedia(paths.part, paths.log);
+  const validation = evaluateChunkProbe(
+    rawProbe,
+    range,
+    expectedCodecMetadata,
+  );
+  assertValidation(`Chunk ${range.index}`, validation);
+  await inspectFile(paths.part);
+  parentBinding.assertConnected();
+  unregisterActivePart(paths.part, attemptToken);
 }
 
 function concatEscape(filePath) {
@@ -1261,11 +1968,22 @@ export function buildMuxFfmpegArgs(videoPath, voicePath, outputPartPath) {
   ];
 }
 
-async function prepareConcatenatedVideo(manifest, chunkRecords, codecMetadata) {
+async function prepareConcatenatedVideo(
+  manifest,
+  chunkRecords,
+  codecMetadata,
+  attemptToken,
+) {
   const listPath = resolve(STAGING_DIRECTORY, "chunks.concat.txt");
-  const listPartPath = resolve(STAGING_DIRECTORY, "chunks.concat.part.txt");
+  const listPartPath = attemptScopedPartPath(
+    resolve(STAGING_DIRECTORY, "chunks.concat.part.txt"),
+    attemptToken,
+  );
   const outputPath = resolve(STAGING_DIRECTORY, "video-concat.mp4");
-  const outputPartPath = resolve(STAGING_DIRECTORY, "video-concat.part.mp4");
+  const outputPartPath = attemptScopedPartPath(
+    resolve(STAGING_DIRECTORY, "video-concat.part.mp4"),
+    attemptToken,
+  );
   const recordPath = resolve(STAGING_DIRECTORY, "video-concat.metadata.json");
   const orderedHash = sha256Text(
     stableStringify(chunkRecords.map((record) => record.file.sha256)),
@@ -1281,11 +1999,14 @@ async function prepareConcatenatedVideo(manifest, chunkRecords, codecMetadata) {
       const validation = evaluateConcatenatedProbe(rawProbe);
       if (
         validation.valid &&
+        record.schemaVersion === CONCAT_RECORD_SCHEMA_VERSION &&
         record.runFingerprint === manifest.runFingerprint &&
         record.orderedChunkSha256 === orderedHash &&
         record.file.sha256 === integrity.sha256 &&
         record.file.bytes === integrity.bytes &&
         record.probeSha256 === validation.probeSha256 &&
+        record.decoding?.videoDecodedWithoutError === true &&
+        record.decoding?.mode === "sequential-rawvideo-null" &&
         sameCodecMetadata(validation.media.codecMetadata, codecMetadata)
       ) {
         return {path: outputPath, integrity, validation, record};
@@ -1301,11 +2022,11 @@ async function prepareConcatenatedVideo(manifest, chunkRecords, codecMetadata) {
   const listContents = `${manifest.ranges
     .map((range) => `file '${concatEscape(chunkPaths(range).output)}'`)
     .join("\n")}\n`;
-  activePartPaths.add(listPartPath);
+  registerActivePart(listPartPath, attemptToken);
   await writeFile(listPartPath, listContents, {encoding: "utf8", flag: "wx"});
   await rename(listPartPath, listPath);
-  activePartPaths.delete(listPartPath);
-  activePartPaths.add(outputPartPath);
+  unregisterActivePart(listPartPath, attemptToken);
+  registerActivePart(outputPartPath, attemptToken);
   await callBundledTool(
     "ffmpeg",
     buildConcatFfmpegArgs(listPath, outputPartPath),
@@ -1320,28 +2041,40 @@ async function prepareConcatenatedVideo(manifest, chunkRecords, codecMetadata) {
   if (!sameCodecMetadata(validation.media.codecMetadata, codecMetadata)) {
     throw new Error("Concatenation changed H.264 codec metadata");
   }
+  await assertVideoFullyDecodable(
+    outputPartPath,
+    resolve(LOGS_DIRECTORY, "concat-decode.log"),
+  );
   await rename(outputPartPath, outputPath);
-  activePartPaths.delete(outputPartPath);
+  unregisterActivePart(outputPartPath, attemptToken);
   const record = {
-    schemaVersion: "agent-skill-long-review-wide-v004-concat-v1",
+    schemaVersion: CONCAT_RECORD_SCHEMA_VERSION,
     runFingerprint: manifest.runFingerprint,
     orderedChunkSha256: orderedHash,
     file: {path: workspaceRelative(outputPath), ...integrity},
     probeSha256: validation.probeSha256,
     codecMetadata: validation.media.codecMetadata,
+    decoding: {
+      videoDecodedWithoutError: true,
+      mode: "sequential-rawvideo-null",
+    },
     validatedAt: new Date().toISOString(),
   };
   await writeJsonAtomically(
     recordPath,
     record,
-    `${recordPath}.part-${process.pid}`,
+    attemptScopedPartPath(`${recordPath}.part`, attemptToken),
+    attemptToken,
   );
   return {path: outputPath, integrity, validation, record};
 }
 
-async function prepareMuxedVideo(manifest, concatenated, codecMetadata) {
+async function prepareMuxedVideo(manifest, concatenated, codecMetadata, attemptToken) {
   const outputPath = resolve(STAGING_DIRECTORY, "review-10m.validated.mp4");
-  const outputPartPath = resolve(STAGING_DIRECTORY, "review-10m.part.mp4");
+  const outputPartPath = attemptScopedPartPath(
+    resolve(STAGING_DIRECTORY, "review-10m.part.mp4"),
+    attemptToken,
+  );
   const recordPath = resolve(STAGING_DIRECTORY, "review-10m.metadata.json");
   if ((await pathExists(outputPath)) && (await pathExists(recordPath))) {
     try {
@@ -1353,12 +2086,17 @@ async function prepareMuxedVideo(manifest, concatenated, codecMetadata) {
       const validation = evaluateFinalProbe(rawProbe, codecMetadata);
       if (
         validation.valid &&
+        record.schemaVersion === FINAL_MEDIA_RECORD_SCHEMA_VERSION &&
         record.runFingerprint === manifest.runFingerprint &&
         record.concatSha256 === concatenated.integrity.sha256 &&
         record.voiceSha256 === manifest.voice.sha256 &&
         record.file.sha256 === integrity.sha256 &&
         record.file.bytes === integrity.bytes &&
-        record.probeSha256 === validation.probeSha256
+        record.probeSha256 === validation.probeSha256 &&
+        record.decoding?.videoDecodedWithoutError === true &&
+        record.decoding?.audioDecodedWithoutError === true &&
+        record.decoding?.videoMode === "sequential-rawvideo-null" &&
+        record.decoding?.audioMode === "sequential-pcm-s16le-null"
       ) {
         return {path: outputPath, integrity, validation, record};
       }
@@ -1370,7 +2108,7 @@ async function prepareMuxedVideo(manifest, concatenated, codecMetadata) {
     [outputPath, outputPartPath, recordPath],
     "mux-invalid",
   );
-  activePartPaths.add(outputPartPath);
+  registerActivePart(outputPartPath, attemptToken);
   await callBundledTool(
     "ffmpeg",
     buildMuxFfmpegArgs(concatenated.path, VOICE_PATH, outputPartPath),
@@ -1382,10 +2120,18 @@ async function prepareMuxedVideo(manifest, concatenated, codecMetadata) {
   ]);
   const validation = evaluateFinalProbe(rawProbe, codecMetadata);
   assertValidation("Final muxed video", validation);
+  await assertVideoFullyDecodable(
+    outputPartPath,
+    resolve(LOGS_DIRECTORY, "mux-video-decode.log"),
+  );
+  await assertAudioFullyDecodable(
+    outputPartPath,
+    resolve(LOGS_DIRECTORY, "mux-audio-decode.log"),
+  );
   await rename(outputPartPath, outputPath);
-  activePartPaths.delete(outputPartPath);
+  unregisterActivePart(outputPartPath, attemptToken);
   const record = {
-    schemaVersion: "agent-skill-long-review-wide-v004-final-media-v1",
+    schemaVersion: FINAL_MEDIA_RECORD_SCHEMA_VERSION,
     runFingerprint: manifest.runFingerprint,
     concatSha256: concatenated.integrity.sha256,
     voiceSha256: manifest.voice.sha256,
@@ -1393,26 +2139,492 @@ async function prepareMuxedVideo(manifest, concatenated, codecMetadata) {
     probeSha256: validation.probeSha256,
     codecMetadata: validation.media.codecMetadata,
     audio: {codec: "aac", sampleRate: 48_000, bitrate: "192k"},
+    decoding: {
+      videoDecodedWithoutError: true,
+      audioDecodedWithoutError: true,
+      videoMode: "sequential-rawvideo-null",
+      audioMode: "sequential-pcm-s16le-null",
+    },
     validatedAt: new Date().toISOString(),
   };
   await writeJsonAtomically(
     recordPath,
     record,
-    `${recordPath}.part-${process.pid}`,
+    attemptScopedPartPath(`${recordPath}.part`, attemptToken),
+    attemptToken,
   );
   return {path: outputPath, integrity, validation, record};
 }
 
-export async function publishValidatedOutputAtomically({
-  stagedVideoPath,
-  finalDirectory,
-  stagingDirectory,
-  manifest,
-  expectedIntegrity,
-}) {
+function publicationJobBinding(manifest) {
+  return {
+    finalManifestSchemaVersion: manifest?.schemaVersion ?? null,
+    runFingerprint: manifest?.runFingerprint ?? null,
+    jobId: manifest?.renderJob?.jobId ?? manifest?.contract?.jobId ?? null,
+    candidateVersion:
+      manifest?.renderJob?.candidateVersion ?? manifest?.contract?.candidateVersion ?? null,
+    episodeId: manifest?.contract?.episodeId ?? null,
+    compositionId: manifest?.contract?.compositionId ?? null,
+  };
+}
+
+function publicationIdentity({manifest, manifestBytes, integrity, attemptToken}) {
+  const jobBinding = publicationJobBinding(manifest);
+  return {
+    attemptToken: assertAttemptToken(attemptToken),
+    output: {
+      fileName: CHUNKED_V004_CONTRACT.outputFileName,
+      bytes: integrity.bytes,
+      sha256: integrity.sha256,
+    },
+    manifest: {
+      fileName: "review-manifest.json",
+      sha256: sha256Text(manifestBytes),
+    },
+    jobBinding,
+    jobBindingSha256: sha256Text(stableStringify(jobBinding)),
+  };
+}
+
+function publicationMarker(kind, identity, timestamp = new Date().toISOString()) {
+  return {
+    schemaVersion: PUBLICATION_STATE_SCHEMA_VERSION,
+    kind,
+    ...identity,
+    recordedAt: timestamp,
+  };
+}
+
+async function readStableJsonIfPresent(filePath, label) {
+  const contents = await readStablePlainFileIfPresent(filePath, label);
+  if (contents === null) return null;
+  return JSON.parse(contents.toString("utf8"));
+}
+
+function markerMatchesPublication(marker, kind, identity) {
+  const binding = identity.jobBinding;
+  const validJobBinding = Boolean(
+    binding?.finalManifestSchemaVersion === FINAL_MANIFEST_SCHEMA_VERSION &&
+      HASH_PATTERN.test(binding?.runFingerprint ?? "") &&
+      binding?.jobId === CHUNKED_V004_CONTRACT.jobId &&
+      binding?.candidateVersion === CHUNKED_V004_CONTRACT.candidateVersion &&
+      binding?.episodeId === CHUNKED_V004_CONTRACT.episodeId &&
+      binding?.compositionId === CHUNKED_V004_CONTRACT.compositionId
+  );
+  return Boolean(
+    validJobBinding &&
+    marker?.schemaVersion === PUBLICATION_STATE_SCHEMA_VERSION &&
+      marker?.kind === kind &&
+      marker?.attemptToken === identity.attemptToken &&
+      stableStringify(marker?.output) === stableStringify(identity.output) &&
+      stableStringify(marker?.manifest) === stableStringify(identity.manifest) &&
+      stableStringify(marker?.jobBinding) === stableStringify(identity.jobBinding) &&
+      marker?.jobBindingSha256 === identity.jobBindingSha256 &&
+      marker?.jobBindingSha256 ===
+        sha256Text(stableStringify(marker?.jobBinding ?? null)) &&
+      !Number.isNaN(Date.parse(marker?.recordedAt ?? ""))
+  );
+}
+
+export async function inspectLongReviewPublication(finalDirectory) {
+  if (arguments.length !== 1) {
+    throw new TypeError("inspectLongReviewPublication accepts only a final-directory path");
+  }
+  const resolvedFinalDirectory = resolve(finalDirectory);
+  if (!(await pathExists(resolvedFinalDirectory))) {
+    return {exists: false, valid: false, recoverable: false};
+  }
+  const finalDirectoryStat = await lstat(resolvedFinalDirectory, {bigint: true});
+  if (!finalDirectoryStat.isDirectory() || finalDirectoryStat.isSymbolicLink()) {
+    return {
+      exists: true,
+      valid: false,
+      recoverable: false,
+      error: {code: "publication_directory_unsafe", message: "Publication is not a plain directory"},
+    };
+  }
+  const outputPath = resolve(
+    resolvedFinalDirectory,
+    CHUNKED_V004_CONTRACT.outputFileName,
+  );
+  const manifestPath = resolve(resolvedFinalDirectory, "review-manifest.json");
+  const pendingPath = resolve(resolvedFinalDirectory, PUBLICATION_PENDING_FILE_NAME);
+  const receiptPath = resolve(resolvedFinalDirectory, PUBLICATION_RECEIPT_FILE_NAME);
+  try {
+    const [integrity, manifestBytes, pending, receipt] = await Promise.all([
+      inspectFile(outputPath),
+      readStablePlainFileIfPresent(manifestPath, "publication manifest"),
+      readStableJsonIfPresent(pendingPath, "publication pending marker"),
+      readStableJsonIfPresent(receiptPath, "publication durable receipt"),
+    ]);
+    if (manifestBytes === null) throw new Error("publication manifest is missing");
+    const finalDirectoryAfter = await lstat(resolvedFinalDirectory, {bigint: true});
+    if (
+      finalDirectoryAfter.isSymbolicLink() ||
+      !finalDirectoryAfter.isDirectory() ||
+      !sameStableFileStat(finalDirectoryStat, finalDirectoryAfter)
+    ) {
+      throw new Error("publication directory changed while being inspected");
+    }
+    const manifest = JSON.parse(manifestBytes.toString("utf8"));
+    const identityMarker = receipt ?? pending;
+    if (!identityMarker) {
+      return {
+        exists: true,
+        valid: false,
+        recoverable: false,
+        outputPath,
+        manifestPath,
+        pendingPath,
+        receiptPath,
+        error: {code: "publication_marker_missing", message: "Publication marker is missing"},
+      };
+    }
+    const identity = publicationIdentity({
+      manifest,
+      manifestBytes,
+      integrity,
+      attemptToken: identityMarker.attemptToken,
+    });
+    const pendingValid = markerMatchesPublication(
+      pending,
+      "durability_unknown",
+      identity,
+    );
+    const durableReceiptValid = markerMatchesPublication(
+      receipt,
+      "durable_receipt",
+      identity,
+    );
+    const valid = pendingValid || durableReceiptValid;
+    return {
+      exists: true,
+      valid,
+      recoverable: valid && pendingValid,
+      status: durableReceiptValid ? "durable_receipt_present" : "durability_unknown",
+      pendingValid,
+      durableReceiptValid,
+      finalDirectory: resolvedFinalDirectory,
+      outputPath,
+      manifestPath,
+      pendingPath,
+      receiptPath,
+      integrity,
+      manifest,
+      identity,
+      ...(valid
+        ? {}
+        : {
+            error: {
+              code: "publication_binding_invalid",
+              message: "Publication media, manifest, and marker binding do not match",
+            },
+          }),
+    };
+  } catch (error) {
+    return {
+      exists: true,
+      valid: false,
+      recoverable: false,
+      finalDirectory: resolvedFinalDirectory,
+      outputPath,
+      manifestPath,
+      pendingPath,
+      receiptPath,
+      error: {
+        code: error?.code ?? "publication_inspection_failed",
+        message: error?.message ?? "Publication inspection failed",
+      },
+    };
+  }
+}
+
+function durableReceiptPartPath(finalDirectory, attemptToken) {
+  const resolvedFinalDirectory = resolve(finalDirectory);
+  return attemptScopedPartPath(
+    resolve(resolvedFinalDirectory, `${PUBLICATION_RECEIPT_FILE_NAME}.part`),
+    attemptToken,
+  );
+}
+
+async function removeDurableReceiptPart(finalDirectory, filePath, attemptToken) {
+  const resolvedFinalDirectory = resolve(finalDirectory);
+  const expectedPath = durableReceiptPartPath(resolvedFinalDirectory, attemptToken);
+  const resolvedPath = resolve(filePath);
+  if (resolvedPath !== expectedPath || dirname(resolvedPath) !== resolvedFinalDirectory) {
+    throw new Error("Refusing to remove an unexpected durable receipt part path");
+  }
+  const finalDirectoryStat = await lstat(resolvedFinalDirectory);
+  if (!finalDirectoryStat.isDirectory() || finalDirectoryStat.isSymbolicLink()) {
+    throw new Error("Publication directory must be a regular, non-symlink directory");
+  }
+  try {
+    const fileStat = await lstat(resolvedPath);
+    if (!fileStat.isFile() || fileStat.isSymbolicLink()) {
+      throw new Error("Durable receipt part must be a regular, non-symlink file");
+    }
+    await unlink(resolvedPath);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+}
+
+async function ensureDurablePublicationReceipt(
+  inspection,
+  {syncFile, syncDirectory},
+) {
+  const receipt = publicationMarker(
+    "durable_receipt",
+    inspection.identity,
+  );
+  if (await pathExists(inspection.receiptPath)) {
+    const existing = await readStableJsonIfPresent(
+      inspection.receiptPath,
+      "publication durable receipt",
+    );
+    if (!markerMatchesPublication(existing, "durable_receipt", inspection.identity)) {
+      throw new Error("Existing durable publication receipt does not match media and manifest");
+    }
+    await syncFile(inspection.receiptPath);
+    await syncDirectory(inspection.finalDirectory);
+    return {committed: true, cleanupWarnings: []};
+  }
+
+  const receiptAttemptToken = randomUUID();
+  const receiptPartPath = durableReceiptPartPath(
+    inspection.finalDirectory,
+    receiptAttemptToken,
+  );
+  let linked = false;
+  try {
+    await writeFile(receiptPartPath, `${JSON.stringify(receipt, null, 2)}\n`, {
+      encoding: "utf8",
+      flag: "wx",
+    });
+    await syncFile(receiptPartPath);
+    await link(receiptPartPath, inspection.receiptPath);
+    linked = true;
+    await syncFile(inspection.receiptPath);
+    await syncDirectory(inspection.finalDirectory);
+    const cleanupWarnings = [];
+    try {
+      await unlink(receiptPartPath);
+      await syncDirectory(inspection.finalDirectory);
+    } catch (error) {
+      cleanupWarnings.push({
+        stage: "durable_receipt_part_cleanup",
+        code: error?.code ?? "publication_receipt_part_cleanup_failed",
+        message: error?.message ?? "Durable receipt part cleanup failed",
+      });
+    }
+    return {committed: true, cleanupWarnings};
+  } catch (error) {
+    if (!linked) {
+      await removeDurableReceiptPart(
+        inspection.finalDirectory,
+        receiptPartPath,
+        receiptAttemptToken,
+      ).catch(() => undefined);
+    }
+    throw error;
+  }
+}
+
+function publicationResult(inspection, {durable, commitWarnings = []}) {
+  return {
+    finalDirectory: inspection.finalDirectory,
+    outputPath: inspection.outputPath,
+    integrity: inspection.integrity,
+    commitStatus: commitWarnings.length > 0
+      ? "committed_with_warnings"
+      : "committed",
+    commitWarnings,
+    durability: {
+      durable,
+      status: durable ? "durable" : "durability_unknown",
+      protocol: "positive-receipt-and-directory-fsync-v1",
+      pendingPath: inspection.pendingPath,
+      receiptPath: inspection.receiptPath,
+    },
+  };
+}
+
+function createLongReviewPublicationDurabilityUnknownError(publication) {
+  const finalDirectory = publication?.finalDirectory ?? null;
+  const outputPath = publication?.outputPath ?? null;
+  const error = new Error(
+    [
+      LONG_REVIEW_PUBLICATION_DURABILITY_UNKNOWN,
+      "the final directory rename committed, but a positive durable receipt was not confirmed",
+      finalDirectory ? `finalDirectory=${finalDirectory}` : null,
+      "inspect the existing publication read-only, then rerun the identical render command to confirm it in place; do not render, delete, or overwrite the committed media",
+    ].filter(Boolean).join(": "),
+  );
+  error.name = "LongReviewPublicationDurabilityUnknownError";
+  error.code = LONG_REVIEW_PUBLICATION_DURABILITY_UNKNOWN;
+  error.committed = true;
+  error.durable = false;
+  error.finalDirectory = finalDirectory;
+  error.outputPath = outputPath;
+  error.commitWarnings = publication?.commitWarnings ?? [];
+  error.recovery = Object.freeze({
+    inspectionMode: "read_only",
+    inspectionFunction: "inspectLongReviewPublication",
+    confirmationMode: "confirm_existing_publication_in_place",
+    instruction:
+      "Rerun the identical render command. It must inspect and confirm the existing publication without rendering or overwriting media.",
+    forbiddenActions: Object.freeze(["render", "overwrite", "delete"]),
+  });
+  return error;
+}
+
+function requireDurableLongReviewPublicationResult(publication) {
+  if (publication?.durability?.durable === true) return publication;
+  throw createLongReviewPublicationDurabilityUnknownError(publication);
+}
+
+export async function reportPublishedLongReviewPublication(finalDirectory) {
+  if (arguments.length !== 1 || typeof finalDirectory !== "string" || !finalDirectory) {
+    throw new TypeError(
+      "reportPublishedLongReviewPublication requires exactly one final-directory path",
+    );
+  }
+  const inspection = await inspectLongReviewPublication(finalDirectory);
+  if (!inspection.valid || !inspection.durableReceiptValid) {
+    throw createLongReviewPublicationDurabilityUnknownError({
+      finalDirectory: resolve(finalDirectory),
+      outputPath: inspection.outputPath ?? null,
+      commitWarnings: inspection.error ? [inspection.error] : [],
+    });
+  }
+  const durablePublication = publicationResult(inspection, {durable: true});
+  process.stdout.write(
+    `published ${workspaceRelative(durablePublication.outputPath)} (${durablePublication.integrity.sha256})\n`,
+  );
+  return durablePublication;
+}
+
+async function finishLongReviewPublication(
+  publication,
+  warningPrefix = "publication committed with warnings",
+) {
+  if (publication?.commitWarnings?.length > 0) {
+    process.stderr.write(`${warningPrefix}: ${JSON.stringify(publication.commitWarnings)}\n`);
+  }
+  requireDurableLongReviewPublicationResult(publication);
+  const verified = await reportPublishedLongReviewPublication(publication.finalDirectory);
+  if (
+    verified.outputPath !== publication.outputPath ||
+    stableStringify(verified.integrity) !== stableStringify(publication.integrity)
+  ) {
+    throw createLongReviewPublicationDurabilityUnknownError(publication);
+  }
+  return {
+    ...verified,
+    commitStatus: publication.commitStatus,
+    commitWarnings: publication.commitWarnings,
+  };
+}
+
+export async function confirmLongReviewPublicationDurability(finalDirectory) {
+  if (arguments.length !== 1) {
+    throw new TypeError(
+      "confirmLongReviewPublicationDurability does not accept dependency injection",
+    );
+  }
+  const syncFile = syncLongReviewRenderFile;
+  const syncDirectory = syncLongReviewRenderDirectory;
+  const before = await inspectLongReviewPublication(finalDirectory);
+  if (!before.valid) {
+    throw new Error(
+      `Cannot confirm invalid long-review publication: ${before.error?.message ?? "unknown"}`,
+    );
+  }
+  let receiptCommitted = false;
+  const commitWarnings = [];
+  try {
+    await Promise.all([
+      syncFile(before.outputPath),
+      syncFile(before.manifestPath),
+      ...(before.pendingValid ? [syncFile(before.pendingPath)] : []),
+      ...(before.durableReceiptValid ? [syncFile(before.receiptPath)] : []),
+    ]);
+    await syncDirectory(before.finalDirectory);
+    await syncDirectory(dirname(before.finalDirectory));
+    const verified = await inspectLongReviewPublication(finalDirectory);
+    if (!verified.valid || stableStringify(verified.identity) !== stableStringify(before.identity)) {
+      throw new Error("Publication changed during durability confirmation");
+    }
+    const receiptResult = await ensureDurablePublicationReceipt(verified, {
+      syncFile,
+      syncDirectory,
+    });
+    receiptCommitted = receiptResult.committed;
+    commitWarnings.push(...receiptResult.cleanupWarnings);
+    if (verified.pendingValid) {
+      try {
+        await unlink(verified.pendingPath);
+        await syncDirectory(verified.finalDirectory);
+      } catch (error) {
+        commitWarnings.push({
+          stage: "durability_unknown_marker_cleanup",
+          code: error?.code ?? "publication_pending_cleanup_failed",
+          message: error?.message ?? "Durability-unknown marker cleanup failed",
+        });
+      }
+    }
+  } catch (error) {
+    commitWarnings.push({
+      stage: "durability_confirmation",
+      code: error?.code ?? "publication_durability_confirmation_failed",
+      message: error?.message ?? "Publication durability confirmation failed",
+    });
+  }
+  const after = await inspectLongReviewPublication(finalDirectory);
+  return publicationResult(after.valid ? after : before, {
+    durable: receiptCommitted,
+    commitWarnings,
+  });
+}
+
+async function publishValidatedOutputAtomically(publicationOptions) {
+  if (arguments.length !== 1 || !publicationOptions || typeof publicationOptions !== "object") {
+    throw new TypeError(
+      "publishValidatedOutputAtomically requires exactly one publication options object",
+    );
+  }
+  const allowedOptionKeys = new Set([
+    "stagedVideoPath",
+    "finalDirectory",
+    "stagingDirectory",
+    "manifest",
+    "expectedIntegrity",
+    "attemptToken",
+  ]);
+  const unsupportedOption = Object.keys(publicationOptions)
+    .find((key) => !allowedOptionKeys.has(key));
+  if (unsupportedOption) {
+    throw new TypeError(
+      `publishValidatedOutputAtomically does not accept dependency injection: ${unsupportedOption}`,
+    );
+  }
+  const {
+    stagedVideoPath,
+    finalDirectory,
+    stagingDirectory,
+    manifest,
+    expectedIntegrity,
+    attemptToken = "00000000-0000-4000-8000-000000000000",
+  } = publicationOptions;
+  assertAttemptToken(attemptToken);
+  const syncPreRenameFile = syncLongReviewRenderFile;
+  const syncPreRenameDirectory = syncLongReviewRenderDirectory;
+  const syncPostRenameFile = syncLongReviewRenderFile;
+  const syncPostRenameDirectory = syncLongReviewRenderDirectory;
   const resolvedFinalDirectory = resolve(finalDirectory);
   const resolvedStagingDirectory = resolve(stagingDirectory);
   await assertAbsent(resolvedFinalDirectory, resolvedFinalDirectory);
+  await syncPreRenameFile(stagedVideoPath);
   const stagedIntegrity = await inspectFile(stagedVideoPath);
   if (
     stagedIntegrity.bytes !== expectedIntegrity.bytes ||
@@ -1421,11 +2633,11 @@ export async function publishValidatedOutputAtomically({
     throw new Error("Validated staging video integrity changed before publication");
   }
   await mkdir(resolvedStagingDirectory, {recursive: true});
-  const publicationPart = resolve(
-    resolvedStagingDirectory,
-    `.v004-publication-${process.pid}-${Date.now()}.part`,
+  const publicationPart = attemptScopedPartPath(
+    resolve(resolvedStagingDirectory, `${PUBLICATION_PART_PREFIX}.part`),
+    attemptToken,
   );
-  activePartPaths.add(publicationPart);
+  registerActivePart(publicationPart, attemptToken);
   await mkdir(publicationPart, {recursive: false});
   const publishedVideoPath = resolve(
     publicationPart,
@@ -1439,22 +2651,162 @@ export async function publishValidatedOutputAtomically({
   ) {
     throw new Error("Publication copy does not match the validated staging video");
   }
+  const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
+  const publishedManifestPath = resolve(publicationPart, "review-manifest.json");
+  await writeFile(publishedManifestPath, manifestBytes, {flag: "wx"});
+  const identity = publicationIdentity({
+    manifest,
+    manifestBytes,
+    integrity: copiedIntegrity,
+    attemptToken,
+  });
+  const pendingPath = resolve(publicationPart, PUBLICATION_PENDING_FILE_NAME);
   await writeFile(
-    resolve(publicationPart, "review-manifest.json"),
-    `${JSON.stringify(manifest, null, 2)}\n`,
+    pendingPath,
+    `${JSON.stringify(publicationMarker("durability_unknown", identity), null, 2)}\n`,
     {encoding: "utf8", flag: "wx"},
   );
+  await Promise.all([
+    syncPreRenameFile(publishedVideoPath),
+    syncPreRenameFile(publishedManifestPath),
+    syncPreRenameFile(pendingPath),
+  ]);
+  await syncPreRenameDirectory(publicationPart);
+  await syncPreRenameDirectory(resolvedStagingDirectory);
   await assertAbsent(resolvedFinalDirectory, resolvedFinalDirectory);
   await rename(publicationPart, resolvedFinalDirectory);
-  activePartPaths.delete(publicationPart);
-  return {
-    finalDirectory: resolvedFinalDirectory,
-    outputPath: resolve(
-      resolvedFinalDirectory,
-      CHUNKED_V004_CONTRACT.outputFileName,
-    ),
-    integrity: copiedIntegrity,
-  };
+  unregisterActivePart(publicationPart, attemptToken);
+
+  const initialInspection = await inspectLongReviewPublication(resolvedFinalDirectory);
+  const commitWarnings = [];
+  let receiptCommitted = false;
+  try {
+    await Promise.all([
+      syncPostRenameFile(initialInspection.outputPath),
+      syncPostRenameFile(initialInspection.manifestPath),
+      syncPostRenameFile(initialInspection.pendingPath),
+    ]);
+    await syncPostRenameDirectory(initialInspection.finalDirectory);
+    for (const directoryPath of new Set([
+      resolvedStagingDirectory,
+      dirname(resolvedFinalDirectory),
+    ])) {
+      await syncPostRenameDirectory(directoryPath);
+    }
+    const verified = await inspectLongReviewPublication(resolvedFinalDirectory);
+    if (!verified.valid || !verified.pendingValid) {
+      throw new Error("Publication changed after final directory rename");
+    }
+    const receiptResult = await ensureDurablePublicationReceipt(verified, {
+      syncFile: syncPostRenameFile,
+      syncDirectory: syncPostRenameDirectory,
+    });
+    receiptCommitted = receiptResult.committed;
+    commitWarnings.push(...receiptResult.cleanupWarnings);
+    try {
+      await unlink(verified.pendingPath);
+      await syncPostRenameDirectory(verified.finalDirectory);
+    } catch (error) {
+      commitWarnings.push({
+        stage: "durability_unknown_marker_cleanup",
+        code: error?.code ?? "publication_pending_cleanup_failed",
+        message: error?.message ?? "Durability-unknown marker cleanup failed",
+      });
+    }
+  } catch (error) {
+    commitWarnings.push({
+      stage: "post_rename_durability",
+      code: error?.code ?? "publication_post_rename_durability_failed",
+      message: error?.message ?? "Publication post-rename durability failed",
+    });
+  }
+  const finalInspection = await inspectLongReviewPublication(resolvedFinalDirectory);
+  return publicationResult(finalInspection.valid ? finalInspection : initialInspection, {
+    durable: receiptCommitted,
+    commitWarnings,
+  });
+}
+
+export function buildFirstChunkEta({
+  firstChunkElapsedSeconds,
+  totalChunks = 20,
+  completedChunks = 1,
+  interChunkPauseMs = 5_000,
+  calculatedAtMs = Date.now(),
+  runFingerprint = null,
+  observationSource = "fresh-parent-end-to-end",
+} = {}) {
+  if (!Number.isFinite(firstChunkElapsedSeconds) || firstChunkElapsedSeconds <= 0) {
+    throw new Error("firstChunkElapsedSeconds must be a positive finite number");
+  }
+  if (
+    !Number.isSafeInteger(totalChunks) ||
+    !Number.isSafeInteger(completedChunks) ||
+    totalChunks <= 0 ||
+    completedChunks < 1 ||
+    completedChunks > totalChunks
+  ) {
+    throw new Error("completedChunks must be within totalChunks");
+  }
+  if (!Number.isSafeInteger(interChunkPauseMs) || interChunkPauseMs < 0) {
+    throw new Error("interChunkPauseMs must be a non-negative integer");
+  }
+  const remainingChunks = totalChunks - completedChunks;
+  const remainingPauses = remainingChunks;
+  const estimatedRemainingSeconds = Math.ceil(
+    remainingChunks * firstChunkElapsedSeconds +
+      (remainingPauses * interChunkPauseMs) / 1_000,
+  );
+  return Object.freeze({
+    schemaVersion: "agent-skill-long-review-first-chunk-eta-v1",
+    runFingerprint,
+    calculatedAt: new Date(calculatedAtMs).toISOString(),
+    observationSource,
+    firstChunkElapsedSeconds,
+    completedChunks,
+    totalChunks,
+    remainingChunks,
+    remainingPauses,
+    interChunkPauseMs,
+    estimatedRemainingSeconds,
+    estimatedSegmentedRenderCompletionAt: new Date(
+      calculatedAtMs + estimatedRemainingSeconds * 1_000,
+    ).toISOString(),
+    scope:
+      "segmented render estimate only; concat, mux, subtitle overlay, machine QA, and visual review follow",
+    automaticContinuation: true,
+  });
+}
+
+async function writeFirstChunkEtaOnce(eta, attemptToken) {
+  if (await pathExists(FIRST_CHUNK_ETA_PATH)) {
+    await assertPlainFile(FIRST_CHUNK_ETA_PATH, "first-chunk ETA record");
+    const existing = JSON.parse(await readFile(FIRST_CHUNK_ETA_PATH, "utf8"));
+    const matchesRun =
+      existing.schemaVersion === eta.schemaVersion &&
+      existing.runFingerprint === eta.runFingerprint &&
+      existing.totalChunks === eta.totalChunks &&
+      existing.completedChunks === eta.completedChunks &&
+      existing.remainingChunks === eta.remainingChunks &&
+      existing.remainingPauses === eta.remainingPauses &&
+      existing.interChunkPauseMs === eta.interChunkPauseMs &&
+      existing.automaticContinuation === true &&
+      Number.isFinite(existing.firstChunkElapsedSeconds) &&
+      existing.firstChunkElapsedSeconds > 0 &&
+      Number.isSafeInteger(existing.estimatedRemainingSeconds) &&
+      existing.estimatedRemainingSeconds >= 0;
+    if (!matchesRun) {
+      throw new Error("Existing first-chunk ETA does not match this render run");
+    }
+    return existing;
+  }
+  await writeJsonAtomically(
+    FIRST_CHUNK_ETA_PATH,
+    eta,
+    attemptScopedPartPath(`${FIRST_CHUNK_ETA_PATH}.part`, attemptToken),
+    attemptToken,
+  );
+  return eta;
 }
 
 async function sleep(milliseconds) {
@@ -1462,84 +2814,191 @@ async function sleep(milliseconds) {
   await new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds));
 }
 
-export async function renderAgentSkillLongReviewWideV004Chunked({
-  chunkFrames = CHUNKED_V004_CONTRACT.defaultChunkFrames,
-  interChunkPauseMs = 0,
-} = {}) {
+export async function renderAgentSkillLongReviewWideV004Chunked(options = {}) {
+  if (arguments.length > 1 || !options || typeof options !== "object") {
+    throw new TypeError("long-review renderer accepts one options object");
+  }
+  const unsupportedOption = Object.keys(options)
+    .find((key) => !["chunkFrames", "interChunkPauseMs"].includes(key));
+  if (unsupportedOption) {
+    throw new TypeError(
+      `long-review renderer does not accept dependency injection: ${unsupportedOption}`,
+    );
+  }
+  assertLongReviewFromSurfaceEnvironment();
+  const {
+    chunkFrames = CHUNKED_V004_CONTRACT.defaultChunkFrames,
+    interChunkPauseMs = CHUNKED_V004_CONTRACT.defaultInterChunkPauseMs,
+  } = options;
   const ranges = buildChunkRanges({chunkFrames});
   const renderConfig = {chunkFrames, interChunkPauseMs};
   parseIntegerOption("interChunkPauseMs", interChunkPauseMs, {
     minimum: 0,
     maximum: 60_000,
   });
-  installSignalHandlers();
-  await assertAbsent(FINAL_DIRECTORY, workspaceRelative(FINAL_DIRECTORY));
-  await Promise.all([
-    mkdir(CHUNKS_DIRECTORY, {recursive: true}),
-    mkdir(STAGING_DIRECTORY, {recursive: true}),
-    mkdir(LOGS_DIRECTORY, {recursive: true}),
-  ]);
-  const manifest = await loadOrCreateRunManifest(renderConfig);
-  let codecMetadata = null;
-  const chunkRecords = [];
-  for (const range of ranges) {
-    if (terminating) throw new Error("Render interrupted");
-    await assertManifestStillCurrent(manifest);
-    let inspected = await inspectChunkForResume(manifest, range, codecMetadata);
-    if (!inspected.eligible) {
-      process.stdout.write(
-        `render chunk ${range.index + 1}/${ranges.length} frames ${range.start}-${range.end}\n`,
-      );
-      await runChunkWorker(manifest, range, codecMetadata);
-      inspected = await inspectChunkForResume(manifest, range, codecMetadata);
-      if (!inspected.eligible) {
-        throw new Error(`Freshly rendered chunk ${range.index} is not resumable`);
-      }
-    } else {
-      process.stdout.write(
-        `resume chunk ${range.index + 1}/${ranges.length} frames ${range.start}-${range.end}\n`,
-      );
-    }
-    codecMetadata ??= inspected.record.codecMetadata;
-    if (!sameCodecMetadata(inspected.record.codecMetadata, codecMetadata)) {
-      throw new Error(`Chunk ${range.index} codec metadata differs from chunk 0`);
-    }
-    chunkRecords.push(inspected.record);
-    if (range.index < ranges.length - 1) await sleep(interChunkPauseMs);
-  }
-  await assertManifestStillCurrent(manifest);
-  const concatenated = await prepareConcatenatedVideo(
-    manifest,
-    chunkRecords,
-    codecMetadata,
-  );
-  const muxed = await prepareMuxedVideo(manifest, concatenated, codecMetadata);
-  await assertManifestStillCurrent(manifest);
-  await assertSafetyStillCurrent(manifest);
-  const finalManifest = {
-    ...manifest,
-    schemaVersion: "agent-skill-long-review-wide-v004-chunked-final-v1",
-    completedAt: new Date().toISOString(),
-    chunks: chunkRecords,
-    concat: concatenated.record,
-    finalMedia: muxed.record,
-    publication: {
-      atomicDirectoryRename: true,
-      preservesWorkDirectories: ["chunks", "staging", "logs", "bundle"],
-      outputPath: workspaceRelative(FINAL_OUTPUT_PATH),
-    },
-  };
-  const publication = await publishValidatedOutputAtomically({
-    stagedVideoPath: muxed.path,
-    finalDirectory: FINAL_DIRECTORY,
-    stagingDirectory: STAGING_DIRECTORY,
-    manifest: finalManifest,
-    expectedIntegrity: muxed.integrity,
+  assertConfiguredLongReviewRenderProfile({
+    chunkFrames,
+    interChunkPauseMs,
   });
-  process.stdout.write(
-    `published ${workspaceRelative(publication.outputPath)} (${publication.integrity.sha256})\n`,
-  );
-  return publication;
+  installSignalHandlers();
+  await mkdir(WORK_DIRECTORY, {recursive: true});
+  const jobLock = await acquireLongReviewRenderJobLock(WORK_DIRECTORY, {
+    jobId: CHUNKED_V004_CONTRACT.jobId,
+    publicationDirectory: CHUNKS_DIRECTORY,
+  });
+  const attemptToken = jobLock.token;
+  const attemptCapability = activateAttempt(attemptToken);
+  try {
+    if (await pathExists(FINAL_DIRECTORY)) {
+      const existingPublication = await inspectLongReviewPublication(FINAL_DIRECTORY);
+      if (existingPublication.valid && existingPublication.pendingValid) {
+        jobLock.assertOwned();
+        const recovered = await confirmLongReviewPublicationDurability(FINAL_DIRECTORY);
+        jobLock.assertOwned();
+        return finishLongReviewPublication(
+          recovered,
+          "publication durability confirmation completed with warnings",
+        );
+      }
+      await assertAbsent(FINAL_DIRECTORY, workspaceRelative(FINAL_DIRECTORY));
+    }
+    await Promise.all([
+      mkdir(STAGING_DIRECTORY, {recursive: true}),
+      mkdir(LOGS_DIRECTORY, {recursive: true}),
+    ]);
+    if (CONFIGURED_RENDER_JOB) {
+      await assertLongReviewRenderJobFilesystemSafety(CONFIGURED_RENDER_JOB, {
+        workspaceRoot: WORKSPACE_ROOT,
+        jobConfigPath: RENDER_JOB_CONFIG_PATH,
+      });
+    }
+    const manifest = await loadOrCreateRunManifest(renderConfig, attemptToken);
+    let codecMetadata = null;
+    let firstChunkEta = null;
+    const chunkRecords = [];
+    for (const range of ranges) {
+      if (terminating) throw new Error("Render interrupted");
+      jobLock.assertOwned();
+      await assertManifestStillCurrent(manifest);
+      const chunkObservationStartedMs = Date.now();
+      let renderedFresh = false;
+      let inspected = await inspectChunkForResume(manifest, range, codecMetadata);
+      if (!inspected.eligible) {
+        process.stdout.write(
+          `render chunk ${range.index + 1}/${ranges.length} frames ${range.start}-${range.end}\n`,
+        );
+        await runChunkWorker(
+          manifest,
+          range,
+          codecMetadata,
+          attemptToken,
+          jobLock,
+        );
+        renderedFresh = true;
+        inspected = await inspectChunkForResume(manifest, range, codecMetadata);
+        if (!inspected.eligible) {
+          throw new Error(`Freshly rendered chunk ${range.index} is not resumable`);
+        }
+      } else {
+        process.stdout.write(
+          `resume chunk ${range.index + 1}/${ranges.length} frames ${range.start}-${range.end}\n`,
+        );
+      }
+      codecMetadata ??= inspected.record.codecMetadata;
+      if (!sameCodecMetadata(inspected.record.codecMetadata, codecMetadata)) {
+        throw new Error(`Chunk ${range.index} codec metadata differs from chunk 0`);
+      }
+      chunkRecords.push(inspected.record);
+      if (range.index === 0) {
+        const observedElapsedSeconds = renderedFresh
+          ? (Date.now() - chunkObservationStartedMs) / 1_000
+          : inspected.record.timing.parentWorkerElapsedSeconds;
+        jobLock.assertOwned();
+        firstChunkEta = await writeFirstChunkEtaOnce(
+          buildFirstChunkEta({
+            firstChunkElapsedSeconds: observedElapsedSeconds,
+            totalChunks: ranges.length,
+            completedChunks: 1,
+            interChunkPauseMs,
+            runFingerprint: manifest.runFingerprint,
+            observationSource: renderedFresh
+              ? "fresh-parent-end-to-end"
+              : "resumed-verified-chunk-metadata",
+          }),
+          attemptToken,
+        );
+        jobLock.assertOwned();
+        process.stdout.write(
+          `first chunk verified in ${observedElapsedSeconds.toFixed(1)}s; ` +
+            `estimated segmented-render ETA ${firstChunkEta.estimatedRemainingSeconds}s ` +
+            `(auto-continuing ${firstChunkEta.remainingChunks} chunks)\n`,
+        );
+      }
+      if (range.index < ranges.length - 1) await sleep(interChunkPauseMs);
+    }
+    jobLock.assertOwned();
+    await assertManifestStillCurrent(manifest);
+    const concatenated = await prepareConcatenatedVideo(
+      manifest,
+      chunkRecords,
+      codecMetadata,
+      attemptToken,
+    );
+    const muxed = await prepareMuxedVideo(
+      manifest,
+      concatenated,
+      codecMetadata,
+      attemptToken,
+    );
+    jobLock.assertOwned();
+    await assertManifestStillCurrent(manifest);
+    await assertSafetyStillCurrent(manifest);
+    if (CONFIGURED_RENDER_JOB) {
+      await assertLongReviewRenderJobFilesystemSafety(CONFIGURED_RENDER_JOB, {
+        workspaceRoot: WORKSPACE_ROOT,
+        jobConfigPath: RENDER_JOB_CONFIG_PATH,
+      });
+    }
+    const finalManifest = {
+      ...manifest,
+      schemaVersion: FINAL_MANIFEST_SCHEMA_VERSION,
+      completedAt: new Date().toISOString(),
+      ...(CONFIGURED_RENDER_JOB?.renderProfile
+        ? {
+            reviewStatus: CONFIGURED_RENDER_JOB.renderProfile.formalCandidate
+              ? "formal-candidate-awaiting-machine-and-visual-qa"
+              : "render-base-requires-external-subtitle-overlay",
+          }
+        : {}),
+      effectiveScheduleConfig: {interChunkPauseMs},
+      chunks: chunkRecords,
+      firstChunkEta,
+      concat: concatenated.record,
+      finalMedia: muxed.record,
+      publication: {
+        atomicDirectoryRename: true,
+        preservesWorkDirectories: ["chunks", "staging", "logs", "bundle"],
+        outputPath: workspaceRelative(FINAL_OUTPUT_PATH),
+      },
+    };
+    jobLock.assertOwned();
+    const publication = await publishValidatedOutputAtomically({
+      stagedVideoPath: muxed.path,
+      finalDirectory: FINAL_DIRECTORY,
+      stagingDirectory: STAGING_DIRECTORY,
+      manifest: finalManifest,
+      expectedIntegrity: muxed.integrity,
+      attemptToken,
+    });
+    return finishLongReviewPublication(publication);
+  } finally {
+    try {
+      await cleanupActiveParts(attemptCapability);
+    } finally {
+      deactivateAttempt(attemptCapability);
+      jobLock.release();
+    }
+  }
 }
 
 async function main() {
@@ -1562,7 +3021,14 @@ const isMain = process.argv[1] && resolve(process.argv[1]) === SCRIPT_PATH;
 if (isMain) {
   main().catch(async (error) => {
     try {
-      await cleanupActiveParts();
+      if (activeAttemptCapability) {
+        const attemptCapability = activeAttemptCapability;
+        try {
+          await cleanupActiveParts(attemptCapability);
+        } finally {
+          deactivateAttempt(attemptCapability);
+        }
+      }
     } catch (cleanupError) {
       process.stderr.write(`part cleanup failed: ${cleanupError.stack ?? cleanupError}\n`);
     }

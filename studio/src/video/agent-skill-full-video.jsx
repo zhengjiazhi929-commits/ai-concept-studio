@@ -22,6 +22,7 @@ import {
   agentSkillEvidenceViewportGeometry,
   agentSkillFullVideoProgressPixelsAt
 } from "./agent-skill-full-video-plan.mjs";
+import { VIDEO_SANS_FONT_FAMILY } from "./font-system.mjs";
 
 const palette = {
   paper: "#F5F6F2",
@@ -681,7 +682,7 @@ export function AgentSkillFullVideo({ episode }) {
       lang="zh-CN"
       style={{
         color: palette.ink,
-        fontFamily: '"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif',
+        fontFamily: VIDEO_SANS_FONT_FAMILY,
         overflow: "hidden"
       }}
     >

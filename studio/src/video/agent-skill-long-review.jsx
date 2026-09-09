@@ -14,6 +14,7 @@ import {
   VisualSystemV1PopText,
   VisualSystemV1SemanticNode,
   VisualSystemV1StandaloneIcon,
+  VisualSystemV1TechnicalArtifact,
   visualSystemV1ProgressAtFrame,
   visualSystemV1StandaloneOverlaySlot
 } from "./components/visual-system-v1/index.jsx";
@@ -27,6 +28,7 @@ import {
 import {
   AGENT_SKILL_LONG_REVIEW_CHAPTERS,
   AGENT_SKILL_LONG_REVIEW_CONNECTOR_TONES,
+  AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES,
   AGENT_SKILL_LONG_REVIEW_SCENE_START_FRAMES,
   AGENT_SKILL_LONG_REVIEW_SCENE_SPECS,
   AGENT_SKILL_LONG_REVIEW_TITLE_PREROLL_FRAMES,
@@ -41,7 +43,7 @@ import {
   longReviewVisualSceneCopy
 } from "./agent-skill-long-review-plan.mjs";
 
-const { palette, typography } = VISUAL_SYSTEM_V1;
+const { palette, typography, surfaceBorder } = VISUAL_SYSTEM_V1;
 
 const humanNodePattern = /(?:\bhuman\b|人工(?:决定|确认)|等待人工)/iu;
 const WIDE_BACKDROP_LOOP_SECONDS = 25;
@@ -109,6 +111,7 @@ function WideMovingBackdrop({ frameOverride = null }) {
   return (
     <div
       data-visual-system-wallpaper="three-edge-blobs-25s-seamless"
+      data-wallpaper-compositor-policy={VISUAL_SYSTEM_V1.wallpaper.compositorPolicy}
       data-wallpaper-loop-frames={periodFrames}
       data-wallpaper-sample-frame={frame}
       style={{ position: "absolute", inset: 0, overflow: "hidden", backgroundColor: palette.paper }}
@@ -128,11 +131,9 @@ function WideMovingBackdrop({ frameOverride = null }) {
               borderRadius: "50%",
               opacity: blob.opacity,
               background: `radial-gradient(ellipse at center, ${blob.color} 0%, ${blob.color} 34%, rgba(242,246,243,0) 74%)`,
-              filter: "blur(88px)",
               translate: `${position.x}px ${position.y}px`,
               scale: position.scale,
-              transformOrigin: "center center",
-              willChange: "translate, scale"
+              transformOrigin: "center center"
             }}
           />
         );
@@ -190,23 +191,25 @@ function AdaptiveSemanticGroups({ spec, layout }) {
   const labelledGroups = (spec.groups ?? []).filter((group) => group.label);
   if (labelledGroups.length === 0) return null;
   return labelledGroups.map((group) => {
-    const isCompleteBoundary = group.visualForm === "full-outline";
+    const isCompleteObjectBoundary = group.semanticMeaning === "complete-object-or-boundary";
     const groupProgress = longReviewSemanticGroupProgress(layout.state, group.nodeIds);
     if (groupProgress <= 0) return null;
     const bounds = longReviewResolvedSemanticGroupBounds(group, layout);
     if (!bounds) return null;
     const { left, right, top, bottom } = bounds;
+    const groupBorderColor = isCompleteObjectBoundary
+      ? surfaceBorder.semanticGroup.completeBoundaryColor
+      : surfaceBorder.semanticGroup.contextualColor;
     return (
       <div
         key={group.id}
         data-semantic-group-id={group.id}
-        data-semantic-group-role={isCompleteBoundary ? "complete-boundary" : "open-swimlane"}
-        data-shape-grammar-role={isCompleteBoundary ? "complete-object" : "open-canvas-group"}
-        data-shape-grammar-form={isCompleteBoundary ? "full-outline" : "open-node"}
+        data-semantic-group-role={isCompleteObjectBoundary ? "complete-boundary" : "contextual-boundary"}
+        data-shape-grammar-role={isCompleteObjectBoundary ? "complete-object" : "semantic-group"}
+        data-shape-grammar-form={group.visualForm}
+        data-visual-system-group-border={`${surfaceBorder.semanticGroup.mode}-${surfaceBorder.semanticGroup.widthPx}px`}
         data-shape-grammar-meaning={
-          group.semanticMeaning ?? (isCompleteBoundary
-            ? "complete-object-or-boundary"
-            : "process-or-relationship-anchor")
+          group.semanticMeaning
         }
         style={{
           position: "absolute",
@@ -215,8 +218,7 @@ function AdaptiveSemanticGroups({ spec, layout }) {
           width: right - left,
           height: bottom - top,
           boxSizing: "border-box",
-          border: isCompleteBoundary ? `2px solid ${palette.lineStrong}` : "none",
-          borderTop: isCompleteBoundary ? undefined : `2px solid ${palette.lineStrong}`,
+          border: `${surfaceBorder.semanticGroup.widthPx}px solid ${groupBorderColor}`,
           background: "linear-gradient(180deg, rgba(216, 243, 232, 0.28) 0%, rgba(216, 243, 232, 0) 42%)",
           borderRadius: 18,
           opacity: groupProgress,
@@ -230,7 +232,7 @@ function AdaptiveSemanticGroups({ spec, layout }) {
             top: 7,
             color: palette.mintDeep,
             fontSize: 15,
-            fontWeight: 820,
+            fontWeight: typography.fontWeights.sectionLabel,
             letterSpacing: ".06em",
             lineHeight: 1
           }}
@@ -332,7 +334,7 @@ function StageCaption({ caption, copyOpacity = 1 }) {
         style={{
           color: palette.mintDeep,
           fontSize: 28,
-          fontWeight: 760,
+          fontWeight: typography.fontWeights.sectionLabel,
           lineHeight: 1.25,
           letterSpacing: "-.015em"
         }}
@@ -428,7 +430,7 @@ function ShapeGrammarLegend({ cue, globalFrame, copyOpacity = 1 }) {
         gap: 18,
         color: palette.muted,
         fontSize: SHAPE_GRAMMAR_LEGEND_FONT_SIZE_PX,
-        fontWeight: 720,
+        fontWeight: typography.fontWeights.explanatory,
         letterSpacing: ".01em",
         opacity,
         pointerEvents: "none"
@@ -493,6 +495,18 @@ function TechnicalDiagram({
       data-visible-semantic-count={semanticLayout.visibleCount}
       data-surface-mode="flat-only"
     >
+      <VisualSystemV1TechnicalArtifact
+        profile={spec.artifactProfile}
+        safeArea={semanticLayout.safeArea}
+        geometryById={semanticLayout.fullGeometryById}
+        nodeVisibilityProgress={state.nodeVisibilityProgress}
+        progress={visualSystemV1ProgressAtFrame(
+          globalFrame,
+          spec.startFrame + spec.visualPlan.timing.graphicStartFrame,
+          AGENT_SKILL_LONG_REVIEW_NODE_ENTER_FRAMES
+        )}
+        contentOpacity={copyOpacity}
+      />
       <AdaptiveSemanticGroups spec={spec} layout={semanticLayout} />
       <AdaptiveConnectors
         spec={spec}
@@ -694,9 +708,7 @@ function SceneLayer({ episode, layer, globalFrame, subtitlePresentationMode }) {
   const scene = episode?.scenes?.find((item) => item.id === layer.sceneId) ?? spec;
   const visualSceneCopy = longReviewVisualSceneCopy(spec.id, scene);
   const title = visualSceneCopy.title;
-  const titleStartFrame = spec.startFrame === 0
-    ? 0
-    : spec.startFrame - AGENT_SKILL_LONG_REVIEW_TITLE_PREROLL_FRAMES;
+  const titleStartFrame = spec.startFrame - AGENT_SKILL_LONG_REVIEW_TITLE_PREROLL_FRAMES;
   return (
     <div
       style={{ position: "absolute", inset: 0, opacity: layer.opacity }}
@@ -715,7 +727,7 @@ function SceneLayer({ episode, layer, globalFrame, subtitlePresentationMode }) {
           zIndex: 4,
           color: palette.ink,
           fontSize: titleFontSize(title),
-          fontWeight: 900,
+          fontWeight: typography.fontWeights.display,
           lineHeight: 1.08,
           letterSpacing: "-.045em",
           whiteSpace: "nowrap",
@@ -734,7 +746,7 @@ function SceneLayer({ episode, layer, globalFrame, subtitlePresentationMode }) {
           zIndex: 4,
           color: palette.muted,
           fontSize: typography.supportingWidePx,
-          fontWeight: 650,
+          fontWeight: typography.fontWeights.supporting,
           lineHeight: 1.34,
           letterSpacing: "-.02em",
           whiteSpace: "nowrap",
@@ -767,7 +779,11 @@ function subtitleCaptions(episode, activeSubtitle = null) {
   }));
 }
 
-export function AgentSkillLongReview({ episode }) {
+export function AgentSkillLongReview({
+  episode,
+  burnInSubtitle = true,
+  renderAudio = true
+}) {
   const frame = useCurrentFrame();
   const layers = longReviewSceneLayersAtFrame(frame);
   const subtitleGate = longReviewSubtitleGateAtFrame(episode?.subtitles ?? [], frame);
@@ -792,7 +808,9 @@ export function AgentSkillLongReview({ episode }) {
       }}
     >
       <WideMovingBackdrop frameOverride={backdropFrame} />
-      {episode?.voice?.publicPath ? <Audio src={staticFile(episode.voice.publicPath)} /> : null}
+      {renderAudio && episode?.voice?.publicPath
+        ? <Audio src={staticFile(episode.voice.publicPath)} />
+        : null}
       <div
         data-visual-system="visual-system-v1"
         data-visual-system-content="open-canvas"
@@ -812,6 +830,7 @@ export function AgentSkillLongReview({ episode }) {
       </div>
       <VisualSystemV1WideBrandLayer
         tone="quiet"
+        motionCadence="continuous"
         transitionFrames={AGENT_SKILL_LONG_REVIEW_SCENE_START_FRAMES}
       />
       <div
@@ -826,14 +845,18 @@ export function AgentSkillLongReview({ episode }) {
             : subtitleGate.opacity * subtitleGate.presentationOpacity
         }}
       >
-        {subtitleGate.renderSubtitle ? (
+        {burnInSubtitle && subtitleGate.renderSubtitle ? (
           <VisualSystemV1PlainSubtitle
             captions={captions}
             visualWeight={subtitleGate.visualWeight ?? "primary"}
           />
         ) : null}
       </div>
-      <VisualSystemV1ChapterProgress chapters={AGENT_SKILL_LONG_REVIEW_CHAPTERS} />
+      <VisualSystemV1ChapterProgress
+        chapters={AGENT_SKILL_LONG_REVIEW_CHAPTERS}
+        revealStartFrame={AGENT_SKILL_LONG_REVIEW_TITLE_PREROLL_FRAMES}
+        revealDurationInFrames={8}
+      />
     </AbsoluteFill>
   );
 }

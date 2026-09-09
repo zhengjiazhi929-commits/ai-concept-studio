@@ -34,9 +34,11 @@ actual_pnpm_version="$("$studio_pnpm" --version)"
 [[ "$actual_pnpm_version" == "$expected_pnpm_version" ]] || fail_startup \
   "pnpm 版本不匹配：需要 ${expected_pnpm_version}，当前为 ${actual_pnpm_version}。"
 
-if [[ ! -d node_modules ]]; then
-  print -- "首次启动：正在按锁文件安装本地依赖，请稍候……"
+if ! node scripts/check-locked-dependencies.mjs; then
+  print -- "依赖未安装或与锁文件不同步：正在执行 frozen install，请稍候……"
   "$studio_pnpm" install --frozen-lockfile || fail_startup "安装失败，请检查网络后重试，或回到 Codex 里让我检查。"
+  node scripts/check-locked-dependencies.mjs --record || fail_startup \
+    "安装完成后依赖验证仍未通过，请回到 Codex 里让我检查。"
 fi
 
 "$studio_pnpm" start:open || fail_startup "系统未能正常启动，请回到 Codex 里让我检查。"

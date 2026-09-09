@@ -1,66 +1,50 @@
 # AI Concept Studio 当前状态
 
-更新时间：2026-08-25 17:03（Asia/Shanghai）
+更新时间：2026-09-09（Asia/Shanghai）
+状态真源版本：38
 
-状态真源版本：9
+## 当前任务：筛选可复用视频能力并合入 main
 
-核心整改合并提交：`4408ea52ce8987a6c7a7646c43d2a13179ce07cc`。
+Zhengjiazhi 明确要求“你查一下吧，把有用的都合并了，接下来我要做完整的新视频了”。
+本轮授权代码筛选、必要修复、测试、提交、推送与通过检查后合并，不是旧长片或新视频的成片批准。
+原“旧片验收后才合并”的代码交付顺序由本次明确要求调整为先整合可用代码，再制作新片；
+Research、Script、Storyboard、Assets/Voice、Final 五道人审和任何生产 Episode 状态不变。
 
-首次状态同步合并提交：`59fc520badc82e52a39b58732efe4239aafa363f`。本文件不把自己的
-提交 SHA 写成“当前 main”，避免状态提交合并后立即产生自指漂移。
+## 范围、风险与回退
 
-## 当前准确结论
+- R3：PR #7 的可靠性、字幕/节奏/边框/字体/水印、分段渲染与 QA 基础，加上已认可视觉参考的复用代码。
+- 独立整合分支 `codex/approved-video-system-20260909` 从PR #7的 `1c6f44e4bc1388bd00f62c9fffc4a6bdd740dd7d` 创建；原视觉工作区和旧媒体不修改。
+- 开始时远端main为 `23990937411710e394cde0be5253b02841d42d11`，唯一未合并远端分支为 `codex/reliability-p1-p2-20260831`（PR #7）。
+- 纳入二维对象/动作库及20秒按需加载、微磨砂内容卡片、三组静态分镜；已认可的样例范围与原哈希分别见docs/14、15、16。
+- 排除spatial/journey两版3D、three/R3F/Remotion Three依赖、已取消粒子封面、生成视频/图片/音频、旧Episode和未审生产素材。旧实验留在原工作区，不删除。
+- 回退为撤销本次代码整合提交/合并，不覆盖生产Episode、历史候选或其他工作树。
 
-安全、恢复、素材权利、CI 和文档整改已经通过 PR #2 合并到远端 `main`。合并保留了
-原有 v004 与动效库，且没有包含 Research、Script 或 Storyboard 的真实业务 Gate 状态变更。
+## 本轮修复与验证
 
-本地离线 `pnpm verify`、分支 push CI、PR merge-ref CI 和合并后的 `main` CI 均已通过；
-全量测试为 `597/597`，P0=0、P1=0 的攻击回归仍通过。核心仓库整改已经技术完成并合并，
-但这不等于真实业务 Gate 已批准、产品已发布或开源发布材料已经齐备。
+- 字体入口回归从旧数量断言升级为11个准确路径名单，逐入口检查本地字体加载。先失败1/1，修复后相关视觉专项111/111通过。
+- 修复资料A→B→重试A时当前pack与历史路径错配；实际临时存储回归先失败，修复后17/17 research测试通过。重试不重复写Episode、不回退B，返回路径与内容一致。
+- 实现绑定哈希更新为 `ac80fc17650ac8f269912576b75894003107479d522935c38636db9d7fffb0df`；旧实现评测证据不沿用，不提高准入级别。
+- 独立Node24.19.0 / pnpm11.19.0 frozen install通过，未引入3D依赖；生产依赖审计未发现已知漏洞。
+- 本机捆绑Python已变为3.12.14；另建隔离CPython3.12.13副本虚拟环境，按仓库哈希锁安装NumPy2.3.5/Pillow12.3.0，真实运行时身份校验通过；未放宽版本合同或修改系统Python。
+- 整合源码新生成9张静态分镜，字节及像素哈希均与已认可 `candidate-8wfU6K` 完全相同。新候选 `outputs/merge-audit-20260909/storyboards/candidate-w0WwMl`，来源1440项，sourceHash=`639451ac788cd89ba6e3d6916d724db1b38313c21bd74c909ede9655948eb661`。旧清单未改写。
+- 修复历史v004d proof只绑定清单而未绑定实际overlay PNG/600帧引用的漏洞，新增消费前后素材完整性检查；专项10/10通过。
+- 修复联系表依赖未锁定QA缓存图的问题，改为从哈希绑定的MP4按索引精确解码到私有新目录；合成错图测试和相关测试5/5通过。
+- 修复字幕输出的符号链接越界；CLI和writer在创建目录或写入前拒绝symlink祖先、最终目标及范围外路径；18/18通过。
+- 卡片三张PNG也与原认可版本逐字节一致。二维动画样例另生成9张静帧用于回归，未生成或验收新的MP4。
+- 完整本地 `CI=true pnpm verify` 通过：1138/1138测试、零失败/跳过，323文件语法、35项动效库检查、7/7回退演练、四帧实际渲染及秘密/diff检查通过。
+- Open Code Review 委派审查覆盖185个可审代码路径；其中30个历史大文件为重点差异/风险路径审查，不宣称全部未改行深审。四处问题修复后交叉复核，无已知未解决P1/P2；历史归档不作为当前运行依据。
+- 二维样例九张静帧中八张与原版逐字节一致；第0帧仅背景渐变出现最大1/255的RGB差，Logo区域完全一致，无已证内容/布局回归。浏览器补丁及渲染顺序不同，具体触发原因未唯一确认；不改写旧认可范围。
+- 本页记录提交前已完成的验证；同一提交的hosted CI必须通过后才允许合并。实时CI、提交和合并事实以 [PR #7](https://github.com/zhengjiazhi929-commits/ai-concept-studio/pull/7) 及GitHub refs为准，旧1012/1012及旧CI不是本次结果。
 
-## 已合并整改范围
-
-1. 外部素材下载的公网 HTTPS、DNS、重定向、超时和流式大小边界。
-2. Provider 调用的 ambiguous 结算冻结、人工对账和禁止静默重试。
-3. 预算与计费字段的严格校验，未知费用不再按 0 记账。
-4. 外部素材 rights declaration、调用合同、完成收据、资产快照和媒体哈希绑定。
-5. 损坏审计账本 fail closed，以及上传提交后的可幂等审计 outbox 恢复。
-6. Operator 身份、Capability 与网络、文件、模型和付费副作用边界。
-7. 测试 fixture 与 live Episode 隔离，评测证据按实现、配置、输入和运行时失效。
-8. 精确 Node/pnpm/依赖版本、秘密扫描、语法检查、测试、回滚和固定渲染 CI。
-9. Golden Gate 的通用版本绑定和审核安全逻辑；不包含任何真实人工批准动作。
-10. README、治理、威胁模型、许可、回滚和当前状态文档。
-
-## 明确排除
-
-- PR #2 未修改 `studio/data/episodes/golden-001/episode.json`。
-- 不批准或推进任何真实 Research、Script、Storyboard、Assets/Voice 或 Final Gate。
-- 不调用模型、语音、图片、视频、发布或其他付费 Provider。
-- 不把业务 Gate 状态提交混入核心整改 PR。
-- 不宣称开源发布就绪；LICENSE、SECURITY、CONTRIBUTING 等发布材料仍属后续范围。
-
-## 验证与合并状态
+## 合并、使用与视频验收状态
 
 | 层级 | 当前状态 |
-|---|---|
-| 旧集成快照机器检查 | `571/571` 及离线 `pnpm verify` 通过，仅作历史证据 |
-| 最新 main 重组后的聚焦检查 | v004 冲突点与安全/恢复回归 `102/102` 通过 |
-| 最新 main 重组后的全量检查 | `597/597`；256 个源码文件；35/35 动效；0 失败 |
-| 回滚与固定渲染 | 7/7；19,776 bytes；external/paid/live read/write 均为 0 |
-| Hosted push CI | `Verify` run `32829050878` 通过；固定 Actions 已使用 Node 24 runtime |
-| PR merge-ref CI | `Verify` run `32829179335` 通过 |
-| 核心整改 main CI | `Verify` run `32829318265` 通过；合并提交 `4408ea5` |
-| 状态同步 main CI | `Verify` run `32829734090` 通过；合并提交 `59fc520` |
-| 技术完成 | 核心仓库整改已完成并合并 |
-| 业务验收 | 不在本分支范围；没有新增人工批准 |
-| Git 状态 | PR #2 已合并到 `main` |
-| 发布 | 代码已合并；产品与开源版本未发布 |
+| --- | --- |
+| 代码整理 | 已完成本轮筛选、修复与交叉审查；通过PR #7交付，实时合并事实见GitHub |
+| 机器验证 | 本轮完整本地verify已通过；hosted CI按当前提交绑定，合并前必须通过 |
+| 视觉参考认可 | 20秒二维样例方向、三张静态卡片材质、三组静态分镜已获限定版本认可 |
+| 新完整视频 | 尚未选题、编排或渲染，不自动沿用旧生产输入 |
+| 成片/发布 | 旧长片未新增验收，新片未验收，没有部署或发布 |
 
-GitHub 当前仍没有分支保护。本次已人工执行“基于最新 `main` → 本地全量验证 → push CI →
-PR merge-ref CI → 合并 → main CI”的完整门禁；后续应把已出现的 `Verify` check 配置为
-`main` 必需状态检查。
-
-- `machine_status`: local_pr_and_main_hosted_verification_passed
-- `technical_status`: core_remediation_merged_to_main
-- `business_acceptance_status`: unchanged_out_of_scope
-- `release_status`: code_merged_product_and_open_source_not_released
+入口与使用边界见 [新视频制作基线](./17-new-video-baseline.md)。
+历史2026-09-05状态见 [归档](./archive/STATUS-20260905-pre-approved-video-integration.md)。

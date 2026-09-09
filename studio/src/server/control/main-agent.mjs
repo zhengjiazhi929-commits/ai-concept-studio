@@ -174,10 +174,17 @@ function realPlanningBudget(sourceEpisode) {
   return { maxCalls: 1, maxCostUsd: remainingCostUsd };
 }
 
-function assertRealPlanningEnabled(sourceEpisode) {
+function assertRealPlanningEnabled(sourceEpisode, authorization) {
+  const shadowBootstrap = Boolean(
+    authorization?.bootstrap === true &&
+    authorization?.planningMode === "shadow"
+  );
   if (
-    sourceEpisode.control?.mainAgentEnabled !== true ||
-    sourceEpisode.control?.modelRouterEnabled !== true
+    !shadowBootstrap &&
+    (
+      sourceEpisode.control?.mainAgentEnabled !== true ||
+      sourceEpisode.control?.modelRouterEnabled !== true
+    )
   ) {
     const error = new Error(
       "真实 Main Agent 规划要求 Main Agent 与 Model Router 开关同时启用"
@@ -192,7 +199,8 @@ function requirePlanningCapability(
   sourceEpisode,
   options = {},
   includeStateWrite = false,
-  includeModelSideEffects = true
+  includeModelSideEffects = true,
+  authorization = null
 ) {
   const usesRealClient = includeModelSideEffects &&
     options.planner === undefined &&
@@ -200,7 +208,7 @@ function requirePlanningCapability(
   const scopes = new Set(includeStateWrite ? ["state.write"] : []);
   let budget = { maxCalls: 0, maxCostUsd: 0 };
   if (usesRealClient) {
-    assertRealPlanningEnabled(sourceEpisode);
+    assertRealPlanningEnabled(sourceEpisode, authorization);
     budget = realPlanningBudget(sourceEpisode);
     scopes.add("model.invoke");
     scopes.add("network.request");
@@ -226,7 +234,13 @@ function requirePlanningCapability(
 export async function generateShadowPlan(sourceEpisode, options = {}) {
   const authorization = planningAuthorization(sourceEpisode, options);
   const capabilityOperation = options.capabilityOperation ?? "main-agent:shadow-plan";
-  const sideEffectGrant = requirePlanningCapability(sourceEpisode, options, false);
+  const sideEffectGrant = requirePlanningCapability(
+    sourceEpisode,
+    options,
+    false,
+    true,
+    authorization
+  );
   const planningMode = authorization.planningMode;
   const initialContext = buildMainAgentContext(sourceEpisode, {
     activeRun: options.activeRun,
@@ -239,6 +253,7 @@ export async function generateShadowPlan(sourceEpisode, options = {}) {
     plan = await options.planner(structuredClone(initialContext));
   } else {
     const client = options.client ?? (await createAiClient({
+      ...(options.aiClientOptions ?? {}),
       sideEffectGrant,
       capabilityOperation,
       requireSideEffectCapability: true

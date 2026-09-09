@@ -43,3 +43,24 @@ test("tracked secret scan recognizes provider formats without returning values",
     ["id", "line", "path"]
   );
 });
+
+test("tracked secret scan does not skip binary files containing NUL bytes", async () => {
+  const syntheticToken = `gh${"p_"}${"Z".repeat(36)}`;
+  const binary = Buffer.concat([
+    Buffer.from([0x00, 0xff, 0x10, 0x00]),
+    Buffer.from(syntheticToken, "ascii"),
+    Buffer.from([0x00, 0x7f])
+  ]);
+  const result = await runTrackedSecretScan({
+    cwd: "/fixture",
+    execFileImpl: async () => ({ stdout: Buffer.from("history.bundle\0") }),
+    lstatImpl: async () => ({ isFile: () => true }),
+    readFileImpl: async () => binary
+  });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.findings, [
+    { path: "history.bundle", id: "github-token", line: 1 }
+  ]);
+  assert.equal(JSON.stringify(result).includes(syntheticToken), false);
+});

@@ -75,11 +75,42 @@ function nullableNonEmptyString(value) {
   return typeof value === "string" && value.trim() ? value : null;
 }
 
+function hasProvableUndispatchedShape(item) {
+  return Boolean(
+    Object.hasOwn(item, "dispatchState") &&
+    item.dispatchState === "reserved" &&
+    Object.hasOwn(item, "calls") &&
+    Number.isInteger(item.calls) &&
+    item.calls >= 0 &&
+    Object.hasOwn(item, "costUsd") &&
+    Number.isFinite(item.costUsd) &&
+    item.costUsd >= 0 &&
+    Object.hasOwn(item, "costKnown") &&
+    typeof item.costKnown === "boolean" &&
+    (item.costKnown || item.costUsd === 0) &&
+    Object.hasOwn(item, "reservedAt") &&
+    typeof item.reservedAt === "string" &&
+    !Number.isNaN(Date.parse(item.reservedAt)) &&
+    Object.hasOwn(item, "dispatchedAt") &&
+    item.dispatchedAt === null &&
+    Object.hasOwn(item, "providerId") &&
+    item.providerId === null &&
+    Object.hasOwn(item, "model") &&
+    item.model === null &&
+    Object.hasOwn(item, "attempt") &&
+    item.attempt === null
+  );
+}
+
 function budgetReservations(value) {
   if (!Array.isArray(value)) return [];
   const dispatchStates = new Set(["reserved", "dispatching", "ambiguous"]);
   return value.flatMap((item) => {
     if (!isRecord(item) || typeof item.id !== "string" || !item.id.trim()) return [];
+    const explicitDispatchState = Object.hasOwn(item, "dispatchState") &&
+      dispatchStates.has(item.dispatchState)
+      ? item.dispatchState
+      : "ambiguous";
     return [{
       id: item.id,
       decisionId: nullableNonEmptyString(item.decisionId),
@@ -87,9 +118,10 @@ function budgetReservations(value) {
       costUsd: finiteNonNegative(item.costUsd),
       costKnown: booleanControl(item.costKnown, false, true),
       reservedAt: typeof item.reservedAt === "string" ? item.reservedAt : null,
-      dispatchState: dispatchStates.has(item.dispatchState)
-        ? item.dispatchState
-        : "reserved",
+      dispatchState: explicitDispatchState === "reserved" &&
+        !hasProvableUndispatchedShape(item)
+        ? "ambiguous"
+        : explicitDispatchState,
       dispatchedAt: typeof item.dispatchedAt === "string" ? item.dispatchedAt : null,
       providerId: nullableNonEmptyString(item.providerId),
       model: nullableNonEmptyString(item.model),

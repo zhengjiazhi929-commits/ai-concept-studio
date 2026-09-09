@@ -55,8 +55,9 @@ test("导入的 Markdown 脚本可作为分镜驳回后的再生成输入", asyn
 
 test("字幕拆分保留中文词语、英文词组和闭合标点边界", () => {
   const source = "Agent Skill 可以附带脚本、参考资料和资产。它解决团队方法如何沉淀。";
-  const chunks = splitSubtitleText(source, 12);
+  const chunks = splitSubtitleText(source, 15);
   assert.equal(chunks.join(""), source);
+  assert.ok(chunks.every((chunk) => Array.from(chunk).length <= 15));
   assert.deepEqual(
     subtitleBoundaryIssues(chunks.map((text, index) => ({ text, start: index, end: index + 1 }))),
     []

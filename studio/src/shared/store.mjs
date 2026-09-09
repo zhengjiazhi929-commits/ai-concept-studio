@@ -2,15 +2,16 @@ import { mkdir, readFile, readdir } from "node:fs/promises";
 import {
   auditLedgerPath,
   configPath,
-  episodeDataDirectory,
   episodeDataPath,
   episodesDataRoot,
   logsRoot
 } from "./paths.mjs";
 import { validateEpisode } from "./schema.mjs";
 import { ensureAgentArchitecture } from "./agent-contracts.mjs";
-import { writeVersionedJson } from "./versioned-json-store.mjs";
 import { appendAuditEvent, readAuditEvents } from "./audit-log.mjs";
+import { createEpisodeWriter } from "./episode-store-writer.mjs";
+
+const episodeWriter = createEpisodeWriter();
 
 export async function readConfig() {
   return JSON.parse(await readFile(configPath, "utf8"));
@@ -27,25 +28,12 @@ export async function readEpisode(episodeId) {
   return episode;
 }
 
-export async function writeEpisode(episode) {
-  const normalizedEpisode = ensureAgentArchitecture(episode);
-  const validation = validateEpisode(normalizedEpisode);
-  if (!validation.valid) throw new Error(validation.errors.join("; "));
+export async function writeEpisode(episode, options = {}) {
+  return episodeWriter.writeEpisode(episode, options);
+}
 
-  const directory = episodeDataDirectory(normalizedEpisode.id);
-  await mkdir(directory, { recursive: true });
-  const destination = episodeDataPath(normalizedEpisode.id);
-  const result = await writeVersionedJson(destination, normalizedEpisode, {
-    expectedVersion: normalizedEpisode.control.stateVersion,
-    getVersion: (value) => value?.control?.stateVersion ?? 0,
-    setVersion: (value, version) => {
-      value.control.stateVersion = version;
-    }
-  });
-  if (episode?.control && typeof episode.control === "object") {
-    episode.control.stateVersion = result.version;
-  }
-  return destination;
+export function readEpisodeCommitStatus(episodeId) {
+  return episodeWriter.readEpisodeCommitStatus(episodeId);
 }
 
 export async function listEpisodes() {

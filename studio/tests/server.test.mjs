@@ -25,6 +25,19 @@ test("本地控制台 API 和视频分段读取可用", async () => {
     outputRoot,
     listEpisodes: async () => [structuredClone(fixtureEpisode)],
     readEpisode: async () => structuredClone(fixtureEpisode),
+    readEpisodeCommitStatus: async (episodeId) => ({
+      schemaVersion: 1,
+      episodeId,
+      stateVersion: 3,
+      commitStatus: "committed_with_warnings",
+      warningCount: 1,
+      commitWarnings: [{
+        stage: "directory_sync",
+        code: "EIO",
+        message: "Committed Episode directory sync failed"
+      }],
+      observedAt: "2026-08-31T12:00:00.000Z"
+    }),
     readRecentEvents: async () => [],
     getTrendRadarState: async () => ({
       run: {
@@ -99,6 +112,9 @@ test("本地控制台 API 和视频分段读取可用", async () => {
       "assets",
       "final"
     ]);
+    assert.equal(episode.stateCommit.commitStatus, "committed_with_warnings");
+    assert.equal(episode.stateCommit.stateVersion, 3);
+    assert.equal(episode.stateCommit.commitWarnings[0].stage, "directory_sync");
 
     const workflow = await fetch(`${base}/api/episodes/golden-001/workflow`).then((response) =>
       response.json()
@@ -212,7 +228,8 @@ test("本地人工预算对账 API 使用服务端身份并严格确认后解除
     calls: 1,
     costUsd: 0.2,
     costKnown: true,
-    reservedAt: "2026-08-24T03:00:00.000Z"
+    reservedAt: "2026-08-24T03:00:00.000Z",
+    dispatchState: "dispatching"
   }];
   source.control.budget.reservedCalls = 1;
   source.control.budget.reservedCostUsd = 0.2;

@@ -70,6 +70,11 @@ test("visual-system-v1 保留双画幅兼容能力，但新默认只输出横版
   assert.equal(VISUAL_SYSTEM_V1.depth.maximumVisibleDepthPx, 2.5);
   assert.equal(VISUAL_SYSTEM_V1.wallpaper.driftPeriodSeconds, 20);
   assert.equal(VISUAL_SYSTEM_V1.wallpaper.maximumDriftFraction, 0.015);
+  assert.equal(VISUAL_SYSTEM_V1.wallpaper.feathering, "radial-gradient-stops");
+  assert.equal(
+    VISUAL_SYSTEM_V1.wallpaper.compositorPolicy,
+    "no-viewport-filter-no-viewport-will-change"
+  );
   assert.deepEqual(VISUAL_SYSTEM_V1.defaults, {
     surfaceMode: "flat-only",
     sameLevelSurfaceUniform: true,
@@ -169,6 +174,8 @@ test("visual-system-v1 保留双画幅兼容能力，但新默认只输出横版
     }
   });
   assert.ok(VISUAL_SYSTEM_V1.forbidden.includes("chapter-duration-text"));
+  assert.ok(VISUAL_SYSTEM_V1.forbidden.includes("viewport-scale-filter-blur"));
+  assert.ok(VISUAL_SYSTEM_V1.forbidden.includes("viewport-scale-will-change"));
   assert.equal(VISUAL_SYSTEM_V1.depth.available, true);
   assert.equal(VISUAL_SYSTEM_V1.depth.enabledByDefault, false);
   assert.equal(VISUAL_SYSTEM_V1.motion.cardReflowFrames, 8);
@@ -176,6 +183,20 @@ test("visual-system-v1 保留双画幅兼容能力，但新默认只输出横版
   assert.equal(VISUAL_SYSTEM_V1_SKILL_AGENT_MCP_PROOF.durationInFrames, 360);
   assert.equal(VISUAL_SYSTEM_V1_SKILL_AGENT_MCP_PROOF.durationSeconds, 12);
   assert.deepEqual(Object.keys(VISUAL_SYSTEM_V1_SKILL_AGENT_MCP_PROOF.compositions), ["wide"]);
+});
+
+test("通用画布背景只用渐变羽化，禁止全屏模糊合成层", async () => {
+  const components = await source("../src/video/components/visual-system-v1/components.jsx");
+  const canvasStart = components.indexOf("export function VisualSystemV1Canvas");
+  const canvasEnd = components.indexOf(
+    "export function VisualSystemV1OpenCanvasHeader",
+    canvasStart
+  );
+  assert.ok(canvasStart >= 0 && canvasEnd > canvasStart);
+  const canvasSource = components.slice(canvasStart, canvasEnd);
+  assert.match(canvasSource, /radial-gradient/gu);
+  assert.doesNotMatch(canvasSource, /filter\s*:/u);
+  assert.doesNotMatch(canvasSource, /willChange\s*:/u);
 });
 
 test("通用库仍能读取竖版兼容布局，但v9样片只允许横版", () => {
@@ -819,7 +840,7 @@ test("章节完成切点保持满亮，不在71到72或191到192帧闪暗", asyn
   assert.match(progress, /bottom: layout\.vertical \? 18 : 16/u);
   assert.match(progress, /gap: layout\.vertical \? 8 : 15/u);
   assert.match(progress, /color: palette\.muted/u);
-  assert.match(progress, /fontWeight: 600/u);
+  assert.match(progress, /fontWeight: typography\.fontWeights\.navigation/u);
   assert.match(progress, /backgroundColor: palette\.mint/u);
   assert.match(progress, /visualSystemV1ChapterDisplayLabel\(chapter\.label, index\)/u);
   assert.doesNotMatch(progress, /segment\.status === "done"[^\n]*opacity|opacity:\s*segment\.status/u);
@@ -949,13 +970,17 @@ test("统一平面节点使用清晰完整3px边框且没有阴影或伪立体�
     components.indexOf("export function VisualSystemV1FlatNode"),
     components.indexOf("function semanticPrimitiveSurface")
   );
-  assert.match(flatNode, /border: `3px solid \$\{mixHexColors\(palette\.lineStrong, focusBorder, normalizedFocus\)\}`/u);
-  assert.match(flatNode, /data-visual-system-card-border="full-outline-3px"/u);
+  assert.match(flatNode, /visualSystemV1InformationCardSurfaceAtFocus/u);
+  assert.match(flatNode, /surfaceBorder\.informationCard\.widthPx/u);
+  assert.match(
+    flatNode,
+    /data-visual-system-card-border=\{`\$\{surfaceBorder\.informationCard\.mode\}-\$\{surfaceBorder\.informationCard\.widthPx\}px`\}/u
+  );
   assert.match(flatNode, /borderRadius: 18/u);
   assert.match(flatNode, /boxShadow: "none"/u);
   assert.match(flatNode, /backgroundImage: "none"/u);
   assert.match(flatNode, /data-visual-system-focus=\{normalizedFocus >= 0\.5 \? "primary" : "context"\}/u);
-  assert.match(flatNode, /backgroundColor: mixHexColors\(palette\.paperWarm, focusSurface, normalizedFocus, 0\.76\)/u);
+  assert.match(flatNode, /backgroundColor: cardSurface\.backgroundColor/u);
   assert.match(flatNode, /data-visual-system-card-layout=\{layoutMode\}/u);
   assert.match(flatNode, /visualSystemV1AdaptiveCardTypography\(cardWidth, cardHeight\)/u);
   assert.match(flatNode, /data-visual-system-card-typography=\{cardTypography\?\.mode/u);
@@ -979,8 +1004,8 @@ test("语义信息卡使用完整外框，时间锚点与数量条仍保留非�
     components.indexOf("export function VisualSystemV1SemanticNode")
   );
   assert.match(semanticSurface, /const fullOutline = \{/u);
-  assert.match(semanticSurface, /border: `3px solid \$\{mixHexColors\(/u);
-  assert.match(semanticSurface, /palette\.lineStrong/u);
+  assert.match(semanticSurface, /surfaceBorder\.informationCard\.widthPx/u);
+  assert.match(semanticSurface, /visualSystemV1InformationCardSurfaceAtFocus/u);
   assert.match(semanticSurface, /borderRadius: 18/u);
   assert.match(semanticSurface, /boxShadow: "none"/u);
   assert.match(semanticSurface, /if \(surfaceRole === "information-card"\) return fullOutline/u);

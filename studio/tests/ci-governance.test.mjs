@@ -2,18 +2,57 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { deflateSync } from "node:zlib";
 import {
   CI_RENDER_SMOKE_COMPOSITION,
   CI_RENDER_SMOKE_CHROME_MODE,
-  CI_RENDER_SMOKE_FRAME,
+  CI_RENDER_SMOKE_EPISODE,
+  CI_RENDER_SMOKE_FRAMES,
   CI_RENDER_SMOKE_TIMEOUT_MS,
   runCiRenderSmoke
 } from "../scripts/ci-render-smoke.mjs";
 import { studioRoot, workspaceRoot } from "../src/shared/paths.mjs";
 
-test("CI render smoke 只渲染固定本地 Composition 并清理临时目录", async () => {
+function pngChunk(type, data) {
+  const typeBuffer = Buffer.from(type, "ascii");
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  return Buffer.concat([length, typeBuffer, data, Buffer.alloc(4)]);
+}
+
+function rgbaPng(width, height, colors) {
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8;
+  header[9] = 6;
+  const rows = [];
+  for (let y = 0; y < height; y += 1) {
+    const row = Buffer.alloc(1 + width * 4);
+    for (let x = 0; x < width; x += 1) {
+      const color = colors[(y * width + x) % colors.length];
+      row.set(color, 1 + x * 4);
+    }
+    rows.push(row);
+  }
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk("IHDR", header),
+    pngChunk("IDAT", deflateSync(Buffer.concat(rows))),
+    pngChunk("IEND", Buffer.alloc(0))
+  ]);
+}
+
+test("CI render smoke 使用内联生产语义 visualPlan 渲染多帧并清理临时目录", async () => {
   const calls = [];
   const temporaryRoot = "/tmp/acs-ci-render-fixture";
+  const pngByFrame = new Map(CI_RENDER_SMOKE_FRAMES.map((frame, index) => [
+    frame,
+    rgbaPng(2, 2, [
+      [20 + index, 40, 60, 255],
+      [200, 220 - index, 240, 255]
+    ])
+  ]));
   const result = await runCiRenderSmoke({
     dependencies: {
       mkdtemp: async () => temporaryRoot,
@@ -24,31 +63,48 @@ test("CI render smoke 只渲染固定本地 Composition 并清理临时目录", 
       },
       selectComposition: async (options) => {
         calls.push({ type: "select", options });
-        return { id: options.id, width: 540, height: 960, fps: 15, durationInFrames: 540 };
+        return { id: options.id, width: 2, height: 2, fps: 30, durationInFrames: 90 };
       },
       renderStill: async (options) => {
         calls.push({ type: "render", options });
       },
       stat: async () => ({ isFile: () => true, size: 1234 }),
+      readFile: async (path) => {
+        const frame = Number(/smoke-frame-(\d+)\.png$/u.exec(path)?.[1]);
+        return pngByFrame.get(frame);
+      },
       rm: async (path, options) => {
         calls.push({ type: "cleanup", path, options });
       }
     }
   });
 
-  assert.deepEqual(result, {
-    compositionId: "ConceptPreview",
-    frame: 0,
-    bytes: 1234,
-    externalCalls: 0,
-    liveEpisodesRead: 0
-  });
+  assert.equal(result.compositionId, "ConceptPreview");
+  assert.deepEqual(result.frames.map(({ frame }) => frame), CI_RENDER_SMOKE_FRAMES);
+  assert.equal(result.frames.length, 4);
+  assert.ok(result.frames.every(({ uniqueColors }) => uniqueColors >= 2));
+  assert.equal(result.distinctFrameCount, CI_RENDER_SMOKE_FRAMES.length);
+  assert.equal(Object.hasOwn(result, "externalCalls"), false);
+  assert.equal(Object.hasOwn(result, "liveEpisodesRead"), false);
   assert.equal(CI_RENDER_SMOKE_COMPOSITION, "ConceptPreview");
   assert.equal(CI_RENDER_SMOKE_CHROME_MODE, "chrome-for-testing");
-  assert.equal(CI_RENDER_SMOKE_FRAME, 0);
+  assert.deepEqual(CI_RENDER_SMOKE_FRAMES, [0, 17, 29, 55]);
+  assert.equal(CI_RENDER_SMOKE_EPISODE.id, "ci-production-semantic-smoke");
+  assert.equal(CI_RENDER_SMOKE_EPISODE.scenes[0].visualPlan.structure, "flow");
+  assert.equal(
+    CI_RENDER_SMOKE_EPISODE.scenes[0].visualPlan.styleProfileId,
+    "desktop-light-window-editorial-v3"
+  );
   assert.equal(CI_RENDER_SMOKE_TIMEOUT_MS, 120_000);
   assert.equal(calls.find((call) => call.type === "select").options.id, "ConceptPreview");
-  assert.equal(calls.find((call) => call.type === "render").options.frame, 0);
+  assert.deepEqual(
+    calls.filter((call) => call.type === "render").map(({ options }) => options.frame),
+    CI_RENDER_SMOKE_FRAMES
+  );
+  assert.deepEqual(
+    calls.find((call) => call.type === "select").options.inputProps,
+    { episode: CI_RENDER_SMOKE_EPISODE }
+  );
   assert.equal(
     calls.find((call) => call.type === "select").options.timeoutInMilliseconds,
     120_000
@@ -68,6 +124,11 @@ test("CI render smoke 只渲染固定本地 Composition 并清理临时目录", 
   assert.equal(
     calls.find((call) => call.type === "render").options.browserExecutable,
     "/usr/bin/fixture-chrome"
+  );
+  assert.ok(
+    calls.filter((call) => call.type === "render").every(
+      ({ options }) => options.inputProps.episode === CI_RENDER_SMOKE_EPISODE
+    )
   );
   assert.deepEqual(calls.at(-1), {
     type: "cleanup",
@@ -117,7 +178,7 @@ test("CI 与本地 package 共享精确 Node 和 pnpm 版本", async () => {
   );
   assert.equal(
     packageDocument.scripts["diff:check"],
-    "git diff --check && git diff --cached --check"
+    "node scripts/check-git-diff.mjs"
   );
   assert.equal(packageDocument.devDependencies.esbuild, "0.28.1");
   assert.equal(packageDocument.dependencies["@phosphor-icons/react"], "2.1.10");
@@ -141,7 +202,23 @@ test("CI 与本地 package 共享精确 Node 和 pnpm 版本", async () => {
   assert.match(pnpmWorkspace, /overrides:\n  nanoid: 3\.3\.18/u);
   assert.match(lockfile, /nanoid@3\.3\.18/u);
   assert.doesNotMatch(lockfile, /nanoid@3\.3\.16/u);
+  assert.match(workflow, /schedule:\n\s+- cron: "17 3 \* \* 1"/u);
+  assert.match(workflow, /fetch-depth: 0/u);
+  assert.match(workflow, /ACS_DIFF_BASE_SHA/u);
+  assert.match(workflow, /ACS_DIFF_HEAD_SHA/u);
+  assert.match(workflow, /ACS_DIFF_FALLBACK_BASE_REF: origin\/main/u);
   assert.match(workflow, /pnpm install --frozen-lockfile/u);
+  assert.match(
+    workflow,
+    /actions\/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6\.2\.0/u
+  );
+  assert.match(workflow, /python-version: "3\.12\.13"/u);
+  assert.match(workflow, /python -m pip install --disable-pip-version-check --require-hashes/u);
+  assert.match(
+    workflow,
+    /qa-agent-skill-long-review-wide-v004-requirements\.lock\.txt/u
+  );
+  assert.match(workflow, /QA_PYTHON=%s/u);
   assert.match(workflow, /pnpm audit --prod --audit-level high/u);
   assert.match(workflow, /pnpm verify/u);
   assert.match(workflow, /permissions:\n  contents: read/u);
@@ -153,14 +230,20 @@ test("CI 与本地 package 共享精确 Node 和 pnpm 版本", async () => {
     workflow,
     /actions\/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7\.0\.0/u
   );
-  assert.doesNotMatch(workflow, /uses: actions\/(?:checkout|setup-node)@v\d/u);
+  assert.doesNotMatch(workflow, /uses: actions\/(?:checkout|setup-node|setup-python)@v\d/u);
   assert.match(workflow, /node scripts\/scan-tracked-secrets\.mjs/u);
   assert.doesNotMatch(workflow, /STUDIO_|OPENAI_|ANTHROPIC_|API_KEY/u);
   assert.match(macLauncher, /expected_node_version="\$\(<\.\.\/\.node-version\)"/u);
   assert.match(macLauncher, /actual_node_version="\$\(node -p 'process\.versions\.node'\)"/u);
+  assert.match(macLauncher, /scripts\/check-locked-dependencies\.mjs/u);
+  assert.match(macLauncher, /install --frozen-lockfile/u);
+  assert.match(macLauncher, /check-locked-dependencies\.mjs --record/u);
   assert.doesNotMatch(macLauncher, /Node\.js 20|node_major >= 20/u);
   assert.match(windowsLauncher, /STUDIO_EXPECTED_NODE/u);
   assert.match(windowsLauncher, /process\.versions\.node/u);
+  assert.match(windowsLauncher, /scripts\\check-locked-dependencies\.mjs/u);
+  assert.match(windowsLauncher, /install --frozen-lockfile/u);
+  assert.match(windowsLauncher, /check-locked-dependencies\.mjs" --record/u);
   assert.doesNotMatch(windowsLauncher, /Node\.js 20/u);
 });
 

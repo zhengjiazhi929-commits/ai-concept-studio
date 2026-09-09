@@ -1,15 +1,18 @@
 import React from "react";
 
 import { VisualSystemV1AiWatermark } from "./ai-watermark.jsx";
-import { VISUAL_SYSTEM_V1_AI_WATERMARK } from "./ai-watermark.mjs";
+import {
+  VISUAL_SYSTEM_V1_AI_WATERMARK,
+  visualSystemV1AiWatermarkCadence
+} from "./ai-watermark.mjs";
 
 const placement = VISUAL_SYSTEM_V1_AI_WATERMARK.placement;
 const safeZonePadding = 40;
 const safeZoneSize = placement.size + safeZonePadding * 2;
 
 export const VISUAL_SYSTEM_V1_WIDE_BRAND_TONES = Object.freeze({
-  standard: Object.freeze({ opacity: 1, watermarkCadence: "continuous" }),
-  quiet: Object.freeze({ opacity: 0.76, watermarkCadence: "longform-quiet" })
+  standard: Object.freeze({ opacity: 1 }),
+  quiet: Object.freeze({ opacity: 0.76 })
 });
 
 export const VISUAL_SYSTEM_V1_WIDE_BRAND_SAFE_ZONE = Object.freeze({
@@ -40,15 +43,17 @@ export const VISUAL_SYSTEM_V1_WIDE_BRAND_SAFE_ZONE = Object.freeze({
 });
 
 export const VISUAL_SYSTEM_V1_WIDE_BRAND_LAYER = Object.freeze({
-  schemaVersion: "visual-system-v1-wide-brand-layer-v1",
+  schemaVersion: "visual-system-v1-wide-brand-layer-v2",
   outputFormat: "wide-only",
   role: "persistent-brand-layer",
   instancePolicy: "exactly-one-per-composition",
   defaultWatermarkProfileId: VISUAL_SYSTEM_V1_AI_WATERMARK.defaultProfileId,
+  defaultWatermarkCadenceId: VISUAL_SYSTEM_V1_AI_WATERMARK.defaultCadenceId,
   watermarkProfilePolicy: "approved-v013-default-v012-explicit-legacy-fallback",
   watermarkTonePolicy: "standard-default-quiet-explicit-longform",
   watermarkCadencePolicy:
-    "standard-continuous-quiet-static-body-declared-transition-motion",
+    "independent-explicit-validated-default-continuous",
+  watermarkToneCadenceCouplingPolicy: "independent",
   watermarkTones: VISUAL_SYSTEM_V1_WIDE_BRAND_TONES,
   watermarkPlacement: placement,
   safeZone: VISUAL_SYSTEM_V1_WIDE_BRAND_SAFE_ZONE
@@ -57,12 +62,14 @@ export const VISUAL_SYSTEM_V1_WIDE_BRAND_LAYER = Object.freeze({
 export function VisualSystemV1WideBrandLayer({
   profile = VISUAL_SYSTEM_V1_AI_WATERMARK.defaultProfileId,
   tone = "standard",
+  motionCadence = VISUAL_SYSTEM_V1_AI_WATERMARK.defaultCadenceId,
   transitionFrames
 } = {}) {
   const { safeZone } = VISUAL_SYSTEM_V1_WIDE_BRAND_LAYER;
   const resolvedTone = VISUAL_SYSTEM_V1_WIDE_BRAND_TONES[tone];
   if (!resolvedTone) throw new Error(`未知的 visual-system-v1 品牌水印 tone: ${tone}`);
-  const transitionSource = resolvedTone.watermarkCadence === "continuous"
+  const effectiveCadence = visualSystemV1AiWatermarkCadence(motionCadence).id;
+  const transitionSource = effectiveCadence === "continuous"
     ? "continuous-not-applicable"
     : transitionFrames == null
       ? "composition-entry-and-exit"
@@ -82,7 +89,7 @@ export function VisualSystemV1WideBrandLayer({
       data-brand-watermark-profile={profile}
       data-brand-watermark-tone={tone}
       data-brand-watermark-opacity={resolvedTone.opacity}
-      data-brand-watermark-motion-cadence={resolvedTone.watermarkCadence}
+      data-brand-watermark-motion-cadence={effectiveCadence}
       data-brand-watermark-transition-source={transitionSource}
       style={{
         position: "absolute",
@@ -94,7 +101,7 @@ export function VisualSystemV1WideBrandLayer({
     >
       <VisualSystemV1AiWatermark
         profile={profile}
-        motionCadence={resolvedTone.watermarkCadence}
+        motionCadence={effectiveCadence}
         transitionFrames={transitionFrames}
       />
     </div>

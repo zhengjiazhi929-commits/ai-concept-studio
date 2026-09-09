@@ -42,11 +42,18 @@ if not "%STUDIO_ACTUAL_PNPM%"=="%STUDIO_EXPECTED_PNPM%" (
   exit /b 1
 )
 
-if not exist "node_modules" (
-  echo 首次启动：正在按锁文件安装本地依赖，请稍候……
+node "scripts\check-locked-dependencies.mjs"
+if errorlevel 1 (
+  echo 依赖未安装或与锁文件不同步：正在执行 frozen install，请稍候……
   call "%STUDIO_PNPM%" install --frozen-lockfile
   if errorlevel 1 (
     echo 安装失败，请检查网络后重试，或回到 Codex 里让我检查。
+    pause
+    exit /b 1
+  )
+  node "scripts\check-locked-dependencies.mjs" --record
+  if errorlevel 1 (
+    echo 安装完成后依赖验证仍未通过，请回到 Codex 里让我检查。
     pause
     exit /b 1
   )

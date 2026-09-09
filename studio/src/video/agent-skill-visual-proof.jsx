@@ -20,6 +20,7 @@ import {
 } from "./agent-skill-visual-proof-plan.mjs";
 import { localTtsSubtitleAt } from "./agent-skill-local-tts-plan.mjs";
 import { motionPhaseIndex } from "./agent-skill-motion-plan.mjs";
+import { VIDEO_SANS_FONT_FAMILY } from "./font-system.mjs";
 
 export const APPROVED_VISUAL_PROOF_AUDIO = "episodes/agent-skill-20260806/voice-v001.wav";
 export const LOCAL_TTS_VISUAL_PROOF_AUDIO =
@@ -1046,7 +1047,7 @@ export function AgentSkillVisualProof({
       lang="zh-CN"
       style={{
         color: palette.ink,
-        fontFamily: '"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif',
+        fontFamily: VIDEO_SANS_FONT_FAMILY,
         overflow: "hidden"
       }}
     >

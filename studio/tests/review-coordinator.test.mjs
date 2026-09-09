@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   fixtureAssetFileDependencies,
-  readFixtureEpisode
+  readFixtureEpisode,
+  readPacedFixtureEpisode
 } from "./episode-fixture.mjs";
 import {
   approveGate,
@@ -336,7 +337,7 @@ test("旧审核配置留下的通过报告不能直接用于人工批准", async
 });
 
 test("素材总审能把资产计划问题退回真正的 Asset Agent", async () => {
-  const source = await readFixtureEpisode();
+  const source = await readPacedFixtureEpisode();
   source.pipeline.find((step) => step.agent === "voice-agent").status = "ready";
   source.approvals.assets.status = "pending";
   const config = await readReviewConfig();

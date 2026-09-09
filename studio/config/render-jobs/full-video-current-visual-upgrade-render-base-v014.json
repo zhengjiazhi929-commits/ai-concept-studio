@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "long-review-render-job-v1",
+  "jobId": "agent-skill-20260806-current-visual-upgrade-render-base-v014",
+  "episodeId": "agent-skill-20260806",
+  "candidateVersion": 14,
+  "compositionId": "AgentSkillLongReview",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "durationInFrames": 18000,
+  "paths": {
+    "runner": "studio/scripts/render-agent-skill-long-review-full-v004b-chunked.mjs",
+    "entryPoint": "studio/src/video/agent-skill-long-review-index.jsx",
+    "episode": "studio/data/render-inputs/full-v004b-attempt-001/episode.json",
+    "voice": "studio/public/episodes/agent-skill-20260806/voice-natural-technical-v004-full.wav",
+    "finalDirectory": "outputs/studio/agent-skill-20260806/review-candidates/full-video-current-visual-upgrade-render-base-v014",
+    "workDirectory": "outputs/studio/agent-skill-20260806/review-candidates/.full-video-current-visual-upgrade-render-base-v014-work"
+  },
+  "protectedArtifacts": [],
+  "renderProfile": {
+    "schemaVersion": "long-review-render-profile-v1",
+    "artifactRole": "render-base",
+    "formalCandidate": false,
+    "visualSource": "v013@980c4f4be9c1f0bccdcd546873fa1a877c98aac8",
+    "voice": "v004-full",
+    "subtitleStyle": "v004b-no-box",
+    "subtitleDelivery": "external-overlay-required",
+    "burnInSubtitle": false,
+    "chunkFrames": 900,
+    "interChunkPauseMs": 5000,
+    "concurrency": 1
+  },
+  "temporaryVoice": true,
+  "temporaryVoiceIsFinalHumanRecording": false
+}

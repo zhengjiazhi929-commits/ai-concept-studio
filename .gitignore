@@ -43,6 +43,7 @@ studio/data/collector/
 studio/data/research/
 studio/data/trends/
 studio/data/production/
+studio/data/render-inputs/
 studio/data/episodes/agent-skill-*/
 studio/data/fixtures/agent-skill-voice/
 studio/data/fixtures/agent-skill-assets/

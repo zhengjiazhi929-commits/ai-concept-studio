@@ -23,7 +23,7 @@ export const FORMAL_EVALUATION_RUNNER_ID = "main-agent-offline-reference-runner"
 export const FORMAL_EVALUATION_RUNNER_VERSION = "2.0.0";
 export const INDEPENDENT_JUDGE_ID = "deterministic-action-rubric-judge";
 export const INDEPENDENT_JUDGE_VERSION = "2.0.0";
-export const AGENT_CONTROL_IMPLEMENTATION_VERSION = "agent-control-release-v5";
+export const AGENT_CONTROL_IMPLEMENTATION_VERSION = "agent-control-release-v6";
 export const EFFECTIVE_AI_ROUTING_VERSION = "effective-ai-routing-v1";
 
 export const AGENT_CONTROL_IMPLEMENTATION_PATHS = Object.freeze([
@@ -50,6 +50,7 @@ export const AGENT_CONTROL_IMPLEMENTATION_PATHS = Object.freeze([
   "src/server/control/policy-engine.mjs",
   "src/server/control/provider-result-recovery.mjs",
   "src/server/control/provider-health.mjs",
+  "src/server/control/worker-audit-outbox.mjs",
   "src/server/control/workflow-kernel.mjs",
   "src/server/importer.mjs",
   "src/server/orchestrator.mjs",
@@ -70,10 +71,12 @@ export const AGENT_CONTROL_IMPLEMENTATION_PATHS = Object.freeze([
   "src/server/production/short-asset-plan-adapter.mjs",
   "src/server/production/short-script-adapter.mjs",
   "src/server/production/short-storyboard-adapter.mjs",
+  "src/server/production/subtitle-segmentation.mjs",
   "src/server/production/upload-transaction.mjs",
   "src/server/production/voice.mjs",
   "src/server/production/worker-prompts.mjs",
   "src/server/qa.mjs",
+  "src/server/renderer-core.mjs",
   "src/server/renderer.mjs",
   "src/server/research/agent.mjs",
   "src/server/research/engine.mjs",
@@ -114,7 +117,10 @@ export const AGENT_CONTROL_IMPLEMENTATION_PATHS = Object.freeze([
   "src/shared/audit-log.mjs",
   "src/shared/cloud-backup.mjs",
   "src/shared/config-integrity.mjs",
+  "src/shared/durable-json-store.mjs",
   "src/shared/editorial-visual-policy.mjs",
+  "src/shared/episode-store-writer-core.mjs",
+  "src/shared/episode-store-writer.mjs",
   "src/shared/env.mjs",
   "src/shared/integrity.mjs",
   "src/shared/network.mjs",
@@ -135,6 +141,7 @@ export const AGENT_CONTROL_IMPLEMENTATION_PATHS = Object.freeze([
   "src/video/components/visual-system-v1/content-layout.mjs",
   "src/video/components/visual-system-v1/grammar-layout.mjs",
   "src/video/components/visual-system-v1/tokens.mjs",
+  "src/video/font-system.mjs",
   "src/video/golden-assets-voice-gate-dossier.mjs",
   "src/video/golden-local-voice-plan.mjs"
 ].sort());
@@ -151,8 +158,8 @@ const REQUIRED_RUNTIME_BINDINGS = Object.freeze([
 ]);
 
 export const DEFAULT_EVALUATION_SUITE = Object.freeze({
-  id: "main-agent-control-reference-v5",
-  version: "5.0.0",
+  id: "main-agent-control-reference-v6",
+  version: "6.0.0",
   policyVersion: "routing-policy-v1",
   reviewVersion: "review-rubrics-v10",
   runner: {

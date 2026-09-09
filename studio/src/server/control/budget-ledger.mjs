@@ -50,6 +50,24 @@ function reservationIds(episode) {
   return new Set((episode.control?.budget?.reservations ?? []).map((item) => item.id));
 }
 
+function reservationIsProvablyUndispatched(reservation) {
+  return Boolean(
+    reservation?.dispatchState === "reserved" &&
+    Number.isInteger(reservation.calls) &&
+    reservation.calls >= 0 &&
+    Number.isFinite(reservation.costUsd) &&
+    reservation.costUsd >= 0 &&
+    typeof reservation.costKnown === "boolean" &&
+    (reservation.costKnown || reservation.costUsd === 0) &&
+    typeof reservation.reservedAt === "string" &&
+    !Number.isNaN(Date.parse(reservation.reservedAt)) &&
+    reservation.dispatchedAt === null &&
+    reservation.providerId === null &&
+    reservation.model === null &&
+    reservation.attempt === null
+  );
+}
+
 function ambiguityEvents(episode) {
   return (episode.history ?? []).filter((entry) => (
     entry?.type === "budget-reservation-ambiguous" &&
@@ -200,7 +218,7 @@ export function getAmbiguousBudgetReservationIds(sourceEpisode) {
   const episode = ensureAgentArchitecture(sourceEpisode);
   const currentIds = reservationIds(episode);
   const uncertainDispatchIds = (episode.control?.budget?.reservations ?? [])
-    .filter((item) => new Set(["dispatching", "ambiguous"]).has(item.dispatchState))
+    .filter((item) => !reservationIsProvablyUndispatched(item))
     .map((item) => item.id);
   return [...new Set(
     [
@@ -215,38 +233,110 @@ export function markInterruptedBudgetReservationsAmbiguous(sourceEpisode, option
   const episode = ensureAgentArchitecture(sourceEpisode);
   const currentReservations = episode.control.budget.reservations ?? [];
   if (currentReservations.length === 0) {
-    return { episode, changed: false, reservationIds: [] };
+    return {
+      episode,
+      changed: false,
+      reservationIds: [],
+      releasedReservationIds: [],
+      ambiguousReservationIds: []
+    };
   }
   const alreadyAmbiguous = new Set(
     ambiguityEvents(episode).flatMap((entry) => entry.reservationIds)
   );
+  const releasedReservations = currentReservations.filter((reservation) => (
+    reservationIsProvablyUndispatched(reservation) &&
+    !alreadyAmbiguous.has(reservation.id)
+  ));
   const newlyAmbiguous = currentReservations
+    .filter((reservation) => (
+      !reservationIsProvablyUndispatched(reservation)
+    ))
     .map((reservation) => reservation.id)
     .filter((id) => !alreadyAmbiguous.has(id));
-  if (newlyAmbiguous.length === 0) {
-    return { episode, changed: false, reservationIds: [] };
+  if (releasedReservations.length === 0 && newlyAmbiguous.length === 0) {
+    return {
+      episode,
+      changed: false,
+      reservationIds: [],
+      releasedReservationIds: [],
+      ambiguousReservationIds: []
+    };
   }
   const at = timestamp(options.now);
+  const releasedReservationIds = releasedReservations.map((reservation) => reservation.id);
+  const releasedReservationIdSet = new Set(releasedReservationIds);
+  if (releasedReservations.length > 0) {
+    const releasedCalls = releasedReservations.reduce(
+      (sum, reservation) => sum + reservation.calls,
+      0
+    );
+    const releasedCostUsd = releasedReservations.reduce(
+      (sum, reservation) => sum + reservation.costUsd,
+      0
+    );
+    episode.control.budget.reservations = currentReservations.filter(
+      (reservation) => !releasedReservationIdSet.has(reservation.id)
+    );
+    episode.control.budget.reservedCalls = Math.max(
+      0,
+      episode.control.budget.reservedCalls - releasedCalls
+    );
+    episode.control.budget.reservedCostUsd = Number(
+      Math.max(
+        0,
+        episode.control.budget.reservedCostUsd - releasedCostUsd
+      ).toFixed(6)
+    );
+    episode.history ??= [];
+    for (const reservation of releasedReservations) {
+      episode.history.push({
+        at,
+        type: "budget-reservation-settled",
+        status: "settled",
+        settlementStatus: "not_dispatched",
+        reservationId: reservation.id,
+        reservationIds: [reservation.id],
+        decisionId: reservation.decisionId,
+        providerId: reservation.providerId,
+        model: reservation.model,
+        attempt: reservation.attempt,
+        usedCalls: 0,
+        usedCostUsd: 0,
+        message:
+          "进程中断发生在 Provider 派发标记前；已按未派发零用量安全释放预算预留"
+      });
+    }
+  }
   const previousOverrun = episode.control.budget.overrun;
-  episode.control.budget.overrun = true;
+  if (newlyAmbiguous.length > 0) episode.control.budget.overrun = true;
+  const newlyAmbiguousIdSet = new Set(newlyAmbiguous);
   for (const reservation of currentReservations) {
-    if (newlyAmbiguous.includes(reservation.id)) {
+    if (newlyAmbiguousIdSet.has(reservation.id)) {
       reservation.dispatchState = "ambiguous";
     }
   }
-  episode.history ??= [];
-  episode.history.push({
-    at,
-    type: "budget-reservation-ambiguous",
-    status: "ambiguous",
-    failureCode: "provider_usage_unknown_after_process_interruption",
-    reservationIds: newlyAmbiguous,
-    previousOverrun,
-    message:
-      `进程中断时有 ${newlyAmbiguous.length} 项 Provider 调用尚未结算；预算预留已冻结，必须人工核对调用结果和费用`
-  });
+  if (newlyAmbiguous.length > 0) {
+    episode.history ??= [];
+    episode.history.push({
+      at,
+      type: "budget-reservation-ambiguous",
+      status: "ambiguous",
+      failureCode: "provider_usage_unknown_after_process_interruption",
+      reservationIds: newlyAmbiguous,
+      previousOverrun,
+      message:
+        `进程中断时有 ${newlyAmbiguous.length} 项 Provider 调用的派发状态或用量不明；预算预留已冻结，必须人工核对调用结果和费用`
+    });
+  }
   episode.updatedAt = at;
-  return { episode, changed: true, reservationIds: newlyAmbiguous };
+  return {
+    episode,
+    changed: true,
+    reservationIds: [...releasedReservationIds, ...newlyAmbiguous],
+    releasedReservationIds,
+    ambiguousReservationIds: newlyAmbiguous
+  };
 }
 
 export function createEpisodeBudgetLedger(options = {}) {

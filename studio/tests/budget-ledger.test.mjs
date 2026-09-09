@@ -81,6 +81,321 @@ test("模型请求前会持久化预算预留，并以实时状态阻止并发�
   );
 });
 
+test("进程恢复按 Provider 派发窗口释放 reserved 并只冻结 dispatching 或 ambiguous", async () => {
+  const reservedStore = memoryStore();
+  const reservedLedger = createEpisodeBudgetLedger(reservedStore);
+  await reservedLedger.reserve({
+    episodeId: "budget-case",
+    reservationId: "route-before-dispatch:attempt:1",
+    decisionId: "route-before-dispatch",
+    calls: 1,
+    costUsd: 0.2,
+    now: new Date("2026-08-31T02:00:00.000Z")
+  });
+  const provablyUndispatched = reservedStore.episode.control.budget.reservations[0];
+  assert.equal(Object.hasOwn(provablyUndispatched, "dispatchState"), true);
+  assert.equal(provablyUndispatched.dispatchState, "reserved");
+  assert.equal(provablyUndispatched.dispatchedAt, null);
+  assert.equal(provablyUndispatched.providerId, null);
+  assert.equal(provablyUndispatched.model, null);
+  assert.equal(provablyUndispatched.attempt, null);
+  const released = markInterruptedBudgetReservationsAmbiguous(
+    reservedStore.episode,
+    { now: new Date("2026-08-31T02:01:00.000Z") }
+  );
+  assert.equal(released.changed, true);
+  assert.deepEqual(released.releasedReservationIds, [
+    "route-before-dispatch:attempt:1"
+  ]);
+  assert.deepEqual(released.ambiguousReservationIds, []);
+  assert.deepEqual(getAmbiguousBudgetReservationIds(released.episode), []);
+  assert.equal(released.episode.control.budget.reservations.length, 0);
+  assert.equal(released.episode.control.budget.reservedCalls, 0);
+  assert.equal(released.episode.control.budget.reservedCostUsd, 0);
+  assert.equal(released.episode.control.budget.usedCalls, 0);
+  assert.equal(released.episode.control.budget.usedCostUsd, 0);
+  assert.equal(released.episode.control.budget.overrun, false);
+  const releasedEvent = released.episode.history.at(-1);
+  assert.equal(releasedEvent.type, "budget-reservation-settled");
+  assert.equal(releasedEvent.settlementStatus, "not_dispatched");
+  assert.equal(releasedEvent.usedCalls, 0);
+  assert.equal(releasedEvent.usedCostUsd, 0);
+
+  const dispatchingStore = memoryStore();
+  const dispatchingLedger = createEpisodeBudgetLedger(dispatchingStore);
+  await dispatchingLedger.reserve({
+    episodeId: "budget-case",
+    reservationId: "route-dispatching:attempt:1",
+    decisionId: "route-dispatching",
+    calls: 1,
+    costUsd: 0.2,
+    now: new Date("2026-08-31T02:02:00.000Z")
+  });
+  await dispatchingLedger.markDispatched({
+    episodeId: "budget-case",
+    reservationId: "route-dispatching:attempt:1",
+    providerId: "test-provider",
+    model: "test-model",
+    attempt: 1,
+    now: new Date("2026-08-31T02:02:30.000Z")
+  });
+  const frozen = markInterruptedBudgetReservationsAmbiguous(
+    dispatchingStore.episode,
+    { now: new Date("2026-08-31T02:03:00.000Z") }
+  );
+  assert.equal(frozen.changed, true);
+  assert.deepEqual(frozen.releasedReservationIds, []);
+  assert.deepEqual(frozen.ambiguousReservationIds, [
+    "route-dispatching:attempt:1"
+  ]);
+  assert.deepEqual(
+    getAmbiguousBudgetReservationIds(frozen.episode),
+    ["route-dispatching:attempt:1"]
+  );
+  assert.equal(frozen.episode.control.budget.reservations.length, 1);
+  assert.equal(frozen.episode.control.budget.reservedCalls, 1);
+  assert.equal(frozen.episode.control.budget.reservedCostUsd, 0.2);
+  assert.equal(frozen.episode.control.budget.overrun, true);
+
+  const alreadyAmbiguousStore = memoryStore();
+  const alreadyAmbiguousLedger = createEpisodeBudgetLedger(alreadyAmbiguousStore);
+  await alreadyAmbiguousLedger.reserve({
+    episodeId: "budget-case",
+    reservationId: "route-already-ambiguous:attempt:1",
+    decisionId: "route-already-ambiguous",
+    calls: 1,
+    costUsd: 0.2
+  });
+  await alreadyAmbiguousLedger.markDispatched({
+    episodeId: "budget-case",
+    reservationId: "route-already-ambiguous:attempt:1"
+  });
+  await alreadyAmbiguousLedger.markAmbiguous({
+    episodeId: "budget-case",
+    reservationId: "route-already-ambiguous:attempt:1"
+  });
+  const repeated = markInterruptedBudgetReservationsAmbiguous(
+    alreadyAmbiguousStore.episode,
+    { now: new Date("2026-08-31T02:04:00.000Z") }
+  );
+  assert.equal(repeated.changed, false);
+  assert.deepEqual(repeated.reservationIds, []);
+  assert.deepEqual(repeated.releasedReservationIds, []);
+  assert.deepEqual(repeated.ambiguousReservationIds, []);
+  assert.equal(
+    repeated.episode.history.filter(
+      (entry) => entry.type === "budget-reservation-ambiguous"
+    ).length,
+    1
+  );
+});
+
+test("不完整或非法的旧版 reserved 记录不能伪造未派发零费用释放", async (t) => {
+  const safeNullFields = {
+    dispatchedAt: null,
+    providerId: null,
+    model: null,
+    attempt: null
+  };
+  const inheritedReserved = Object.assign(
+    Object.create({ dispatchState: "reserved" }),
+    {
+      id: "inherited-dispatch-state",
+      calls: 1,
+      costUsd: 0.2,
+      costKnown: true,
+      reservedAt: "2026-08-31T03:00:00.000Z",
+      ...safeNullFields
+    }
+  );
+  const scenarios = [
+    {
+      name: "missing",
+      reservation: {
+        id: "missing-dispatch-state",
+        calls: 1,
+        costUsd: 0.2,
+        costKnown: true,
+        reservedAt: "2026-08-31T03:00:00.000Z",
+        ...safeNullFields
+      }
+    },
+    {
+      name: "invalid",
+      reservation: {
+        id: "invalid-dispatch-state",
+        calls: 1,
+        costUsd: 0.2,
+        costKnown: true,
+        reservedAt: "2026-08-31T03:00:00.000Z",
+        dispatchState: "not-started",
+        ...safeNullFields
+      }
+    },
+    {
+      name: "missing-calls",
+      reservation: {
+        id: "missing-calls",
+        costUsd: 0.2,
+        costKnown: true,
+        reservedAt: "2026-08-31T03:00:00.000Z",
+        dispatchState: "reserved",
+        ...safeNullFields
+      }
+    },
+    {
+      name: "invalid-calls",
+      reservation: {
+        id: "invalid-calls",
+        calls: "1",
+        costUsd: 0.2,
+        costKnown: true,
+        reservedAt: "2026-08-31T03:00:00.000Z",
+        dispatchState: "reserved",
+        ...safeNullFields
+      }
+    },
+    {
+      name: "missing-cost-usd",
+      reservation: {
+        id: "missing-cost-usd",
+        calls: 1,
+        costKnown: true,
+        reservedAt: "2026-08-31T03:00:00.000Z",
+        dispatchState: "reserved",
+        ...safeNullFields
+      }
+    },
+    {
+      name: "invalid-cost-usd",
+      reservation: {
+        id: "invalid-cost-usd",
+        calls: 1,
+        costUsd: "0.2",
+        costKnown: true,
+        reservedAt: "2026-08-31T03:00:00.000Z",
+        dispatchState: "reserved",
+        ...safeNullFields
+      }
+    },
+    {
+      name: "missing-cost-known",
+      reservation: {
+        id: "missing-cost-known",
+        calls: 1,
+        costUsd: 0.2,
+        reservedAt: "2026-08-31T03:00:00.000Z",
+        dispatchState: "reserved",
+        ...safeNullFields
+      }
+    },
+    {
+      name: "invalid-cost-known",
+      reservation: {
+        id: "invalid-cost-known",
+        calls: 1,
+        costUsd: 0.2,
+        costKnown: "true",
+        reservedAt: "2026-08-31T03:00:00.000Z",
+        dispatchState: "reserved",
+        ...safeNullFields
+      }
+    },
+    {
+      name: "unknown-cost-with-nonzero-value",
+      reservation: {
+        id: "unknown-cost-with-nonzero-value",
+        calls: 1,
+        costUsd: 0.2,
+        costKnown: false,
+        reservedAt: "2026-08-31T03:00:00.000Z",
+        dispatchState: "reserved",
+        ...safeNullFields
+      }
+    },
+    {
+      name: "inherited",
+      reservation: inheritedReserved
+    },
+    {
+      name: "legacy-minimal",
+      reservation: {
+        id: "legacy-minimal-reservation",
+        calls: 1,
+        costUsd: 0.2,
+        costKnown: true,
+        reservedAt: "2026-08-31T03:00:00.000Z"
+      }
+    },
+    {
+      name: "contradictory-own-reserved",
+      reservation: {
+        id: "reserved-with-dispatch-evidence",
+        calls: 1,
+        costUsd: 0.2,
+        costKnown: true,
+        reservedAt: "2026-08-31T03:00:00.000Z",
+        dispatchState: "reserved",
+        dispatchedAt: "2026-08-31T03:00:10.000Z",
+        providerId: "provider-a",
+        model: "model-a",
+        attempt: 1
+      }
+    }
+  ];
+
+  for (const scenario of scenarios) {
+    await t.test(scenario.name, () => {
+      const source = {
+        id: `budget-${scenario.name}`,
+        control: {
+          budget: {
+            maxCalls: 2,
+            maxCostUsd: 2,
+            usedCalls: 0,
+            usedCostUsd: 0,
+            reservedCalls: 1,
+            reservedCostUsd: 0.2,
+            reservations: [scenario.reservation]
+          }
+        },
+        history: []
+      };
+      const normalized = ensureAgentArchitecture(source);
+      assert.equal(normalized.control.budget.reservations[0].dispatchState, "ambiguous");
+
+      const recovered = markInterruptedBudgetReservationsAmbiguous(normalized, {
+        now: new Date("2026-08-31T03:01:00.000Z")
+      });
+      const reservationId = scenario.reservation.id;
+      assert.equal(recovered.changed, true);
+      assert.deepEqual(recovered.releasedReservationIds, []);
+      assert.deepEqual(recovered.ambiguousReservationIds, [reservationId]);
+      assert.deepEqual(getAmbiguousBudgetReservationIds(recovered.episode), [reservationId]);
+      assert.equal(recovered.episode.control.budget.reservations.length, 1);
+      assert.equal(
+        recovered.episode.control.budget.reservations[0].dispatchState,
+        "ambiguous"
+      );
+      assert.equal(recovered.episode.control.budget.reservedCalls, 1);
+      assert.equal(recovered.episode.control.budget.reservedCostUsd, 0.2);
+      assert.equal(recovered.episode.control.budget.usedCalls, 0);
+      assert.equal(recovered.episode.control.budget.usedCostUsd, 0);
+      assert.equal(recovered.episode.control.budget.overrun, true);
+      assert.equal(
+        recovered.episode.history.some(
+          (entry) => entry.settlementStatus === "not_dispatched"
+        ),
+        false
+      );
+      assert.equal(
+        recovered.episode.history.at(-1).failureCode,
+        "provider_usage_unknown_after_process_interruption"
+      );
+    });
+  }
+});
+
 test("模型请求后原子结算已用预算，路由重复记录不会二次计费", async () => {
   const store = memoryStore();
   const ledger = createEpisodeBudgetLedger(store);
@@ -126,7 +441,7 @@ test("模型请求后原子结算已用预算，路由重复记录不会二次�
   assert.equal(duplicate.control.budget.usedCostUsd, 0.15);
 });
 
-test("中断的 Provider 预算预留保持冻结，人工显式对账前不能重试或按默认值释放", async () => {
+test("中断的已派发 Provider 预算预留保持冻结，人工显式对账前不能重试或按默认值释放", async () => {
   const store = memoryStore();
   const ledger = createEpisodeBudgetLedger(store);
   await ledger.reserve({
@@ -136,6 +451,14 @@ test("中断的 Provider 预算预留保持冻结，人工显式对账前不能�
     calls: 1,
     costUsd: 0.2,
     now: new Date("2026-08-06T06:10:00.000Z")
+  });
+  await ledger.markDispatched({
+    episodeId: "budget-case",
+    reservationId: "route-ambiguous:attempt:1",
+    providerId: "test-provider",
+    model: "test-model",
+    attempt: 1,
+    now: new Date("2026-08-06T06:10:30.000Z")
   });
   const marked = markInterruptedBudgetReservationsAmbiguous(store.episode, {
     now: new Date("2026-08-06T06:11:00.000Z")
@@ -342,7 +665,8 @@ test("人工对账累计调用数或六位小数费用溢出时拒绝写入", as
       calls: 1,
       costUsd: 0.1,
       costKnown: true,
-      reservedAt: "2026-08-06T07:00:00.000Z"
+      reservedAt: "2026-08-06T07:00:00.000Z",
+      dispatchState: "dispatching"
     }];
     source.control.budget.reservedCalls = 1;
     source.control.budget.reservedCostUsd = 0.1;
@@ -381,6 +705,15 @@ test("多笔中断预留逐笔对账时不会丢失先前已经确认的真实�
       calls: 1,
       costUsd,
       now: new Date(`2026-08-06T06:2${index}:00.000Z`)
+    });
+  }
+  for (const index of [0, 1]) {
+    await ledger.markDispatched({
+      episodeId: "budget-case",
+      reservationId: `route-multiple:attempt:${index + 1}`,
+      providerId: "test-provider",
+      model: "test-model",
+      attempt: index + 1
     });
   }
   const marked = markInterruptedBudgetReservationsAmbiguous(store.episode, {
@@ -431,6 +764,13 @@ test("中断前已经存在的真实 overrun 不会被纯歧义对账清除", as
     reservationId: "route-existing-overrun:attempt:1",
     calls: 1,
     costUsd: 0.2
+  });
+  await ledger.markDispatched({
+    episodeId: "budget-case",
+    reservationId: "route-existing-overrun:attempt:1",
+    providerId: "test-provider",
+    model: "test-model",
+    attempt: 1
   });
   const beforeRecovery = store.episode;
   beforeRecovery.control.budget.overrun = true;

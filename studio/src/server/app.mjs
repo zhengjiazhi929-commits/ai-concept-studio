@@ -15,6 +15,7 @@ import {
   listEpisodes,
   readConfig,
   readEpisode,
+  readEpisodeCommitStatus,
   readRecentEvents
 } from "../shared/store.mjs";
 import { summarizePipeline } from "../shared/schema.mjs";
@@ -503,7 +504,12 @@ async function routeApi(
 
   const episodeMatch = /^\/api\/episodes\/([a-z0-9-]+)$/u.exec(url.pathname);
   if (request.method === "GET" && episodeMatch) {
-    sendJson(response, 200, { episode: await readState(episodeMatch[1]) });
+    const episodeId = episodeMatch[1];
+    const readCommitStatus = options.readEpisodeCommitStatus ?? readEpisodeCommitStatus;
+    sendJson(response, 200, {
+      episode: await readState(episodeId),
+      stateCommit: await readCommitStatus(episodeId)
+    });
     return true;
   }
 
@@ -998,6 +1004,7 @@ function approvalRouteDependencies(options = {}) {
     "readEpisode",
     "listEpisodes",
     "readRecentEvents",
+    "readEpisodeCommitStatus",
     "writeEpisode",
     "appendEvent",
     "getCloudBackupStatus",

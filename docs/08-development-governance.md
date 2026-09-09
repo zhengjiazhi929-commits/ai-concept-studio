@@ -104,6 +104,25 @@ SOP 文件只作来源参考，不是运行时依赖。
 
 任何失败都必须报告真实命令、失败数、首个根因和下一门禁。
 
+CI 与本地门禁必须使用同一证据边界：
+
+- 本地 `diff:check` 至少检查工作树和暂存区；PR 还要检查
+  `base...head`，push 还要检查 `before..head`。CI 必须完整 fetch
+  所需基线，新分支不得把全零 `before` 当成空 diff 通过。
+- render smoke 只能使用内联、确定性的生产语义 `visualPlan` Fixture，
+  不读取 live Episode。它必须渲染标题、辅助文案和图形阶段的多个
+  代表帧，实际解码 PNG 像素，拒绝全黑、全透明、单色和帧间无变化。
+- 本地启动器必须将 `package.json`、`pnpm-lock.yaml`、workspace 配置和
+  锁定 Node/pnpm 版本绑定到依赖指纹，同时核对 pnpm 安装 lock 副本和
+  直接依赖可解析性；只看 `node_modules` 目录存在不算通过。
+- 默认分支每周定时重跑 frozen install、生产依赖安全审计和完整
+  verify；工作流文件存在不等于 hosted CI 已经执行。
+- 视频 QA 的 Python 运行时必须固定 CPython 小版本，并通过仓库内
+  `--require-hashes` 依赖锁固定 NumPy/Pillow；CI 和本地 QA 都要记录
+  Python、包版本、脚本与锁文件哈希。不能退回任意系统 `python3`。
+- 机器 QA 必须完整解码音视频，并检查轨道数量、帧数、A/V 时长、
+  黑帧、冻结和静音覆盖；这些证据仍不能替代最终成片的连续 1x 人工观看。
+
 ## 7. Git 与交付
 
 - 开始前核对真实 Git 根和 dirty 状态；有不相关改动时使用独立 worktree。

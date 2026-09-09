@@ -15,6 +15,45 @@ import {
   derivedVisualDirectionFidelity
 } from "./short-script-adapter.mjs";
 import { derivedStoryboardFidelity } from "./short-storyboard-adapter.mjs";
+import {
+  subtitleBoundaryReasons as sharedSubtitleBoundaryReasons,
+  SUBTITLE_MAXIMUM_CUE_DURATION_SECONDS,
+  SUBTITLE_MINIMUM_CUE_DURATION_SECONDS
+} from "./subtitle-segmentation.mjs";
+
+export const SUBTITLE_QA_MAXIMUM_CUE_DURATION_SECONDS =
+  SUBTITLE_MAXIMUM_CUE_DURATION_SECONDS;
+
+function subtitleSourceBinding(subtitles = []) {
+  const texts = [];
+  const issues = [];
+  const valid = [];
+  for (let index = 0; index < subtitles.length; index += 1) {
+    const cue = subtitles[index] ?? {};
+    const text = String(cue.text ?? "");
+    if (cue.sourceText === undefined) {
+      texts.push(text);
+      valid.push(true);
+      continue;
+    }
+    const previous = subtitles[index - 1];
+    const source = cue.sourceText;
+    const isSourceText = typeof source === "string" && source.trim().length > 0;
+    const plain = isSourceText && text === source;
+    // Rolling display may only repeat the immediately preceding, already shown
+    // prefix. Unverified metadata must never replace the actual displayed text.
+    const rolling = isSourceText && index > 0 && valid[index - 1] &&
+      text === String(previous?.text ?? "") + source &&
+      Number.isFinite(cue.start) && Number.isFinite(previous?.end) &&
+      Math.abs(cue.start - previous.end) <= 0.0001;
+    const matches = (plain || rolling) &&
+      (cue.rollingCarryApplied === undefined || cue.rollingCarryApplied === !plain);
+    valid.push(matches);
+    texts.push(matches ? source : text);
+    if (!matches) issues.push({index, reason: "source-display-mismatch"});
+  }
+  return {texts, issues};
+}
 
 function compactLength(value) {
   return String(value ?? "").replace(/[\s，。！？；：、“”‘’（）《》…—,.!?;:'"()\[\]{}-]/gu, "").length;
@@ -39,29 +78,53 @@ function hasStage(stage, ...stages) {
   return stages.includes(stage);
 }
 
-const subtitleSegmenter = new Intl.Segmenter("zh-CN", { granularity: "word" });
-const leadingClosingPunctuation = /^[，。！？；：、）》】,.!?;:)\]]/u;
-const trailingOpeningPunctuation = /[（《【(\[]$/u;
-
 export function subtitleBoundaryIssues(subtitles = []) {
-  const texts = subtitles.map((subtitle) => String(subtitle?.text ?? ""));
-  const joined = texts.join("");
-  const validBoundaries = new Set(
-    [...subtitleSegmenter.segment(joined)].map((item) => item.index)
-  );
-  validBoundaries.add(joined.length);
+  const {texts} = subtitleSourceBinding(subtitles);
   const issues = [];
   let offset = 0;
   for (let index = 0; index < texts.length - 1; index += 1) {
     offset += texts[index].length;
-    const previous = texts[index].trimEnd();
-    const next = texts[index + 1].trimStart();
-    const reasons = [];
-    if (!validBoundaries.has(offset)) reasons.push("word-split");
-    if (leadingClosingPunctuation.test(next)) reasons.push("leading-punctuation");
-    if (trailingOpeningPunctuation.test(previous)) reasons.push("trailing-opening-punctuation");
+    const previous = texts[index];
+    const next = texts[index + 1];
+    const reasons = sharedSubtitleBoundaryReasons(previous, next);
     if (reasons.length > 0) {
-      issues.push({ index, offset, reasons });
+      issues.push({ index, offset, reasons: [...new Set(reasons)] });
+    }
+  }
+  return issues;
+}
+
+export function subtitleDurationIssues(subtitles = [], options = {}) {
+  const minimumSeconds = Number(
+    options.minimumSeconds ?? SUBTITLE_MINIMUM_CUE_DURATION_SECONDS
+  );
+  const maximumSeconds = Number(
+    options.maximumSeconds ?? SUBTITLE_QA_MAXIMUM_CUE_DURATION_SECONDS
+  );
+  if (
+    !Number.isFinite(minimumSeconds) ||
+    !Number.isFinite(maximumSeconds) ||
+    minimumSeconds <= 0 ||
+    maximumSeconds <= minimumSeconds
+  ) {
+    throw new TypeError("字幕时长 QA 上下限无效");
+  }
+
+  const issues = [];
+  for (let index = 0; index < subtitles.length; index += 1) {
+    const subtitle = subtitles[index] ?? {};
+    const start = Number(subtitle.start);
+    const end = Number(subtitle.end);
+    const durationSeconds = end - start;
+    const reasons = [];
+    if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+      reasons.push("invalid-duration");
+    } else {
+      if (durationSeconds < minimumSeconds - 1e-12) reasons.push("too-short");
+      if (durationSeconds > maximumSeconds + 1e-12) reasons.push("too-long");
+    }
+    if (reasons.length > 0) {
+      issues.push({index, durationSeconds, reasons});
     }
   }
   return issues;
@@ -483,19 +546,41 @@ export function evaluateProductionQuality(episode, options = {}) {
     let subtitleTimelineValid = subtitles.length > 0;
     let maxRate = 0;
     let overlyLongLines = 0;
-    let overlyBriefLines = 0;
     let leadingWhitespaceLines = 0;
     for (const subtitle of subtitles) {
-      if (Math.abs(subtitle.start - previousEnd) > 0.2 || subtitle.end <= subtitle.start) {
+      if (
+        !Number.isFinite(subtitle.start) ||
+        !Number.isFinite(subtitle.end) ||
+        subtitle.start < 0 ||
+        Math.abs(subtitle.start - previousEnd) > 0.2 ||
+        subtitle.end <= subtitle.start
+      ) {
         subtitleTimelineValid = false;
       }
       const subtitleDuration = Math.max(0.1, subtitle.end - subtitle.start);
       maxRate = Math.max(maxRate, compactLength(subtitle.text) / subtitleDuration);
       if (compactLength(subtitle.text) > 28) overlyLongLines += 1;
-      if (subtitleDuration < 0.75) overlyBriefLines += 1;
       if (/^\s/u.test(String(subtitle.text ?? ""))) leadingWhitespaceLines += 1;
       previousEnd = subtitle.end;
     }
+    const sourceBinding = subtitleSourceBinding(subtitles);
+    add(
+      "subtitle-source-integrity",
+      "字幕原文与实际显示一致",
+      sourceBinding.issues.length === 0,
+      "error",
+      sourceBinding.issues.length,
+      "0 条原文与显示不一致",
+      sourceBinding.issues.length === 0 ? "" : "字幕原文必须与显示一致，累计显示只能重复上一条已展示的前缀",
+      {ownerAgentId: "storyboard-agent", location: "subtitles"}
+    );
+    const durationIssues = subtitleDurationIssues(subtitles);
+    const overlyBriefLines = durationIssues.filter(
+      (issue) => issue.reasons.includes("too-short")
+    ).length;
+    const overlyLongDurationLines = durationIssues.filter(
+      (issue) => issue.reasons.includes("too-long")
+    ).length;
     if (Math.abs(previousEnd - duration) > 0.35) subtitleTimelineValid = false;
     add(
       "subtitle-timeline",
@@ -521,6 +606,22 @@ export function evaluateProductionQuality(episode, options = {}) {
         ownerAgentId: "storyboard-agent",
         location: "subtitles",
         suggestedFix: "由 Storyboard Agent 重新平衡相邻字幕，避免孤立短尾句"
+      }
+    );
+    add(
+      "subtitle-max-duration",
+      "字幕不会提前展示过长后文",
+      overlyLongDurationLines === 0,
+      "error",
+      overlyLongDurationLines,
+      `0 条长于 ${SUBTITLE_QA_MAXIMUM_CUE_DURATION_SECONDS} 秒`,
+      overlyLongDurationLines === 0
+        ? ""
+        : `${overlyLongDurationLines} 条字幕停留超过 ${SUBTITLE_QA_MAXIMUM_CUE_DURATION_SECONDS} 秒，会在旁白念到前提前暴露后文`,
+      {
+        ownerAgentId: "storyboard-agent",
+        location: "subtitles",
+        suggestedFix: "按原旁白 marker 和完整语义短句重新分段，禁止用整段长字幕覆盖慢速口播"
       }
     );
     add(
@@ -570,7 +671,9 @@ export function evaluateProductionQuality(episode, options = {}) {
         ...scriptSections.map((section) => section?.narration),
         structuredScript.closing
       ].join("\n"));
-      const subtitleCharacters = compactLength(subtitles.map((subtitle) => subtitle.text).join("\n"));
+      const subtitleCharacters = compactLength(
+        sourceBinding.texts.join("\n")
+      );
       const coverage = scriptCharacters > 0 ? subtitleCharacters / scriptCharacters : Number.NaN;
       const coveragePassed = Number.isFinite(coverage) && coverage >= 0.75 && coverage <= 1.25;
       add(

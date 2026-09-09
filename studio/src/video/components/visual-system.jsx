@@ -9,9 +9,9 @@ import {
   useVideoConfig
 } from "remotion";
 import visualSystem from "../../../config/visual-system.json";
+import { VIDEO_SANS_FONT_FAMILY } from "../font-system.mjs";
 
-const fontFamily =
-  '"PingFang SC", "HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif';
+const fontFamily = VIDEO_SANS_FONT_FAMILY;
 
 export const visualColors = visualSystem.colors;
 

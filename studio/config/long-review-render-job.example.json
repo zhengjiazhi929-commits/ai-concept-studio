@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "long-review-render-job-v1",
+  "jobId": "replace-me-current-v001",
+  "episodeId": "replace-me-current",
+  "candidateVersion": 1,
+  "compositionId": "AgentSkillLongReview",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "durationInFrames": 18000,
+  "paths": {
+    "entryPoint": "studio/src/video/agent-skill-long-review-index.jsx",
+    "episode": "studio/data/episodes/replace-me-current/episode.json",
+    "voice": "studio/public/episodes/replace-me-current/voice-review.wav",
+    "finalDirectory": "outputs/studio/replace-me-current/review-candidates/full-video-current-v001",
+    "workDirectory": "outputs/studio/replace-me-current/review-candidates/.full-video-current-v001-work"
+  },
+  "protectedArtifacts": [],
+  "temporaryVoice": true,
+  "temporaryVoiceIsFinalHumanRecording": false
+}

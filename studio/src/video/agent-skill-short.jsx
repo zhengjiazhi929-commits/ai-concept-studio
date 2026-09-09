@@ -17,6 +17,7 @@ import {
   agentSkillShortProgressPixelsAt,
   agentSkillShortSceneAt
 } from "./agent-skill-short-plan.mjs";
+import { VIDEO_SANS_FONT_FAMILY } from "./font-system.mjs";
 
 const palette = {
   paper: "#F4F6F3",
@@ -393,7 +394,7 @@ export function AgentSkillShortExplainer({ episode }) {
   const scene = episode.scenes.find((item) => item.id === plannedScene.id) ?? episode.scenes.at(-1);
   const subtitle = (episode.subtitles ?? []).find((item) => currentSecond >= item.start && currentSecond < item.end)?.text ?? scene.subtitle;
   return (
-    <AbsoluteFill lang="zh-CN" style={{ color: palette.ink, fontFamily: '"Microsoft YaHei", "Noto Sans CJK SC", sans-serif' }}>
+    <AbsoluteFill lang="zh-CN" style={{ color: palette.ink, fontFamily: VIDEO_SANS_FONT_FAMILY }}>
       <Backdrop />
       {episode.voice?.publicPath ? <Audio src={staticFile(episode.voice.publicPath)} /> : null}
       <Header scene={scene} />
