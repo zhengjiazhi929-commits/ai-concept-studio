@@ -15,6 +15,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import {dirname, resolve} from "node:path";
+import {fileURLToPath} from "node:url";
 import {tmpdir} from "node:os";
 import {promisify} from "node:util";
 import test from "node:test";
@@ -23,7 +24,7 @@ import {resolveLockedPythonRuntime} from "../scripts/qa-agent-skill-long-review-
 
 const execFileAsync = promisify(execFile);
 const SCRIPT_PATH = resolve(
-  dirname(new URL(import.meta.url).pathname),
+  dirname(fileURLToPath(import.meta.url)),
   "../scripts/build-agent-skill-v004b-no-box-overlays.py",
 );
 const FONT_PATH = resolve(import.meta.dirname, "helpers/overlay-python-harness.py");

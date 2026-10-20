@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import {jsonDocumentContentSha256} from '../src/shared/durable-json-store.mjs';
 
 import { assertCurrentApprovalArtifactIntegrity } from
   "../src/server/reviews/approval-artifact-integrity.mjs";
@@ -14,6 +15,15 @@ function episodeWithDraft(gate, draft) {
     }
   };
 }
+
+test('local imported inline script verifies both content file and import manifest before human approval',async()=>{
+  const content={title:'synthetic'};
+  const draft={content,generationKind:'codex-local-script-import',artifactPath:'script.json',bytes:27,sha256:jsonDocumentContentSha256(content),manifestPath:'import.json',manifestBytes:42,manifestSha256:'b'.repeat(64)};
+  const options={resolveExistingPathInside:async(_root,path)=>path,inspectFileIntegrity:async path=>path.endsWith('script.json')?{bytes:27,sha256:draft.sha256}:{bytes:42,sha256:'c'.repeat(64)}};
+  await assert.rejects(assertCurrentApprovalArtifactIntegrity(episodeWithDraft('script',draft),'script',options),error=>error.code==='script_approval_artifact_integrity_mismatch');
+  draft.content.title='changed-inline';
+  await assert.rejects(assertCurrentApprovalArtifactIntegrity(episodeWithDraft('script',draft),'script',options),error=>error.code==='script_approval_inline_integrity_mismatch');
+});
 
 function inlineResearchEpisode() {
   return {

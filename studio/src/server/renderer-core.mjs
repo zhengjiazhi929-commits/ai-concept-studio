@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 
 import { studioOutputRoot, workspaceRoot } from "../shared/paths.mjs";
+import {usesEditorialMaterialization} from "./production/editorial-materialization-consumption.mjs";
 
 function renderVersionFromPath(outputPath) {
   return Number(/preview-v(\d{3})\.mp4$/u.exec(outputPath)?.[1] ?? 0);
@@ -52,6 +53,14 @@ export function createRendererService({
   finalizeDeterministicLayoutSampleSet
 }) {
   async function renderPreview(episode, context = {}) {
+    // The materialization-v1 props are editorial estimates with no Audio.
+    // Never silently rebuild today's source or render that silent bundle as a
+    // formal, voice-approved film. Audio alignment needs a separately gated path.
+    if (usesEditorialMaterialization(episode)) {
+      throw Object.assign(new Error("编辑动画素材包尚未接入实际旁白和音频对齐；不能正式渲染"), {
+        code: "editorial_audio_integration_required", statusCode: 409
+      });
+    }
     const config = await dependencies.readConfig();
     const outputDirectory = dependencies.episodeOutputDirectory(episode.id);
     await dependencies.mkdir(outputDirectory, { recursive: true });

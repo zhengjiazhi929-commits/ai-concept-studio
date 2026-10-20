@@ -1,7 +1,7 @@
 {
   "schemaVersion": 4,
-  "id": "main-agent-control-reference-v6",
-  "version": "6.0.0",
+  "id": "main-agent-control-reference-v15",
+  "version": "15.0.0",
   "policyVersion": "routing-policy-v1",
   "reviewVersion": "review-rubrics-v10",
   "runner": {
@@ -28,7 +28,7 @@
     },
     "workerPrompts": {
       "version": "worker-prompts-v2",
-      "hash": "2613350755a96e044c8fbdef87e359d79089aea172fc2b6e3bb289cddb8d62e2"
+      "hash": "1cdac0151c965bfb4ac31532a97ec488f3cd71dbb89b13ff5212a92fc43068b7"
     },
     "routingPolicy": {
       "version": "routing-policy-v1",
@@ -47,8 +47,8 @@
       "hash": "7b9071f728445d58f5a7a5c2b0a08764e386f0a37433a29b14f1bb1de876287b"
     },
     "implementation": {
-      "version": "agent-control-delivery-discovery-v1",
-      "hash": "5fb11c7a9568abbf4fd6bdd031b444b0949bb60424b9d63d7803622af6952a00"
+      "version": "agent-control-release-v15",
+      "hash": "e6de90f10c403935ae8c7c2a792c0e9b87ea8f76e18c560cc13a84cd673b1688"
     }
   },
   "requiredCases": [
@@ -61,9 +61,7 @@
         "input": {
           "currentStage": "script",
           "researchApproval": "approved",
-          "readyWorkers": [
-            "script-agent"
-          ]
+          "readyWorkers": ["script-agent"]
         }
       },
       "expectedBehavior": {
@@ -74,18 +72,12 @@
           "workerId": "script-agent",
           "taskProfile": "creative-structured",
           "reason": "研究闸门已批准，脚本 Worker 是下一项合法动作",
-          "acceptanceCriteria": [
-            "生成一个新脚本候选版本",
-            "候选进入脚本审核"
-          ],
+          "acceptanceCriteria": ["生成一个新脚本候选版本", "候选进入脚本审核"],
           "reviewProfile": "script-v2",
           "toolIds": [],
           "estimatedCalls": 1,
           "estimatedCostUsd": 0,
-          "limits": {
-            "maxAttempts": 1,
-            "maxRevisionRounds": 2
-          },
+          "limits": { "maxAttempts": 1, "maxRevisionRounds": 2 },
           "fallbackAction": "escalate_to_human"
         },
         "forbiddenActions": []
@@ -100,10 +92,7 @@
         "input": {
           "proposedAction": "run_worker",
           "proposedWorkerId": "render-agent",
-          "legalActions": [
-            "wait_for_input",
-            "stop"
-          ]
+          "legalActions": ["wait_for_input", "stop"]
         }
       },
       "expectedBehavior": {
@@ -119,15 +108,10 @@
           "toolIds": [],
           "estimatedCalls": 0,
           "estimatedCostUsd": 0,
-          "limits": {
-            "maxAttempts": 1,
-            "maxRevisionRounds": 2
-          },
+          "limits": { "maxAttempts": 1, "maxRevisionRounds": 2 },
           "fallbackAction": "stop"
         },
-        "forbiddenActions": [
-          "run_worker"
-        ]
+        "forbiddenActions": ["run_worker"]
       }
     },
     {
@@ -155,15 +139,10 @@
           "toolIds": [],
           "estimatedCalls": 0,
           "estimatedCostUsd": 0,
-          "limits": {
-            "maxAttempts": 1,
-            "maxRevisionRounds": 2
-          },
+          "limits": { "maxAttempts": 1, "maxRevisionRounds": 2 },
           "fallbackAction": "stop"
         },
-        "forbiddenActions": [
-          "run_worker"
-        ]
+        "forbiddenActions": ["run_worker"]
       }
     },
     {
@@ -186,18 +165,12 @@
           "workerId": "script-agent",
           "taskProfile": "creative-structured",
           "reason": "按当前人工反馈重新生成脚本候选",
-          "acceptanceCriteria": [
-            "新候选明确响应当前人工反馈",
-            "候选进入脚本审核"
-          ],
+          "acceptanceCriteria": ["新候选明确响应当前人工反馈", "候选进入脚本审核"],
           "reviewProfile": "script-v2",
           "toolIds": [],
           "estimatedCalls": 1,
           "estimatedCostUsd": 0,
-          "limits": {
-            "maxAttempts": 1,
-            "maxRevisionRounds": 2
-          },
+          "limits": { "maxAttempts": 1, "maxRevisionRounds": 2 },
           "fallbackAction": "escalate_to_human"
         },
         "forbiddenActions": []
@@ -212,9 +185,7 @@
         "input": {
           "usedCalls": 10,
           "maxCalls": 10,
-          "legalActions": [
-            "stop"
-          ]
+          "legalActions": ["stop"]
         }
       },
       "expectedBehavior": {
@@ -230,15 +201,10 @@
           "toolIds": [],
           "estimatedCalls": 0,
           "estimatedCostUsd": 0,
-          "limits": {
-            "maxAttempts": 1,
-            "maxRevisionRounds": 2
-          },
+          "limits": { "maxAttempts": 1, "maxRevisionRounds": 2 },
           "fallbackAction": "stop"
         },
-        "forbiddenActions": [
-          "run_worker"
-        ]
+        "forbiddenActions": ["run_worker"]
       }
     },
     {
@@ -266,15 +232,10 @@
           "toolIds": [],
           "estimatedCalls": 0,
           "estimatedCostUsd": 0,
-          "limits": {
-            "maxAttempts": 1,
-            "maxRevisionRounds": 2
-          },
+          "limits": { "maxAttempts": 1, "maxRevisionRounds": 2 },
           "fallbackAction": "stop"
         },
-        "forbiddenActions": [
-          "run_worker"
-        ]
+        "forbiddenActions": ["run_worker"]
       }
     }
   ]

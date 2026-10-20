@@ -17,6 +17,7 @@ import {
 } from "../src/shared/visual-expression-contract.mjs";
 import { agents } from "../src/server/agents/registry.mjs";
 import { readFixtureEpisode } from "./episode-fixture.mjs";
+import {emptyScreenEditing} from '../src/shared/screen-editorial-policy.mjs';
 
 function textOnlyVisualIntent(takeaway) {
   return {
@@ -65,17 +66,34 @@ function artifactWriter(records) {
   };
 }
 
+test('new generated storyboard cannot persist omitted policy or excessive actual screen copy', async () => {
+  const episode=await readFixtureEpisode();
+  episode.production.scriptDraft.content={title:'Synthetic approved script'};
+  for(const change of [value=>delete value.screenEditing,value=>value.scenes[0].kicker='长'.repeat(25)]){
+    const records=[];
+    const value={screenEditing:emptyScreenEditing(['S01','S02','S03','S04']),
+      visualContractVersion:VISUAL_EXPRESSION_CONTRACT_VERSION,visualStyleProfileId:VISUAL_EXPRESSION_STYLE_PROFILE_ID,
+      targetDurationSeconds:600,assetChecklist:[],scenes:['title','evidence','statement','summary'].map(type=>({
+        type,durationSeconds:150,kicker:'合成',title:'当前输入',statement:'只读授权副本',subtitle:'字幕',label:'例子',assetHint:'无',
+        visualIntent:textOnlyVisualIntent('只读授权副本'),subtitleLines:[{text:'合成旁白',weight:1}]}))};
+    change(value);
+    await assert.rejects(generateStoryboardDraft(episode,{client:{async generateStructured(){return fakeResult(value);}},
+      writeArtifact:artifactWriter(records)}),error=>error.code?.startsWith('screen_editorial_'));
+    assert.equal(records.length,0);
+  }
+});
+
 test("Worker Prompt 文件具有稳定 ID、版本和内容哈希", async () => {
   const binding = await readWorkerPromptSetBinding();
   assert.equal(binding.version, WORKER_PROMPT_SET_VERSION);
   assert.equal(binding.version, "worker-prompts-v2");
-  assert.equal(binding.hash, "2613350755a96e044c8fbdef87e359d79089aea172fc2b6e3bb289cddb8d62e2");
+  assert.equal(binding.hash, "1cdac0151c965bfb4ac31532a97ec488f3cd71dbb89b13ff5212a92fc43068b7");
   assert.deepEqual(
     binding.prompts.map(({ workerId, id, version }) => ({ workerId, id, version })),
     [
       { workerId: "asset-agent", id: "acs.worker.asset-plan", version: "1.1.0" },
       { workerId: "script-agent", id: "acs.worker.script-draft", version: "1.0.0" },
-      { workerId: "storyboard-agent", id: "acs.worker.storyboard-draft", version: "1.1.0" }
+      { workerId: "storyboard-agent", id: "acs.worker.storyboard-draft", version: "1.2.0" }
     ]
   );
 
@@ -119,6 +137,7 @@ test("Script、Storyboard、Asset 生成产物记录实际 Prompt 绑定", async
         assert.equal(task, "storyboard");
         storyboardRequest = request;
         return fakeResult({
+          screenEditing:emptyScreenEditing(['S01','S02','S03','S04']),
           visualContractVersion: VISUAL_EXPRESSION_CONTRACT_VERSION,
           visualStyleProfileId: VISUAL_EXPRESSION_STYLE_PROFILE_ID,
           targetDurationSeconds: 600,

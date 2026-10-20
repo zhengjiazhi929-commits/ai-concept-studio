@@ -545,6 +545,40 @@ test("素材执行 dossier 只展示候选 A，Episode 当前方案变成 B 时�
   );
 });
 
+test("editorial asset dossier preserves packaged resources and reports preparation-only approval consequences", () => {
+  const episode=fixtureEpisode();
+  const plan=episode.production.assetPlan.content;
+  plan.kind="editorial-code-asset-plan-v1";
+  const candidate=episode.reviewCheckpoints.assetExecution.currentCandidate;
+  const file=(path)=>({path,bytes:20,sha256:"7".repeat(64)});
+  candidate.localCodeImplementation={schemaVersion:"editorial-code-implementation-v1",componentId:"EditorialMotionPreview",
+    sha256:"8".repeat(64),files:[file("studio/src/video/editorial-motion-preview.jsx")],
+    rendered:false,visualAcceptance:false,
+    font:{status:"packaged-files-bound",packageName:"@fontsource-variable/noto-sans-sc",packageVersion:"5.3.0",
+      family:"Noto Sans SC Variable",license:"OFL-1.1",licensePath:"font/LICENSE",portable:true,browserResolutionVerified:false,
+      files:[file("font/LICENSE"),file("font/synthetic.woff2")]},
+    logo:{profile:"approved-v013-stable-footprint",cadence:"continuous",width:120,height:120,frameCount:120,
+      validation:"approved-manifest-sha256-and-png-header-only",manifest:file("logo/manifest.json"),files:[file("logo/frame-000.png")]}};
+  Object.assign(candidate.summary,{kind:plan.kind,voiceStatus:"deferred",renderAuthorized:false,
+    materializationStatus:"not-started",visualAcceptance:false,fontBrowserResolutionVerified:false});
+  candidate.planHash=integrityHash(plan);
+  const before=structuredClone(episode);
+  const view=buildHumanApprovalView(episode,"asset-execution",{artifact:{plan:structuredClone(plan)}});
+  assert.equal(view.content.candidate.localCodeImplementation.font.files.length,2);
+  assert.equal(view.evidence.localCodeImplementation.logo.manifest.sha256,"7".repeat(64));
+  assert.equal(view.content.candidate.localCodeImplementation.rendered,false);
+  assert.equal(view.content.candidate.localCodeImplementation.visualAcceptance,false);
+  assert.equal(view.content.candidate.summary.voiceStatus,"deferred");
+  assert.equal(view.content.candidate.summary.renderAuthorized,false);
+  assert.equal(view.content.candidate.summary.materializationStatus,"not-started");
+  assert.match(view.consequences.onApprove.join(" "),/仅确认.*素材准备方案/u);
+  assert.doesNotMatch(view.consequences.onApprove.join(" "),/允许 Asset Agent 继续执行/u);
+  assert.match(view.consequences.doesNotHappen.join(" "),/独立零调用入口/u);
+  assert.doesNotMatch(view.consequences.doesNotHappen.join(" "),/入口尚未实现/u);
+  assert.ok(view.risks.some(risk=>risk.code==="editorial-preparation-not-production"));
+  assert.deepEqual(episode,before);
+});
+
 test("内嵌脚本与素材方案不要求未登记文件摘要，live null metadata 仍可审批", async () => {
   const episode = fixtureEpisode();
   episode.production.scriptDraft.sha256 = null;

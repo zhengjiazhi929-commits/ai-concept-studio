@@ -1,4 +1,6 @@
 import { normalize, resolve } from "node:path";
+import {jsonDocumentContentSha256} from '../../shared/durable-json-store.mjs';
+import { inspectTimedEditorialEpisode, hasTimedEditorialExecution } from "../production/timed-editorial-content.mjs";
 
 import {
   inspectFileIntegrity,
@@ -192,12 +194,33 @@ function registeredArtifacts(episode, gate) {
   }
   if (gate === "script") {
     const draft = episode.production?.scriptDraft;
+    if (draft?.generationKind === 'codex-local-script-import') {
+      if (!draft.content || jsonDocumentContentSha256(draft.content) !== draft.sha256) {
+        throw integrityError('本地导入讲稿正文与登记哈希不一致','script_approval_inline_integrity_mismatch');
+      }
+      return [
+        {...draft,path:draft.artifactPath},
+        {path:draft.manifestPath,bytes:draft.manifestBytes,sha256:draft.manifestSha256}
+      ];
+    }
     if (draft?.content !== null && draft?.content !== undefined) return [];
     const path = draft?.artifactPath ?? draft?.source ?? null;
     return path ? [{ ...draft, path }] : [];
   }
   if (gate === "storyboard") {
     const draft = episode.production?.storyboardDraft;
+    if (draft?.generationKind === "codex-local-storyboard-import") {
+      if (!draft.content || jsonDocumentContentSha256(draft.content) !== draft.sha256) {
+        throw integrityError(
+          "本地导入分镜正文与登记哈希不一致",
+          "storyboard_approval_inline_integrity_mismatch"
+        );
+      }
+      return [
+        { ...draft, path: draft.artifactPath },
+        { path: draft.manifestPath, bytes: draft.manifestBytes, sha256: draft.manifestSha256 }
+      ];
+    }
     const path = draft?.artifactPath ?? null;
     return path ? [{ ...draft, path }] : [];
   }
@@ -205,6 +228,9 @@ function registeredArtifacts(episode, gate) {
 }
 
 export async function assertCurrentApprovalArtifactIntegrity(episode, gate, options = {}) {
+  if (gate === "storyboard" && hasTimedEditorialExecution(episode) && !inspectTimedEditorialEpisode(episode).valid) {
+    throw integrityError("逐拍分镜与当前执行时间轴不一致", "storyboard_approval_execution_mismatch");
+  }
   if (gate === "research" && episode.research?.content) {
     const inspection = inspectInlineResearchEvidence(episode);
     if (!inspection.passed) {

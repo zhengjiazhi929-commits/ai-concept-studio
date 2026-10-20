@@ -15,13 +15,10 @@ fail_startup() {
   exit 1
 }
 
-if [[ -x "$bundled_node" && -x "$bundled_pnpm" ]]; then
+if [[ -x "$bundled_node" ]]; then
   export PATH="$runtime_root/node/bin:$PATH"
-  studio_pnpm="$bundled_pnpm"
 else
   command -v node >/dev/null 2>&1 || fail_startup "没有找到项目锁定的 Node.js 24.19.0。请先安装并重试。"
-  command -v pnpm >/dev/null 2>&1 || fail_startup "没有找到 pnpm。请先安装并重试。"
-  studio_pnpm="$(command -v pnpm)"
 fi
 
 expected_node_version="$(<../.node-version)"
@@ -30,6 +27,16 @@ actual_node_version="$(node -p 'process.versions.node')"
   "Node.js 版本不匹配：需要 ${expected_node_version}，当前为 ${actual_node_version}。"
 
 expected_pnpm_version="$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).engines.pnpm')"
+cached_pnpm="$HOME/.cache/ai-concept-studio/pnpm/$expected_pnpm_version/package/bin/pnpm.cjs"
+if [[ -x "$cached_pnpm" ]]; then
+  studio_pnpm="$cached_pnpm"
+elif command -v pnpm >/dev/null 2>&1; then
+  studio_pnpm="$(command -v pnpm)"
+elif [[ -x "$bundled_pnpm" ]]; then
+  studio_pnpm="$bundled_pnpm"
+else
+  fail_startup "没有找到项目锁定的 pnpm $expected_pnpm_version。请安装该版本后重试。"
+fi
 actual_pnpm_version="$("$studio_pnpm" --version)"
 [[ "$actual_pnpm_version" == "$expected_pnpm_version" ]] || fail_startup \
   "pnpm 版本不匹配：需要 ${expected_pnpm_version}，当前为 ${actual_pnpm_version}。"

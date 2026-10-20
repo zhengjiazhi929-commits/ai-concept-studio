@@ -167,6 +167,8 @@ test("CI 与本地 package 共享精确 Node 和 pnpm 版本", async () => {
   assert.equal(packageDocument.engines.pnpm, "11.19.0");
   assert.equal(packageDocument.packageManager, "pnpm@11.19.0");
   assert.equal(packageDocument.scripts["ci:render-smoke"], "node scripts/ci-render-smoke.mjs");
+  assert.equal(packageDocument.scripts["ci:editorial-motion-smoke"], "node scripts/ci-editorial-motion-smoke.mjs");
+  assert.equal(packageDocument.scripts["ci:full-card-text-smoke"], "node scripts/ci-full-card-text-smoke.mjs");
   assert.equal(
     packageDocument.scripts["scan:secrets"],
     "node scripts/scan-tracked-secrets.mjs"
@@ -174,7 +176,7 @@ test("CI 与本地 package 共享精确 Node 和 pnpm 版本", async () => {
   assert.equal(packageDocument.scripts.check, "node scripts/check-syntax.mjs");
   assert.equal(
     packageDocument.scripts.verify,
-    "pnpm scan:secrets && pnpm check && pnpm motion:check && pnpm test && pnpm rehearse:rollback && pnpm ci:render-smoke && pnpm diff:check"
+    "pnpm scan:secrets && pnpm check && pnpm motion:check && pnpm test && pnpm rehearse:rollback && pnpm ci:render-smoke && pnpm ci:editorial-motion-smoke && pnpm ci:full-card-text-smoke && pnpm diff:check"
   );
   assert.equal(
     packageDocument.scripts["diff:check"],

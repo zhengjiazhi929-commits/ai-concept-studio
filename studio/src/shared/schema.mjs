@@ -1,4 +1,5 @@
 import { validateProductionProfile } from "./production-profiles.mjs";
+import { editorialVoiceRegistrationValid } from "./editorial-voice-contract.mjs";
 
 export const APPROVAL_GATES = [
   { id: "research", label: "研究证据", stepId: "research", restartStepId: "research" },
@@ -224,6 +225,9 @@ export function validateEpisode(episode) {
       }
     }
   }
+
+  if ((episode?.voice?.mode === "editorial-local-tts" || episode?.production?.editorialVoice != null)
+    && !editorialVoiceRegistrationValid(episode)) errors.push("invalid editorial-local-tts voice registration");
 
   if (episode?.voice?.mode === "local-offline-tts") {
     const voice = episode.voice;

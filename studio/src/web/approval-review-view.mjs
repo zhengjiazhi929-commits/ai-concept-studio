@@ -260,6 +260,9 @@ function seconds(value) {
 
 function renderStoryboard(review) {
   const content = review?.content ?? {};
+  if (content.editorialReadiness && content.editorialReadiness.execution !== "implemented-contract") {
+    return renderEditorialStoryboard(content);
+  }
   const draft = content.draft ?? content.storyboardDraft ?? {};
   const scenes = asArray(content.scenes);
   const subtitles = asArray(content.subtitles);
@@ -267,6 +270,9 @@ function renderStoryboard(review) {
   const checklist = asArray(draft.assetChecklist ?? content.assetChecklist);
   const render = content.renderSpecification ?? content.render ?? {};
   return `
+    ${content.editorialReadiness ? `<section class="approval-review-section"><h3>编辑估算时间轴 · 未配音实测</h3>
+      <p>逐拍代码合同已校验，尚不代表动画视觉验收或声音对齐；此处分镜批准不能替代素材/声音及最终成片批准。</p>
+      ${renderCollection("时间假设", content.editorialPlan?.executionPlan?.timingPolicy ?? {})}</section>` : ""}
     <section class="approval-review-section">
       <div class="approval-section-heading"><h3>Storyboard ${scenes.length} 镜</h3><span>${escapeHtml(`${seconds(render.durationSeconds ?? scenes.at(-1)?.end)} · ${render.width ?? "?"}×${render.height ?? "?"} · ${render.fps ?? "?"}fps`)}</span></div>
       ${scenes.length ? `<div class="approval-scene-list">${scenes.map((scene) => `<article>
@@ -275,6 +281,7 @@ function renderStoryboard(review) {
         ${scene.statement ? `<p>${escapeHtml(scene.statement)}</p>` : ""}
         ${scene.subtitle ? `<blockquote>${escapeHtml(scene.subtitle)}</blockquote>` : ""}
         ${scene.assetHint ? `<small class="approval-muted">画面要求：${escapeHtml(scene.assetHint)}</small>` : ""}
+        ${scene.motionPlan ? `<details><summary>逐拍对象、动作与原文触发</summary>${renderValue(scene.motionPlan)}</details>` : ""}
       </article>`).join("")}</div>` : '<p class="approval-empty">没有可审核的镜头，禁止批准。</p>'}
     </section>
     <section class="approval-review-section">
@@ -286,6 +293,37 @@ function renderStoryboard(review) {
     </section>
     ${renderCollection("视觉规则", rules, { emptyText: "没有登记视觉规则。" })}
     ${renderCollection("素材检查清单", checklist, { emptyText: "没有登记素材检查项。" })}`;
+}
+
+function renderEditorialStoryboard(content) {
+  const plan = content.editorialPlan ?? {};
+  const shots = asArray(plan.shots);
+  return `
+    <section class="approval-review-section">
+      <div class="approval-section-heading"><h3>编辑分镜 ${shots.length} 镜</h3><span>尚未配音或对齐 · 尚未实现动作</span></div>
+      <p>以下为完整编辑要求，可阅读不等于可批准。没有实测时码、完成动画或可播放预览。</p>
+      <p>${escapeHtml(plan.timingPolicy ?? "时间依据待补充。")}</p>
+      <p>${escapeHtml(plan.implementationBoundary ?? "可执行视觉计划待实现。")}</p>
+      ${shots.length ? `<div class="approval-scene-list">${shots.map((shot) => `<article>
+        <div><span>${escapeHtml(shot.id ?? "镜头")}</span><small>时码未测量</small></div>
+        <strong>${escapeHtml(shot.title ?? "未命名镜头")}</strong>
+        <p>表现方式：${escapeHtml(shot.form ?? "未登记")}</p>
+        <p>构图：${escapeHtml(shot.layout ?? "未登记")}</p>
+        <p>口播单元：${escapeHtml(asArray(shot.unitIds).join("、"))}</p>
+        <blockquote>${escapeHtml(shot.narration ?? "未登记原文")}</blockquote>
+        <ol>${asArray(shot.beats).map((beat) => `<li>
+          <p>原文触发：${escapeHtml(beat.cue ?? "未登记")}</p>
+          <p>动作：${escapeHtml(beat.action ?? "未登记")}</p>
+          <p>计划结果：${escapeHtml(beat.result ?? "未登记")}</p>
+        </li>`).join("")}</ol>
+        <p>专项约束：${escapeHtml(shot.guard ?? "未登记")}</p>
+        <p>实现边界：${escapeHtml(shot.implementation ?? "未登记")}</p>
+        <p>时间说明：${escapeHtml(shot.timing?.note ?? "绝对时间待对齐")}</p>
+        <p>来源引用：${escapeHtml(asArray(shot.evidenceRefs).join("、"))}</p>
+        <details><summary>原文单元哈希</summary>${renderValue(shot.sourceUnits ?? [])}</details>
+      </article>`).join("")}</div>` : '<p class="approval-empty">没有可阅读的编辑镜头，禁止批准。</p>'}
+    </section>
+    ${renderCollection("统一视觉要求", plan.globalStyle ?? {}, { emptyText: "没有登记统一视觉要求。" })}`;
 }
 
 function estimatedCostLabel(cost = {}) {
@@ -374,6 +412,46 @@ function renderPlanItems(items) {
   }).join("")}</div>` : '<p class="approval-empty">没有制作条目，禁止批准。</p>';
 }
 
+function renderEditorialResourceBindings(candidate, plan, localMaterialization) {
+  const implementation = candidate.localCodeImplementation ?? {};
+  if (plan.kind !== "editorial-code-asset-plan-v1"
+    && implementation.schemaVersion !== "editorial-code-implementation-v1") return "";
+  const summary = candidate.summary ?? {};
+  const font = implementation.font ?? {};
+  const logo = implementation.logo ?? {};
+  const codeFiles = asArray(implementation.files);
+  const fontFiles = asArray(font.files);
+  const logoFiles = asArray(logo.files);
+  const inventory = (title, value) => `<details><summary>${escapeHtml(title)}</summary><pre>${escapeHtml(displayJson(value))}</pre></details>`;
+  const states = {
+    "方案编制时素材状态": summary.materializationStatus === "not-started" ? "未物化" : summary.materializationStatus ?? null,
+    "当前素材登记": localMaterialization?.state === "files-registered" ? "文件已登记，使用前仍须重新核验" : "尚未登记制作产物",
+    "声音状态": summary.voiceStatus === "deferred" ? "声音待做" : summary.voiceStatus ?? null,
+    "渲染状态": implementation.rendered === false ? "未渲染" : implementation.rendered ?? null,
+    "视觉验收": implementation.visualAcceptance === false ? "未验收" : implementation.visualAcceptance ?? null,
+    "正式渲染已授权": summary.renderAuthorized ?? null
+  };
+  return `<section class="approval-review-section tone-warning">
+    <div class="approval-section-heading"><h3>本地代码与已绑定资源</h3><span>代码/锁文件 ${codeFiles.length} 个 · 字体文件 ${fontFiles.length} 个 · Logo 帧 ${logoFiles.length} 个</span></div>
+    <p>本次仅确认素材准备方案；制作须显式使用独立零调用入口并核验当前绑定，不会自动配音或正式渲染。文件登记不等于视觉验收。</p>
+    ${renderValue(states)}
+    ${renderValue({"组件": implementation.componentId ?? null, "实现聚合 SHA-256": implementation.sha256 ?? null})}
+    ${inventory("代码与锁文件：逐文件路径及 SHA-256", codeFiles)}
+    ${renderValue({"字体": font.family ?? null, "字体包": font.packageName ?? null, "字体包版本": font.packageVersion ?? null,
+      "字体许可证": font.license ?? null, "许可证路径": font.licensePath ?? null,
+      "WOFF2 文件数": fontFiles.filter(file => String(file?.path ?? "").endsWith(".woff2")).length,
+      "字体绑定状态": font.status ?? null, "浏览器字体解析已验证": font.browserResolutionVerified ?? null})}
+    ${font.browserResolutionVerified === false
+      ? `<p>${font.status === "packaged-files-bound" && fontFiles.length > 0 ? "字体文件已绑定；" : ""}浏览器字体解析尚未验证。</p>` : ""}
+    ${inventory("字体资源：逐文件路径及 SHA-256", fontFiles)}
+    ${renderValue({"Logo 样式": logo.profile ?? null, "Logo 动态节奏": logo.cadence ?? null,
+      "清单声明帧数": logo.frameCount ?? null, "资源校验方式": logo.validation ?? null,
+      "Logo 批准清单": logo.manifest ?? null})}
+    <p>本方案要求 Logo 帧匹配批准清单 SHA-256 并通过 PNG 头部校验；不等于逐像素 QA，也不代表成片已验收。</p>
+    ${inventory("Logo 帧：逐文件路径及 SHA-256", logoFiles)}
+  </section>`;
+}
+
 function renderAssetExecution(review) {
   const content = review?.content ?? {};
   const planContainer = content.plan ?? content.assetPlan ?? {};
@@ -384,6 +462,7 @@ function renderAssetExecution(review) {
   const policy = content.executionPolicy ?? plan.executionPolicy ?? {};
   const calls = asArray(content.prompts ?? policy.externalApiCalls ?? summary.externalApiCalls);
   return `
+    ${renderEditorialResourceBindings(candidate, plan, review?.evidence?.localMaterialization)}
     <section class="approval-review-section">
       <div class="approval-section-heading"><h3>全部制作条目</h3><span>${items.length} 项</span></div>
       ${renderPlanItems(items)}

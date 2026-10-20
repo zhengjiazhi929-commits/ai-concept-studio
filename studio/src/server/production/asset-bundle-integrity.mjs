@@ -10,6 +10,8 @@ import {
   currentGateArtifactHash,
   currentGateVersion
 } from "../../shared/workflow.mjs";
+import {usesEditorialMaterialization, verifyRegisteredEditorialMaterialization}
+  from "./editorial-materialization-consumption.mjs";
 
 function integrityError(message, code, details = {}) {
   const error = new Error(message);
@@ -54,6 +56,8 @@ async function verifyFile(record, absolutePath, inspect, details = {}) {
 
 export async function assertCurrentAssetBundleIntegrity(episode, options = {}) {
   const inspect = options.inspectFileIntegrity ?? inspectFileIntegrity;
+  const editorial = usesEditorialMaterialization(episode)
+    ? await verifyRegisteredEditorialMaterialization({workspaceRoot, episode}) : null;
   const assets = [];
   for (const asset of episode.assets ?? []) {
     const path = String(asset?.path ?? "");
@@ -120,7 +124,8 @@ export async function assertCurrentAssetBundleIntegrity(episode, options = {}) {
     artifactHash: currentGateArtifactHash(episode, "assets"),
     reviewReportId: episode.reviews?.assets?.latestReportId ?? null,
     assets,
-    voice
+    voice,
+    ...(editorial ? {editorialMaterialization: editorial.receipt} : {})
   };
   return {
     ...binding,

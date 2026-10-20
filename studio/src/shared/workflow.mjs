@@ -75,7 +75,8 @@ function stableAssets(assets = []) {
     bytes: asset.bytes ?? null,
     sha256: asset.sha256 ?? null,
     privacy: asset.privacy ?? null,
-    rights: asset.rights ?? null
+    rights: asset.rights ?? null,
+    ...(asset.materialization != null ? {materialization: asset.materialization} : {})
   }));
 }
 
@@ -101,6 +102,11 @@ export function storyboardGateScenes(scenes = []) {
     };
     if (scene.visualIntent != null) stable.visualIntent = scene.visualIntent;
     if (scene.visualPlan != null) stable.visualPlan = scene.visualPlan;
+    if (scene.motionPlan != null) {
+      for (const key of ["motionPlan", "startFrame", "endFrame", "narration", "unitIds", "sourceShotIds", "evidenceRefs"]) {
+        stable[key] = scene[key] ?? null;
+      }
+    }
     return stable;
   });
 }
@@ -127,6 +133,10 @@ export function gateArtifactPayload(episode, gate) {
   if (gate === "assets") {
     return {
       assetBundleRevision: episode.production?.assetBundleRevision ?? null,
+      ...(episode.production?.editorialMaterialization != null
+        ? {editorialMaterialization: episode.production.editorialMaterialization} : {}),
+      ...(episode.production?.editorialVoice != null
+        ? {editorialVoice: episode.production.editorialVoice} : {}),
       assetPlan: episode.production?.assetPlan ?? null,
       voicePlan: episode.production?.voicePlan ?? null,
       materialsVersion: episode.production?.materialsVersion ?? null,

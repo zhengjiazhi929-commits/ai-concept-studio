@@ -31,6 +31,9 @@ import {
 } from "../security/side-effect-capability.mjs";
 import { buildWorkerPrompt } from "./worker-prompts.mjs";
 import { splitSubtitleTextSemantically } from "./subtitle-segmentation.mjs";
+import {SCREEN_EDITORIAL_PLAN_SCHEMA,emptyScreenEditing,screenEditorialPromptDirective}
+  from '../../shared/screen-editorial-policy.mjs';
+import {assertGeneratedStoryboardScreenEditing} from './storyboard-screen-editing.mjs';
 
 const closedObject = (properties, required = Object.keys(properties)) => ({
   type: "object",
@@ -69,6 +72,7 @@ function scriptSchemaForProfile(profile) {
 
 function storyboardSchemaForProfile(profile) {
   return closedObject({
+  screenEditing: SCREEN_EDITORIAL_PLAN_SCHEMA,
   visualContractVersion: {
     type: "string",
     enum: [VISUAL_EXPRESSION_CONTRACT_VERSION]
@@ -494,6 +498,7 @@ export async function generateStoryboardDraft(episode, options = {}) {
   });
   if (deterministic) {
     const value = adaptApprovedScriptToShortStoryboard(episode);
+    value.screenEditing = emptyScreenEditing(value.scenes.map((_,i)=>`S${String(i+1).padStart(2,'0')}`));
     const requestCount = episode.production?.ai?.requestCount ?? 0;
     const generatedAt = new Date().toISOString();
     const result = {
@@ -510,6 +515,7 @@ export async function generateStoryboardDraft(episode, options = {}) {
       sourceScriptReviewReportId: value.sourceScript.reviewReportId
     };
     const timeline = buildTimeline(value, profile);
+    assertGeneratedStoryboardScreenEditing({...value,scenes:timeline.scenes},{required:true});
     const artifact = await writeArtifact(episode.id, "storyboard-draft", {
       generatedAt,
       episodeId: episode.id,
@@ -530,7 +536,8 @@ export async function generateStoryboardDraft(episode, options = {}) {
   const scriptDraft = await readApprovedScriptInput(episode);
   const prompt = await buildWorkerPrompt("storyboard-agent", {
     profileInstruction: profile.storyboardInstruction,
-    visualExpressionDirective: visualExpressionPromptDirective()
+    visualExpressionDirective: visualExpressionPromptDirective(),
+    screenEditorialDirective: screenEditorialPromptDirective()
   });
   const client = options.client ?? (await createAiClient({
     sideEffectGrant,
@@ -555,6 +562,7 @@ export async function generateStoryboardDraft(episode, options = {}) {
     maxOutputTokens: profile.maximumStoryboardTokens
   });
   const timeline = buildTimeline(result.value, profile);
+  assertGeneratedStoryboardScreenEditing({...result.value,scenes:timeline.scenes},{required:true});
   const artifact = await writeArtifact(episode.id, "storyboard-draft", {
     generatedAt: new Date().toISOString(),
     episodeId: episode.id,

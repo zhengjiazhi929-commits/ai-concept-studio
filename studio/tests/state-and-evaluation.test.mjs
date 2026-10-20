@@ -297,7 +297,20 @@ test("implementation 指纹覆盖控制链路的最小安全依赖闭包", async
     "src/server/production/quality.mjs",
     "src/server/production/golden-m1-gate-preparation.mjs",
     "src/server/production/local-offline-voice-core.mjs",
-    "src/server/production/local-offline-voice.mjs"
+    "src/server/production/local-offline-voice.mjs",
+    "scripts/complete-approved-storyboard.mjs",
+    "scripts/prepare-editorial-assets.mjs",
+    "src/shared/approved-storyboard-completion-request.mjs",
+    "src/shared/editorial-assets-prepare-request.mjs",
+    "src/server/control/approved-storyboard-transition.mjs",
+    "src/server/control/editorial-assets-transition.mjs",
+    "src/server/production/approved-storyboard-binding.mjs",
+    "src/server/production/approved-storyboard-completion-core.mjs",
+    "src/server/production/approved-storyboard-completion.mjs",
+    "src/server/production/editorial-assets-prepare-core.mjs",
+    "src/server/production/editorial-assets-prepare.mjs",
+    "src/server/production/editorial-asset-plan.mjs",
+    "src/server/production/editorial-code-implementation.mjs"
   ];
   assert.equal(
     new Set(AGENT_CONTROL_IMPLEMENTATION_PATHS).size,
@@ -344,7 +357,7 @@ test("implementation 指纹覆盖控制链路的最小安全依赖闭包", async
   );
 });
 
-test("旧 review-rubrics-v5 评测证据不能给当前 v9 套件放行", async () => {
+test("旧 review-rubrics-v5 评测证据不能给当前运行时套件放行", async () => {
   const suite = await readEvaluationSuiteConfig();
   const records = await passingReleaseEvidence(suite);
   const stale = structuredClone(records[0]);

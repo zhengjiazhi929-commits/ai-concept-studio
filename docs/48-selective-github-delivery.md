@@ -60,3 +60,25 @@ trimmed the separate evaluation-binding-name array; seven tests rejected that
 candidate. The packaging helper was corrected, the full focused group reran
 successfully, and the failed version was never committed. No assertion was
 relaxed and no production artifact was changed.
+
+## Production package
+
+The production package keeps the import/completion, timed editorial motion,
+asset, local voice, private review, renderer, and screen-policy dependencies
+together. It also retains the corresponding authorization, integrity, browser
+ownership, path portability, and layout regressions. Existing private-review
+entry points remain private review; they are not promoted to a human gate.
+
+One visual-contract test now uses an independent, explicitly enumerated
+synthetic fixture instead of the user's episode plan. The supported mechanism,
+topic/outline opening, chapter ordering, and unique-ID checks remain, with
+negative fixtures added. All four episode-specific plan JSON files are excluded.
+
+Technical documents describe historical development and example commands.
+Any mentioned `outputs/` evidence stays local and is not a promised GitHub link
+or a test prerequisite. Fourteen episode-specific working documents are omitted.
+The current delivery and gate status is only `docs/STATUS.md`.
+
+Production-focused verification passed 118/118 tests. The v15 implementation
+binding matches the source implementation; all 232 implementation paths and
+all eight runtime-binding names are present. `admission.eligible` remains false.
