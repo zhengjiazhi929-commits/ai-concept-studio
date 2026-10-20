@@ -97,6 +97,8 @@ import {
   "./security/side-effect-capability.mjs";
 import { createOperatorSessionAuthority } from
   "./security/operator-session.mjs";
+import { assertLocalRequestBoundary, assertLocalRequestOrigin } from
+  "./security/local-request-boundary.mjs";
 
 const localHosts = new Set(["127.0.0.1", "::1", "localhost"]);
 const budgetReconciliationTokenHeader = "x-budget-reconciliation-token";
@@ -257,35 +259,6 @@ async function readBinaryBody(request, maximumBytes = 64 * 1024 * 1024) {
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
-}
-
-function assertLocalRequestOrigin(request, config, { required = false } = {}) {
-  const origin = request.headers.origin;
-  if (!origin) {
-    if (!required) return;
-    const error = new Error("operator session 解锁必须来自本地控制台页面");
-    error.code = "forbidden_origin";
-    error.statusCode = 403;
-    throw error;
-  }
-  let parsedOrigin;
-  try {
-    parsedOrigin = new URL(origin);
-  } catch {
-    const error = new Error("请求来源格式无效");
-    error.code = "forbidden_origin";
-    error.statusCode = 403;
-    throw error;
-  }
-  if (
-    !localHosts.has(parsedOrigin.hostname) ||
-    Number(parsedOrigin.port || 80) !== config.port
-  ) {
-    const error = new Error("请求来源不属于本地控制台");
-    error.code = "forbidden_origin";
-    error.statusCode = 403;
-    throw error;
-  }
 }
 
 async function serveFile(request, response, filePath) {
@@ -1074,7 +1047,8 @@ export async function createStudioServer(options = {}) {
   const servedWebRoot = resolve(options.webRoot ?? webRoot);
   const server = http.createServer(async (request, response) => {
     try {
-      const url = new URL(request.url, `http://${config.host}:${config.port}`);
+      assertLocalRequestBoundary(request, config);
+      const url = new URL(request.url, `http://${request.headers.host}`);
       if (url.pathname.startsWith("/api/")) {
         if (request.method === "POST" && url.pathname === "/api/operator/session") {
           assertLocalRequestOrigin(request, config, { required: true });

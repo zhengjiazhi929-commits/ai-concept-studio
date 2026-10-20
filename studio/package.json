@@ -63,7 +63,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "remotion": "4.0.504",
-    "undici": "7.29.0"
+    "undici": "7.29.1"
   },
   "devDependencies": {
     "esbuild": "0.28.1"

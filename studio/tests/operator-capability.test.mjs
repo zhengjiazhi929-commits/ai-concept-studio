@@ -294,7 +294,7 @@ test("localhost operator session 要求一次性解锁、HttpOnly cookie、CSRF 
     server.listen(0, "127.0.0.1");
     await once(server, "listening");
     const base = `http://127.0.0.1:${server.address().port}`;
-    const origin = `http://127.0.0.1:${config.port}`;
+    const origin = base;
     const unlock = (unlockCode, includeOrigin = true) => fetch(
       `${base}/api/operator/session`,
       {

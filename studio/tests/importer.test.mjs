@@ -544,7 +544,7 @@ test("HTTP Golden seed 无鉴权时零调用，短期 session 成功后仍停在
     server.listen(0, "127.0.0.1");
     await once(server, "listening");
     const base = `http://127.0.0.1:${server.address().port}`;
-    const origin = `http://127.0.0.1:${config.port}`;
+    const origin = base;
 
     const unauthenticated = await fetch(`${base}/api/import/golden`, {
       method: "POST",
