@@ -82,3 +82,11 @@ The current delivery and gate status is only `docs/STATUS.md`.
 Production-focused verification passed 118/118 tests. The v15 implementation
 binding matches the source implementation; all 232 implementation paths and
 all eight runtime-binding names are present. `admission.eligible` remains false.
+
+## Static examples package
+
+The fourth package adds the already accepted concise storyboard source,
+proof command, exact font entry, documentation, and 14 passing focused tests.
+No image or video was generated or accepted again in this delivery task.
+The screen-policy runtime is in the production package because its consumers
+already import it; this fourth package is the independently selectable examples.

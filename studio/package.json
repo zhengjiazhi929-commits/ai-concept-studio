@@ -51,6 +51,7 @@
     "illustration:catalog": "node scripts/render-illustration-system-proof.mjs",
     "illustration:test": "node --test tests/illustration-system-*.test.mjs tests/editorial-plan.test.mjs tests/editorial-scene.test.mjs tests/illustration-storyboards*.test.mjs tests/glass-card-*.test.mjs",
     "storyboards:proof": "node scripts/render-illustration-storyboard-proof.mjs",
+    "storyboards:concise": "node scripts/render-concise-storyboard-proof.mjs",
     "cards:proof": "node scripts/render-glass-card-proof.mjs",
     "ci:render-smoke": "node scripts/ci-render-smoke.mjs",
     "ci:editorial-motion-smoke": "node scripts/ci-editorial-motion-smoke.mjs",
