@@ -46,8 +46,10 @@ Dependency patches retain Remotion `4.0.504`, Node `24.19.0`, and pnpm `11.19.0`
 `postcss-selector-parser 7.1.6`. Regression tests cover the installed versions
 and targeted malformed input / connector behavior.
 
-Current delivery status: candidate assembly in progress; no hosted result for
-this candidate, no PR, and no merge.
+Delivery status when this document commit was prepared: the selected code is
+locally verified. A candidate push is authorized; hosted CI must be checked on
+its exact pushed SHA. PR creation and merging still require the user's next
+decision. Live state is linked from `docs/STATUS.md`.
 
 ## Discovery package
 
@@ -90,3 +92,35 @@ proof command, exact font entry, documentation, and 14 passing focused tests.
 No image or video was generated or accepted again in this delivery task.
 The screen-policy runtime is in the production package because its consumers
 already import it; this fourth package is the independently selectable examples.
+
+## Final local verification
+
+Code commit: `9ba00ec62b2f9d07586df81de15122646601a553`.
+The subsequent delivery-record commit changes documentation only.
+
+- Exact Node `24.19.0`, pnpm `11.19.0`, CPython `3.12.13`.
+- `pnpm install --frozen-lockfile`: exit 0.
+- `pnpm audit --prod --audit-level high --json`: exit 0; all severity counts 0.
+- `CI=true pnpm verify`: exit 0; 1793 tests passed, no failures, skips, or
+  cancellations. Includes secret scan, 429 source syntax checks, 35 motion
+  assets, rollback rehearsal, three browser smoke gates, and Git diff checks.
+- The former episode-plan test has one additional negative regression;
+  the earlier historical 1792-test result is not being reused as current proof.
+- 275 changed paths match the explicit selection. Original 1199 file hashes,
+  original HEAD/branch/dirty inventory, and excluded runtime snapshots are
+  unchanged. Generated media and private production state are not published.
+
+## Review coverage and limits
+
+Publication checks cover selection, secrets, relative imports, commands, local
+documentation links, evaluation binding, and the synthetic-fixture adaptation.
+OCR's final range contains 275 files: 252 reviewable source/config files and 23
+tool-excluded documentation/other files. Fourteen changed files received a
+focused source/diff review (5.56% of reviewable files); the other 238 are
+explicitly not a repeated line-by-line audit of the previously implemented
+code. The per-file checklist and command logs are retained locally.
+
+An independent checker also verified the dependency/evaluation closure and
+fixture semantics. This scope does not establish a whole-code security audit,
+new full-video acceptance, or a release. Existing long-copy layout fixtures
+remain stress tests, not recommended video copy.

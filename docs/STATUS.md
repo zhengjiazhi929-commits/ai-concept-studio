@@ -1,7 +1,7 @@
 # AI Concept Studio 当前状态
 
 更新时间：2026-10-20（Asia/Shanghai）
-状态真源版本：74（选择性 Git 提交准备，尚未推送或合并）
+状态真源版本：75（选择性候选本地完整验证通过，GitHub 检查与合并状态见实时引用）
 
 ## 当前任务：按依赖整理候选分支
 
@@ -18,10 +18,21 @@
   代替对私人制作计划的测试读取。参考实现绑定 v15 与原实现一致，
   `admission.eligible=false` 保持。
 - 第四批三组静态示例及准确字体入口已加入，专项 14/14 通过，未改画法或生成新视频。
-  候选现已完整组装，等待最终完整验证和 hosted CI。
+  四批源码提交的最终版本为 `9ba00ec62b2f9d07586df81de15122646601a553`。
   私人生产计划、运行数据及生成媒体不提交。
 - 每批源码变化使旧评测失效；参考评测保持 `offline-reference-only`，不获得正式准入。
-- 完整验证和 hosted CI 尚待候选组装完成。机器检查、静态视觉接受、成片验收和合并分开记录。
+- 上述源码版本的 exact frozen install、production audit 和 canonical `pnpm verify`
+  已通过：1793/1793，0失败/跳过/取消；429源码语法、35动效、回滚演练、
+  三组真实浏览器 smoke 和 diff 检查通过。新增测试使用合成数据，不读取原制作文件。
+- 提交范围共275路径：273项原源选择加交付文档及合成fixture；23项原本地文件排除。
+  原1199文件、原HEAD/分支及dirty清单核验不变。完整命令与结果保存在本地交付证据中。
+- 本文档提交只记录上述已完成验证，不预先宣称 hosted CI 通过。实时结果须核对
+  [候选分支的 Verify](https://github.com/zhengjiazhi929-commits/ai-concept-studio/actions?query=branch%3Acodex%2Fverified-system-delivery-20261020)
+  与 [候选提交](https://github.com/zhengjiazhi929-commits/ai-concept-studio/tree/codex/verified-system-delivery-20261020)
+  的精确 SHA。main 仍是原基线；PR/merge 需用户另行确认。
+- machine_status=local_full_verification_passed；technical_status=selected_candidate_verified；
+  business_acceptance_status=static_examples_only；release_status=merge_not_authorized。
+  机器检查、静态视觉接受、成片验收和合并分开记录。
 - 交付范围、验收及回退见 [选择性 Git 交付](48-selective-github-delivery.md)。
 
 ## 以下是已合并基线的历史记录（不是当前授权或验证结果）
