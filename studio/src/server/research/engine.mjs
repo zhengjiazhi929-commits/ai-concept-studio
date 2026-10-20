@@ -111,7 +111,11 @@ export function buildResearchPlan({ episode, config, now = new Date() }) {
       runId: selection.runId,
       candidateId: selection.candidateId,
       selectedAt: selection.selectedAt,
-      note: selection.note || ""
+      note: selection.note || "",
+      ...(selection.selectionMode === "manual" ? {
+        selectionMode: "manual",
+        manualDecision: structuredClone(selection.manualDecision)
+      } : {})
     },
     marketContext: {
       purpose: "只证明近期创作者正在讨论该概念，不作为技术事实来源",

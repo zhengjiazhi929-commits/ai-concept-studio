@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { inferConceptIds } from "../trends/engine.mjs";
 import { normalizeSearchText } from "../trends/schema.mjs";
+import { matchesConfiguredCreator } from "./discovery.mjs";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SAFE_ID_PATTERN = /^[a-z0-9-]+$/u;
@@ -52,7 +53,10 @@ function createSignalId(observation) {
   return `collector-${digest}`;
 }
 
-export function normalizeObservation({ observation, taxonomy, config, batchId, observedAt }) {
+export function normalizeObservation({ observation, taxonomy, config, batchId, observedAt, source }) {
+  if (source && !matchesConfiguredCreator(observation.evidence?.authorName ?? observation.pageCreatorName, source)) {
+    return {status: "pending_review", reason: "creator-identity-mismatch", observation};
+  }
   const publishedAt = observation.publishedAt;
   const timestamp = Date.parse(publishedAt);
   if (!publishedAt || Number.isNaN(timestamp)) {
@@ -87,6 +91,13 @@ export function normalizeObservation({ observation, taxonomy, config, batchId, o
     angle: observation.angle || inferAngle(observation.title),
     conceptIds,
     sourceKind: observation.sourceKind || "collector-public-page",
+    ...(observation.evidence ? {evidence: {
+      authorName: observation.evidence.authorName, authorUrl: observation.evidence.authorUrl,
+      ...(observation.evidence.identityBasis ? {identityBasis: observation.evidence.identityBasis} : {}),
+      ...(observation.evidence.dateReferenceAt ? {dateReferenceAt: observation.evidence.dateReferenceAt} : {}),
+      url: observation.evidence.url, publishedText: observation.evidence.publishedText,
+      excerpt: observation.evidence.excerpt
+    }} : {}),
     ...(observation.externalId ? { externalId: observation.externalId } : {}),
     ...(Object.keys(metrics).length ? { metrics } : {}),
     collector: {

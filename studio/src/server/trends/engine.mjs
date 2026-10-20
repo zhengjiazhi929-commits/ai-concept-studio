@@ -12,13 +12,16 @@ function round(value, digits = 0) {
 }
 
 function ageInDays(signal, now) {
-  const timestamp = Date.parse(signal.publishedAt || signal.observedAt);
+  // A recent collection time cannot stand in for a verified publication time.
+  const timestamp = typeof signal.publishedAt === "string"
+    ? Date.parse(signal.publishedAt)
+    : Number.NaN;
   return (now.getTime() - timestamp) / DAY_MS;
 }
 
 function inWindow(signal, now, days) {
   const age = ageInDays(signal, now);
-  return age >= -1 && age <= days;
+  return age >= 0 && age <= days;
 }
 
 export function inferConceptIds(signal, taxonomy) {
@@ -305,6 +308,7 @@ function buildCandidate(concept, signals, sourceMap, config, now) {
       sourceUrl: signal.sourceUrl,
       publishedAt: signal.publishedAt,
       datePrecision: signal.datePrecision,
+      ...(signal.evidence ? {identityBasis: signal.evidence.identityBasis ?? "profile-link", authorUrl: signal.evidence.authorUrl ?? null} : {}),
       angle: signal.angle,
       event: signal.event ?? null
     }))
@@ -331,6 +335,30 @@ export function discoverTrendCandidates({
   const sourceMap = new Map(
     sources.creators.filter((creator) => creator.enabled !== false).map((creator) => [creator.id, creator])
   );
+  const extendedDays = config.windows?.extendedDays ?? 30;
+  const publishedSignals = signals.filter((signal) => {
+    const age = ageInDays(signal, currentTime);
+    return signal.collector?.discoveryVersion !== 1 && sourceMap.has(signal.creatorId) && Number.isFinite(age) && age >= 0;
+  });
+  const recentSignalCounts = Object.fromEntries(
+    [7, 14, 30].map((days) => [
+      `days${days}`,
+      publishedSignals.filter((signal) => inWindow(signal, currentTime, days)).length
+    ])
+  );
+  const latestPublishedTimestamp = publishedSignals.reduce(
+    (latest, signal) => Math.max(latest, Date.parse(signal.publishedAt)),
+    Number.NEGATIVE_INFINITY
+  );
+  const freshness = {
+    status: publishedSignals.some((signal) => inWindow(signal, currentTime, extendedDays))
+      ? "fresh"
+      : publishedSignals.length > 0 ? "stale" : "empty",
+    lastPublishedAt: Number.isFinite(latestPublishedTimestamp)
+      ? new Date(latestPublishedTimestamp).toISOString()
+      : null,
+    windowDays: extendedDays
+  };
   const conceptMap = new Map(taxonomy.concepts.map((concept) => [concept.id, concept]));
   const grouped = new Map(taxonomy.concepts.map((concept) => [concept.id, []]));
   const unmappedSignals = [];
@@ -339,6 +367,7 @@ export function discoverTrendCandidates({
     if (!sourceMap.has(signal.creatorId)) continue;
     const conceptIds = inferConceptIds(signal, taxonomy).filter((conceptId) => conceptMap.has(conceptId));
     if (conceptIds.length === 0) unmappedSignals.push(signal);
+    if (signal.collector?.discoveryVersion === 1 || !inWindow(signal, currentTime, extendedDays)) continue;
     for (const conceptId of conceptIds) grouped.get(conceptId).push(signal);
   }
 
@@ -370,6 +399,8 @@ export function discoverTrendCandidates({
     generatedAt: currentTime.toISOString(),
     summary: {
       signalCount: signals.length,
+      recentSignalCounts,
+      freshness,
       creatorCount: new Set(signals.map((signal) => sourceMap.get(signal.creatorId)?.coverageGroup).filter(Boolean))
         .size,
       mappedSignalCount: signals.length - unmappedSignals.length,

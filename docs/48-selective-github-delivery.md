@@ -48,3 +48,15 @@ and targeted malformed input / connector behavior.
 
 Current delivery status: candidate assembly in progress; no hosted result for
 this candidate, no PR, and no merge.
+
+## Discovery package
+
+The second package adds scoped public discovery, source identity and freshness
+checks, explicit manual topic selection, research binding, and temporary-store
+regression tests. It does not select a real topic or create a production episode.
+
+Focused validation: 164/164 passed. The first assembly attempt incorrectly
+trimmed the separate evaluation-binding-name array; seven tests rejected that
+candidate. The packaging helper was corrected, the full focused group reran
+successfully, and the failed version was never committed. No assertion was
+relaxed and no production artifact was changed.

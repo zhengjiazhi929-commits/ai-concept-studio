@@ -45,7 +45,7 @@ async function createFixtureStore(t) {
     false,
     "trend tests must never use the runtime trend root"
   );
-  return { trendsRoot: isolatedRoot };
+  return { trendsRoot: isolatedRoot, now: () => new Date("2026-08-03T15:00:00.000Z") };
 }
 
 async function readJson(path) {
@@ -119,6 +119,9 @@ test("观察池候选不能绕过人工界面进入研究阶段", async (t) => {
 
 test("候选选择只写入注入的临时 trend root", async (t) => {
   const storeOptions = await createFixtureStore(t);
+  // Historical latest.json has no raw evidence summaries. Publish a complete
+  // fixture run at the pinned fixture clock before exercising valid selection.
+  await writeTrendRun({ id: "trend-current-fixture", ...await runFixture(t) }, storeOptions);
   const result = await selectTrendCandidate(
     "agent-skill",
     "synthetic fixture selection",
@@ -169,6 +172,7 @@ test("trend run 拒绝调用方阶段 hook 且正常发布仍保持 run/latest �
 
 test("候选选择拒绝继承阶段 hook，随后正常发布保持 run/latest/selection 一致", async (t) => {
   const storeOptions = await createFixtureStore(t);
+  await writeTrendRun({ id: "trend-current-fixture", ...await runFixture(t) }, storeOptions);
   const inheritedOptions = Object.create({ onDocumentSetStage() {} });
   inheritedOptions.trendsRoot = storeOptions.trendsRoot;
   await assert.rejects(

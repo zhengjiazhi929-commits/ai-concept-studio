@@ -1,4 +1,5 @@
 import { mkdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import {
   collectorAssistTaskPath,
@@ -17,11 +18,18 @@ import {
   readJsonPublicationPointer,
   recoverJsonPublication,
   withDurableJsonStoreLock,
+  writeImmutableJsonDocument,
   writeJsonDocumentAtomic
 } from "../../shared/durable-json-store.mjs";
 import { validateCollectorConfig } from "./schema.mjs";
 
 const COLLECTOR_PUBLICATION_JOURNAL = ".collector-publication.json";
+
+function assertCollectorRunId(runId) {
+  if (typeof runId !== "string" || !/^[a-z0-9-]{1,160}$/u.test(runId)) {
+    throw Object.assign(new Error("Collector run id 无效"), { code: "collector_run_id_invalid" });
+  }
+}
 
 function resolveCollectorDataPaths(options = {}) {
   if (!options.collectorRoot) {
@@ -67,6 +75,43 @@ export async function readLatestCollectorRun(options = {}) {
     paths.latestRun,
     null
   );
+}
+
+export async function readCollectorRun(runId, options = {}) {
+  assertCollectorRunId(runId);
+  const paths = resolveCollectorDataPaths(options);
+  const runPath = ensureInside(paths.runs, resolve(paths.runs, `${runId}.json`));
+  return readJsonDocumentOr(runPath, null, { storeRoot: paths.root });
+}
+
+// Claims precede signal/health writes and survive failures. A repeated id must
+// be inspected against its recorded batch and run; it is never auto-replayed.
+export async function claimCollectorBatch(batch, options = {}) {
+  assertCollectorRunId(batch?.batchId);
+  if (batch.schemaVersion !== 2) {
+    throw Object.assign(new Error("Collector discovery claim只接受v2批次"), {
+      code: "collector_batch_claim_invalid"
+    });
+  }
+  const snapshot = structuredClone(batch);
+  return withCollectorStoreLock(options, async (paths) => {
+    const claimPath = ensureInside(paths.root, resolve(paths.root, "claims", `${snapshot.batchId}.json`));
+    const previous = await readJsonDocumentOr(claimPath, null, { storeRoot: paths.root });
+    if (previous) {
+      throw Object.assign(new Error("该批次已声明；请核对claim与run，禁止自动重放"), {
+        code: "collector_batch_already_claimed"
+      });
+    }
+    const claim = {
+      schemaVersion: 1,
+      batchId: snapshot.batchId,
+      claimedAt: new Date().toISOString(),
+      batchSha256: createHash("sha256").update(JSON.stringify(snapshot)).digest("hex"),
+      batch: snapshot
+    };
+    await writeImmutableJsonDocument(claimPath, claim, { storeRoot: paths.root });
+    return claim;
+  });
 }
 
 export async function readCollectorSourceHealth(options = {}) {

@@ -8,11 +8,14 @@ import {
   upsertTrendSignals
 } from "../trends/store.mjs";
 import { collectPublicSource } from "./adapters.mjs";
+import { buildRecentDiscoveryTask, validateRecentDiscoveryBatch } from "./discovery.mjs";
 import { normalizeObservation } from "./normalizer.mjs";
 import { validateAssistedBatch } from "./schema.mjs";
 import {
+  claimCollectorBatch,
   readCollectorAssistTask,
   readCollectorConfig,
+  readCollectorRun,
   readCollectorSourceHealth,
   readLatestCollectorRun,
   updateCollectorSourceHealth,
@@ -54,12 +57,14 @@ function collectorDependencies(options = {}) {
     writeCollectorRun
   };
   return {
-    values: Object.fromEntries(
-      collectorSideEffectDependencyNames.map((name) => [
-        name,
-        injected[name] ?? defaults[name]
-      ])
-    ),
+    values: {
+      ...Object.fromEntries(collectorSideEffectDependencyNames.map((name) => [
+        name, injected[name] ?? defaults[name]
+      ])),
+      readCollectorAssistTask: injected.readCollectorAssistTask ?? readCollectorAssistTask,
+      readCollectorRun: injected.readCollectorRun ?? readCollectorRun,
+      claimCollectorBatch: injected.claimCollectorBatch ?? claimCollectorBatch
+    },
     fullyInjected: collectorSideEffectDependencyNames.every(
       (name) => typeof injected[name] === "function"
     )
@@ -77,7 +82,7 @@ function requireCollectorSideEffects(options, fullyInjected, operation, scopes) 
     scopes,
     maxCalls: 0,
     maxCostUsd: 0
-  });
+  }, operation);
 }
 
 async function mapWithConcurrency(items, limit, worker) {
@@ -104,6 +109,38 @@ function summarizeNormalization(normalized) {
     pendingReview: normalized.filter((item) => item.status === "pending_review").length,
     ignored: normalized.filter((item) => item.status === "ignored").length
   };
+}
+
+function summarizeDiscovery(sources, sourceChecks = []) {
+  const enabled = sources.creators.filter((source) => source.enabled !== false);
+  const summary = {
+    scanned: sourceChecks.length,
+    verified: sourceChecks.filter((check) => check.status === "verified").length,
+    blocked: sourceChecks.filter((check) => check.status === "blocked").length,
+    unverified: sourceChecks.filter((check) => check.status === "unverified").length,
+    noRecent: sourceChecks.filter((check) => check.status === "no_recent_items").length,
+    notScanned: enabled.length - sourceChecks.length
+  };
+  return {
+    ...summary,
+    complete: enabled.length > 0 && summary.notScanned === 0 &&
+      summary.blocked === 0 && summary.unverified === 0
+  };
+}
+
+function discoverySourceResults(sources, batch) {
+  const checks = new Map(batch.sourceChecks.map((check) => [check.creatorId, check]));
+  return sources.creators.filter((source) => source.enabled !== false).map((source) => {
+    const check = checks.get(source.id);
+    return {
+      creatorId: source.id,
+      status: check?.status === "verified" ? "assisted_success" : check?.status ?? "not_scanned",
+      discoveryStatus: check?.status ?? "not_scanned",
+      reason: check?.reason ?? null,
+      observationCount: batch.observations.filter((observation) => observation.creatorId === source.id).length,
+      ...(check ? { check } : {})
+    };
+  });
 }
 
 async function refreshRadarIfNeeded(
@@ -147,14 +184,14 @@ export async function runCollectorAgent(options = {}) {
     message: "创作者公开信号采集开始运行"
   });
   try {
-    const [config, sources, taxonomy, existingSignals, previousHealth] = await Promise.all([
+    const [config, sources, taxonomy, previousHealth] = await Promise.all([
       dependencies.readCollectorConfig(),
       dependencies.readTrendSources(),
       dependencies.readConceptTaxonomy(),
-      dependencies.readTrendSignals(),
       dependencies.readCollectorSourceHealth()
     ]);
     const enabledSources = sources.creators.filter((source) => source.enabled !== false);
+    const sourceMap = new Map(enabledSources.map((source) => [source.id, source]));
     const sourceResults = await mapWithConcurrency(
       enabledSources,
       config.maxConcurrency,
@@ -167,9 +204,13 @@ export async function runCollectorAgent(options = {}) {
         })
     );
     const batchId = buildRunId("collector-direct", now);
-    const observations = sourceResults.flatMap((result) => result.observations ?? []);
+    const observations = sourceResults.flatMap((result) => (result.observations ?? [])
+      .map((observation) => ({ ...observation, creatorId: result.creatorId })));
     const normalized = observations.map((observation) =>
-      normalizeObservation({ observation, taxonomy, config, batchId, observedAt: startedAt })
+      normalizeObservation({
+        observation, taxonomy, config, batchId, observedAt: startedAt,
+        source: sourceMap.get(observation.creatorId)
+      })
     );
     const acceptedSignals = normalized
       .filter((item) => item.status === "accepted")
@@ -183,6 +224,9 @@ export async function runCollectorAgent(options = {}) {
     const healthEntries = sourceResults.map((result) => {
       const previous = previousHealthMap.get(result.creatorId);
       const degraded = result.status === "failed" && Boolean(previous?.lastSuccessAt);
+      const verifiedPage = result.status === "success" && normalized.some((item) =>
+        item.observation.creatorId === result.creatorId && item.reason !== "creator-identity-mismatch"
+      );
       return {
         creatorId: result.creatorId,
         lastAttemptAt: startedAt,
@@ -190,63 +234,22 @@ export async function runCollectorAgent(options = {}) {
         fetchedBytes: result.fetchedBytes ?? null,
         observationCount: result.observations?.length ?? 0,
         status:
-          result.status === "success"
+          verifiedPage
             ? "success"
-            : result.status === "assisted_required"
+            : ["success", "assisted_required"].includes(result.status)
               ? "needs_assist"
               : degraded
                 ? "degraded"
                 : "failed",
         accessMode:
-          result.status === "success" ? "direct" : previous?.accessMode || "codex_assisted",
-        reason: result.reason ?? null,
-        ...(result.status === "success" ? { lastSuccessAt: startedAt } : {})
+          verifiedPage ? "direct" : previous?.accessMode || "codex_assisted",
+        reason: result.reason ?? (result.status === "success" && !verifiedPage ? "no-verified-page-observations" : null),
+        discoveryStatus: "not_scanned",
+        ...(verifiedPage ? { lastSuccessAt: startedAt } : {})
       };
     });
     await dependencies.updateCollectorSourceHealth(healthEntries, startedAt);
-    const latestSignalMap = new Map();
-    for (const signal of existingSignals.signals) {
-      const timestamp = signal.publishedAt || signal.observedAt;
-      if (!latestSignalMap.has(signal.creatorId) || timestamp > latestSignalMap.get(signal.creatorId)) {
-        latestSignalMap.set(signal.creatorId, timestamp);
-      }
-    }
-    const sourceMap = new Map(enabledSources.map((source) => [source.id, source]));
-    const assistedSources = sourceResults.filter((result) => result.status === "assisted_required");
-    const assistTask = {
-      schemaVersion: 1,
-      taskId: `assist-${batchId}`,
-      createdAt: startedAt,
-      purpose: "使用 Codex 读取普通程序无法稳定提取的公开创作者作品列表",
-      rules: [
-        "只读取公开页面，不登录账号、不使用 Cookie。",
-        "记录作品标题、来源链接和可核对的发布时间；没有互动数据就保持为空。",
-        "竞品内容只作为热度信号，不作为技术事实来源。"
-      ],
-      tasks: assistedSources.map((result) => {
-        const source = sourceMap.get(result.creatorId);
-        const latestSignalAt = latestSignalMap.get(result.creatorId) ?? null;
-        const fresh = latestSignalAt
-          ? Date.parse(latestSignalAt) >= now.getTime() - config.sourceFreshnessDays * DAY_MS
-          : false;
-        return {
-          creatorId: source.id,
-          name: source.name,
-          platform: source.platform,
-          profileUrl: source.profileUrl,
-          suggestedSearchQuery: `site:jingxuan.douyin.com/m/video \"${source.name}\" AI`,
-          latestSignalAt,
-          priority: fresh ? "normal" : "high"
-        };
-      }),
-      outputTemplate: {
-        schemaVersion: 1,
-        batchId: `assisted-${startedAt.slice(0, 10).replaceAll("-", "")}`,
-        observedAt: startedAt,
-        method: "Codex 公开页面核对",
-        observations: []
-      }
-    };
+    const assistTask = buildRecentDiscoveryTask({ sources, now, lookbackDays: Math.min(config.lookbackDays ?? 30, 30), sourceResults });
     await dependencies.writeCollectorAssistTask(assistTask);
     const normalizationSummary = summarizeNormalization(normalized);
     const radarRefresh = await refreshRadarIfNeeded(
@@ -265,6 +268,8 @@ export async function runCollectorAgent(options = {}) {
       status: "complete",
       startedAt,
       finishedAt: new Date().toISOString(),
+      discoveryTaskId: assistTask.taskId,
+      discoverySummary: summarizeDiscovery(sources),
       summary: {
         configuredSources: enabledSources.length,
         directSuccess: sourceResults.filter((result) => result.status === "success").length,
@@ -281,6 +286,7 @@ export async function runCollectorAgent(options = {}) {
       sourceResults: sourceResults.map((result) => ({
         creatorId: result.creatorId,
         status: result.status,
+        discoveryStatus: "not_scanned",
         reason: result.reason,
         httpStatus: result.httpStatus ?? null,
         observationCount: result.observations?.length ?? 0
@@ -311,7 +317,7 @@ export async function runCollectorAgent(options = {}) {
       status: "complete",
       message: `创作者信号采集完成：${run.summary.directSuccess} 个直读，${run.summary.assistedRequired} 个需 Codex 辅助`
     });
-    return { run, runPath };
+    return { run, runPath, assistTask };
   } catch (error) {
     await dependencies.appendEvent({
       type: "agent.failed",
@@ -324,24 +330,36 @@ export async function runCollectorAgent(options = {}) {
 
 export async function importAssistedCollectorBatch(batch, options = {}) {
   const { values: dependencies, fullyInjected } = collectorDependencies(options);
+  const recentDiscovery = batch?.schemaVersion === 2;
+  const recentDependenciesInjected = ["readCollectorAssistTask", "readCollectorRun", "claimCollectorBatch"]
+    .every((name) => typeof options.dependencies?.[name] === "function");
   const sideEffectGrant = requireCollectorSideEffects(
     options,
-    fullyInjected,
+    fullyInjected && (!recentDiscovery || recentDependenciesInjected),
     "collector:import-assisted-batch",
     ["state.write", "filesystem.write"]
   );
+  if (!recentDiscovery && sideEffectGrant?.episodeId.startsWith("public-discovery/") && options.legacyImport !== true) {
+    throw Object.assign(new Error("本地近期发现导入v1必须显式指定legacyImport"), { code: "collector_legacy_confirmation_required" });
+  }
+  batch = structuredClone(batch);
   const now = options.now instanceof Date ? options.now : new Date(options.now ?? Date.now());
   const [config, sources, taxonomy] = await Promise.all([
     dependencies.readCollectorConfig(),
     dependencies.readTrendSources(),
     dependencies.readConceptTaxonomy()
   ]);
-  const validation = validateAssistedBatch(
-    batch,
-    new Set(sources.creators.map((source) => source.id))
-  );
+  const task = recentDiscovery ? await dependencies.readCollectorAssistTask() : null;
+  const validation = recentDiscovery
+    ? validateRecentDiscoveryBatch(batch, { sources, task, now })
+    : validateAssistedBatch(batch, new Set(sources.creators.map((source) => source.id)));
   if (!validation.valid) throw new Error(validation.errors.join("; "));
+  if (recentDiscovery && await dependencies.readCollectorRun(batch.batchId)) {
+    throw Object.assign(new Error("该发现批次已导入，请使用新的batchId记录新的证据"), { code: "collector_batch_already_imported" });
+  }
+  if (recentDiscovery) await dependencies.claimCollectorBatch(batch);
 
+  const sourceMap = new Map(sources.creators.map((source) => [source.id, source]));
   const normalized = batch.observations.map((observation) =>
     normalizeObservation({
       observation: {
@@ -351,18 +369,32 @@ export async function importAssistedCollectorBatch(batch, options = {}) {
       taxonomy,
       config,
       batchId: batch.batchId,
-      observedAt: batch.observedAt
+      observedAt: batch.observedAt,
+      ...(recentDiscovery ? { source: sourceMap.get(observation.creatorId) } : {})
     })
   );
   const acceptedSignals = normalized
     .filter((item) => item.status === "accepted")
-    .map((item) => item.signal);
+    .map((item) => ({
+      ...item.signal,
+      collector: { ...item.signal.collector, discoveryVersion: recentDiscovery ? 2 : 1 }
+    }));
   const upsert = acceptedSignals.length
     ? await dependencies.upsertTrendSignals(acceptedSignals, { importTag: batch.batchId })
     : { added: 0, updated: 0, unchanged: 0 };
   const creatorIds = Array.from(new Set(batch.observations.map((item) => item.creatorId)));
-  await dependencies.updateCollectorSourceHealth(
-    creatorIds.map((creatorId) => ({
+  const healthEntries = recentDiscovery ? batch.sourceChecks.map((check) => ({
+    creatorId: check.creatorId,
+    lastAttemptAt: check.checkedAt,
+    lastAssistedAt: check.checkedAt,
+    status: check.status === "verified" ? "success" : check.status === "no_recent_items" ? "no_recent_items" : "needs_assist",
+    discoveryStatus: check.status,
+    discoveryTaskId: batch.discoveryTaskId,
+    accessMode: "codex_assisted",
+    reason: check.reason ?? (check.status === "verified" ? null : check.status),
+    observationCount: batch.observations.filter((item) => item.creatorId === check.creatorId).length,
+    ...(check.status === "verified" ? { lastSuccessAt: check.checkedAt } : {})
+  })) : creatorIds.map((creatorId) => ({
       creatorId,
       lastAttemptAt: batch.observedAt,
       lastSuccessAt: batch.observedAt,
@@ -371,10 +403,10 @@ export async function importAssistedCollectorBatch(batch, options = {}) {
       accessMode: "codex_assisted",
       reason: null,
       observationCount: batch.observations.filter((item) => item.creatorId === creatorId).length
-    })),
-    batch.observedAt
-  );
+    }));
+  await dependencies.updateCollectorSourceHealth(healthEntries, batch.observedAt);
   const normalizationSummary = summarizeNormalization(normalized);
+  const discoverySummary = recentDiscovery ? summarizeDiscovery(sources, batch.sourceChecks) : null;
   const radarRefresh = await refreshRadarIfNeeded(
     options.refreshRadar ?? config.refreshRadarAfterCollection,
     acceptedSignals.length,
@@ -384,27 +416,34 @@ export async function importAssistedCollectorBatch(batch, options = {}) {
     "collector:import-assisted-batch"
   );
   const run = {
-    schemaVersion: 1,
+    schemaVersion: recentDiscovery ? 2 : 1,
     id: batch.batchId,
     agentId: "creator-signal-collector",
-    mode: "codex-assisted-import",
+    mode: recentDiscovery ? "recent-public-works-import" : "codex-assisted-import",
+    legacy: !recentDiscovery,
+    ...(recentDiscovery ? {
+      discoveryTaskId: batch.discoveryTaskId,
+      discoverySummary,
+      sourceChecks: batch.sourceChecks,
+      observations: batch.observations
+    } : {}),
     method: batch.method || "公开页面人工或 Codex 核对",
     status: "complete",
     startedAt: batch.observedAt,
     finishedAt: now.toISOString(),
     summary: {
-      configuredSources: creatorIds.length,
+      configuredSources: recentDiscovery ? sources.creators.filter((source) => source.enabled !== false).length : creatorIds.length,
       directSuccess: 0,
-      assistedRequired: 0,
-      assistedSuccess: creatorIds.length,
-      failed: 0,
+      assistedRequired: recentDiscovery ? discoverySummary.notScanned + discoverySummary.blocked + discoverySummary.unverified : 0,
+      assistedSuccess: recentDiscovery ? discoverySummary.verified : creatorIds.length,
+      failed: recentDiscovery ? discoverySummary.blocked : 0,
       observationsFound: batch.observations.length,
       ...normalizationSummary,
       signalsAdded: upsert.added,
       signalsUpdated: upsert.updated,
       signalsUnchanged: upsert.unchanged
     },
-    sourceResults: creatorIds.map((creatorId) => ({
+    sourceResults: recentDiscovery ? discoverySourceResults(sources, batch) : creatorIds.map((creatorId) => ({
       creatorId,
       status: "assisted_success",
       reason: null,

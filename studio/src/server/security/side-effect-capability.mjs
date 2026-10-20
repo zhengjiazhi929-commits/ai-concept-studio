@@ -7,6 +7,11 @@ import {
 const CAPABILITY_VERSION = "side-effect-capability-v1";
 const identifierPattern = /^[a-zA-Z0-9][a-zA-Z0-9._:@/-]{0,159}$/u;
 const grantMetadata = new WeakMap();
+const publicDiscoverySinkDelegations = new Map([
+  ["collector:run", new Set(["collector:run", "trend:run"])],
+  ["collector:import-assisted-batch", new Set(["collector:import-assisted-batch", "trend:run"])],
+  ["trend:run", new Set(["trend:run"])]
+]);
 
 export class SideEffectAuthorizationError extends Error {
   constructor(message, code, details = {}, statusCode = 403) {
@@ -395,15 +400,85 @@ export function consumeSideEffectGrantUsage(
   });
 }
 
-export function requireSideEffectGrant(options = {}, spec = {}) {
+export function requireSideEffectGrant(options = {}, spec = {}, sinkOperation) {
+  let grant;
   if (options.sideEffectGrant) {
-    return assertSideEffectGrant(options.sideEffectGrant, spec);
+    grant = assertSideEffectGrant(options.sideEffectGrant, spec);
+  } else if (typeof options.authorizeSideEffect === "function") {
+    grant = assertSideEffectGrant(options.authorizeSideEffect(spec), spec);
+  } else {
+    throw authorizationError(
+      "缺少服务端签发的副作用 Capability",
+      "side_effect_capability_missing"
+    );
   }
-  if (typeof options.authorizeSideEffect === "function") {
-    return assertSideEffectGrant(options.authorizeSideEffect(spec), spec);
+  // Use verified canonical claims. Caller-supplied operation overrides cannot
+  // identify the actual sink, which must declare its own constant separately.
+  const claims = grantMetadata.get(grant).claims;
+  for (const [prefix, operation] of [["editorial-voice/", "voice:register-editorial"],
+    ["editorial-voice-generation/", "voice:generate-editorial"],
+    ["editorial-voice-retake/", "voice:retake-editorial"]]) {
+    if (claims.episodeId.startsWith(prefix) && (claims.operation !== operation || sinkOperation !== operation)) {
+      throw authorizationError("本地完整旁白 Capability 不允许进入当前入口", "editorial_voice_sink_forbidden");
+    }
   }
-  throw authorizationError(
-    "缺少服务端签发的副作用 Capability",
-    "side_effect_capability_missing"
-  );
+  if (claims.episodeId.startsWith("manual-topic/") &&
+    (claims.operation !== "trend:manual-select" || sinkOperation !== "trend:manual-select")) {
+    throw authorizationError(
+      "人工指定选题 Capability 不允许进入当前副作用入口",
+      "manual_topic_sink_forbidden"
+    );
+  }
+  if (claims.episodeId.startsWith("local-script/") &&
+    (claims.operation !== "script:import-local" || sinkOperation !== "script:import-local")) {
+    throw authorizationError(
+      "本地讲稿 Capability 不允许进入当前副作用入口",
+      "local_script_sink_forbidden"
+    );
+  }
+  if (claims.episodeId.startsWith("local-storyboard/") &&
+    (claims.operation !== "storyboard:import-local" || sinkOperation !== "storyboard:import-local")) {
+    throw authorizationError(
+      "本地分镜 Capability 不允许进入当前副作用入口",
+      "local_storyboard_sink_forbidden"
+    );
+  }
+  if (claims.episodeId.startsWith("approved-script/") &&
+    (claims.operation !== "script:complete-approved" || sinkOperation !== "script:complete-approved")) {
+    throw authorizationError(
+      "已批准讲稿完成 Capability 不允许进入当前副作用入口",
+      "approved_script_sink_forbidden"
+    );
+  }
+  if (claims.episodeId.startsWith("approved-storyboard/") &&
+    (claims.operation !== "storyboard:complete-approved" || sinkOperation !== "storyboard:complete-approved")) {
+    throw authorizationError(
+      "已批准分镜完成 Capability 不允许进入当前副作用入口",
+      "approved_storyboard_sink_forbidden"
+    );
+  }
+  if (claims.episodeId.startsWith("editorial-assets/") &&
+    (claims.operation !== "assets:prepare-editorial" || sinkOperation !== "assets:prepare-editorial")) {
+    throw authorizationError(
+      "素材方案准备 Capability 不允许进入当前副作用入口",
+      "editorial_assets_sink_forbidden"
+    );
+  }
+  if (claims.episodeId.startsWith("editorial-materialization/") &&
+    (claims.operation !== "assets:materialize-editorial" || sinkOperation !== "assets:materialize-editorial")) {
+    throw authorizationError(
+      "本地编辑素材制作 Capability 不允许进入当前副作用入口",
+      "editorial_materialization_sink_forbidden"
+    );
+  }
+  if (
+    claims.episodeId.startsWith("public-discovery/") &&
+    !publicDiscoverySinkDelegations.get(claims.operation)?.has(sinkOperation)
+  ) {
+    throw authorizationError(
+      "公开选题 Capability 不允许进入当前副作用入口",
+      "public_discovery_sink_forbidden"
+    );
+  }
+  return grant;
 }

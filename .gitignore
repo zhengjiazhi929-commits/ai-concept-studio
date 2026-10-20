@@ -22,6 +22,7 @@ __pycache__/
 outputs/
 
 # Local credentials
+studio/.local-public-discovery/
 .env
 .env.*
 !.env.example
@@ -45,6 +46,7 @@ studio/data/trends/
 studio/data/production/
 studio/data/render-inputs/
 studio/data/episodes/agent-skill-*/
+studio/data/episodes/*-manual-*/
 studio/data/fixtures/agent-skill-voice/
 studio/data/fixtures/agent-skill-assets/
 studio/public/episodes/

@@ -386,6 +386,7 @@ test("Collector 刷新 Trend 只复用入口 grant，不下传 authority", async
     observations: [{
       creatorId: source.id,
       title: "Fixture accepted observation",
+      pageCreatorName: source.name,
       sourceUrl: "https://example.test/observation",
       publishedAt: "2026-08-23T08:00:00.000Z",
       conceptIds: ["fixture-concept"]

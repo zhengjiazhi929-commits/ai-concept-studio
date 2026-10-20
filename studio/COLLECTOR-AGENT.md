@@ -1,5 +1,10 @@
 # 创作者信号采集 Agent v0.1
 
+## 当前默认入口（2026-09-09）
+
+新一期先运行 `pnpm topic:discover`，按 v2 任务由 Codex 核验原作品，再用 `pnpm topic:discover -- --batch <文件名.json>` 续跑。首次身份配置、授权边界、v2 格式与零结果状态以 [当前 workflow](../docs/18-topic-discovery-workflow.md) 为准。
+任务覆盖全部启用作者，包括配置为固定旧视频的 B 站来源；固定页可读不代表近期发现完成。默认近 30 天，观察需绑定本轮任务、原作品作者与发布日期。
+
 ## 目标
 
 把创作者近期公开内容稳定地转换成热点雷达可以读取的标准化信号，同时保留来源、时间精度、采集方式和失败原因。
@@ -49,7 +54,7 @@ Codex 辅助读取 ──┘
 
 同一创作者、同一标题、同一天的内容会按内容键去重。程序采集的新互动指标可以补充到已有人工信号上，不会制造两条重复内容。
 
-## Codex 辅助批次
+## 历史 v1 辅助批次（只用于兼容迁移）
 
 普通程序无法读取的来源会出现在 `data/collector/assist-task.json`。Codex 核对公开页面后，提交下面的数据结构：
 
@@ -75,12 +80,12 @@ Codex 辅助读取 ──┘
 批次可以通过本地接口 `POST /api/collector/assisted-batches` 提交，或者放入 `data/collector/inbox` 后运行：
 
 ```text
-pnpm import:collector -- <批次文件名>
+pnpm import:collector -- --legacy-import <批次文件名>
 ```
 
 `data/collector/inbox/2026-08-03-codex-assisted-smoke.json` 是已通过真实导入链路验证的示例。
 
-## 当前真实运行结果
+## 历史运行结果（2026-08-03，不能当成当前状态）
 
 首轮运行检查了 18 个观察源：
 
@@ -91,7 +96,7 @@ pnpm import:collector -- <批次文件名>
 - Codex 辅助示例批次中的 2 条观察成功更新既有信号；
 - 热点雷达在有效信号更新后自动重算。
 
-来源是否“近期”使用更严格的 7 天窗口。当前有 15 个来源拥有 7 天内信号，3 个来源需要补充近期内容。
+当时来源是否“近期”使用 7 天窗口；当时有 15 个来源拥有 7 天内信号。此数字已过期，当前看 Radar 的 7/14/30 天计数和 discoverySummary。
 
 ## 每周使用方式
 

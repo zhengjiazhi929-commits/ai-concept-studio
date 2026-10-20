@@ -28,27 +28,7 @@
     },
     "workerPrompts": {
       "version": "worker-prompts-v2",
-      "hash": "2613350755a96e044c8fbdef87e359d79089aea172fc2b6e3bb289cddb8d62e2",
-      "prompts": [
-        {
-          "workerId": "asset-agent",
-          "id": "acs.worker.asset-plan",
-          "version": "1.1.0",
-          "hash": "39ca1613baca85c6a8d643b3978ff9699eeb0c36d7ed5f8629599c9a5378a0fc"
-        },
-        {
-          "workerId": "script-agent",
-          "id": "acs.worker.script-draft",
-          "version": "1.0.0",
-          "hash": "1d4d2a6a5deaf7f66aef8920b248b8a4c47c1747a346d7d45ef5cade25f1c496"
-        },
-        {
-          "workerId": "storyboard-agent",
-          "id": "acs.worker.storyboard-draft",
-          "version": "1.1.0",
-          "hash": "030662aa91d1f1a01f4a797b694cf64f9cf7ffd0c3966e25cdafa6b181b873bb"
-        }
-      ]
+      "hash": "2613350755a96e044c8fbdef87e359d79089aea172fc2b6e3bb289cddb8d62e2"
     },
     "routingPolicy": {
       "version": "routing-policy-v1",
@@ -67,8 +47,8 @@
       "hash": "7b9071f728445d58f5a7a5c2b0a08764e386f0a37433a29b14f1bb1de876287b"
     },
     "implementation": {
-      "version": "agent-control-delivery-security-v1",
-      "hash": "e3b1b1bb3d63bfb5362776a71515c6b67271250c9e2026f3822b26606fc6d8e9"
+      "version": "agent-control-delivery-discovery-v1",
+      "hash": "5fb11c7a9568abbf4fd6bdd031b444b0949bb60424b9d63d7803622af6952a00"
     }
   },
   "requiredCases": [
