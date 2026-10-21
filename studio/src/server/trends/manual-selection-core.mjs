@@ -111,10 +111,15 @@ export function createManualSelectionService({trendsRoot, readEpisode, writeEpis
   async function approveManualTopic(input, options = {}) {
     const request = validateManualTopicRequest(input);
     // The actual sink and subject are derived from the full request, never caller overrides.
-    requireSideEffectGrant(options, manualTopicCapabilitySpec(request), MANUAL_TOPIC_OPERATION);
+    const spec = manualTopicCapabilitySpec(request);
+    const grant = requireSideEffectGrant(options, spec, MANUAL_TOPIC_OPERATION);
+    // Keep the entry grant: rechecking must not invoke a callback that can renew it.
+    const assertAuthorized = () => requireSideEffectGrant({sideEffectGrant: grant}, spec, MANUAL_TOPIC_OPERATION);
     const decisionId = manualTopicDecisionId(request);
     const decisionPath = resolve(root, "manual-selections", `${decisionId}.json`);
     return withDurableJsonStoreLock(root, {}, async () => {
+      // Lock acquisition may outlive the grant. Recovery also writes durable state.
+      assertAuthorized();
       await recoverJsonDocumentSet(root, journal);
       let record = await readJsonDocumentOr(decisionPath, null, {storeRoot: root});
       if (!record) {
@@ -135,6 +140,7 @@ export function createManualSelectionService({trendsRoot, readEpisode, writeEpis
         };
         record.selection = selectionFromDecision(request, snapshot, record.createdAt);
         // The immutable intent is durable before Episode CAS. Retry resumes this exact intent.
+        assertAuthorized();
         await writeImmutableJsonDocument(decisionPath, record, {storeRoot: root});
       } else if (record.decisionId !== decisionId || hash(record.request) !== hash(request) ||
         hash(record.snapshot) !== request.snapshotHash || record.snapshot.run.id !== request.runId ||
@@ -167,12 +173,16 @@ export function createManualSelectionService({trendsRoot, readEpisode, writeEpis
         episode = buildManualEpisode(selection);
         const validation = validateEpisode(episode);
         if (!validation.valid) fail("manual_topic_episode_invalid", "研究草稿未通过 Episode 合同校验");
+        assertAuthorized();
         await writeEpisode(episode);
       }
       // Episode is authoritative. This pointer is derived state; publishing failure
       // cannot roll it back, and retry must never rewrite later Episode progress.
       if (!pointerMatches) {
         try {
+          // An expired grant cannot publish new derived state. The Episode is
+          // already committed, so preserve it and let a fresh grant repair the pointer.
+          assertAuthorized();
           await publishJsonDocumentSet({root, journalName: journal, documents: [{path: resolve(root, "selection.json"), value: selection}]});
         } catch (error) {
           return {status: "committed_with_warning", episodeId: episode.id, decisionPath, selection, warning: "selection_pointer_pending", errorCode: error.code ?? "publication_failed"};
