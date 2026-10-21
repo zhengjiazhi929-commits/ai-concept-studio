@@ -1,9 +1,45 @@
 # AI Concept Studio 当前状态
 
-更新时间：2026-10-20（Asia/Shanghai）
-状态真源版本：75（选择性候选本地完整验证通过，GitHub 检查与合并状态见实时引用）
+更新时间：2026-10-21（Asia/Shanghai）
+状态真源版本：76（PR #8 审查问题整改，验证与合并分别记录）
 
-## 当前任务：按依赖整理候选分支
+## 当前任务：修复候选 PR 审查问题并重新验证
+
+- Zhengjiazhi 已授权修复3个已复现P2、补强1个P3测试断言、分批提交并推送现有
+  [草稿 PR #8](https://github.com/zhengjiazhi929-commits/ai-concept-studio/pull/8)。
+  新提交的 hosted CI 通过后再决定合并；本轮不合并、不部署、不调用付费服务、
+  不操作真实 Episode/Gate、不渲染新整片。下方旧“未授权建PR”已被本次授权取代。
+- 在原隔离候选分支 `codex/verified-system-delivery-20261020` 整改；原脏工作树及媒体保持。
+  main 基线仍为 `0c2b1cdc993a8c9492ab5a091573d673ac60503d`。
+- 已补强4项语音访问器测试，27/27通过；提交 `3409d7b`。
+- 已修复人工选题在异步操作后授权过期仍继续写入的问题，相关56/56通过；提交
+  `bf6b3ed`。Episode已提交时保留后续人工状态，以新授权恢复派生指针。
+- 已统一当前v2与历史v1的审批展示合同，保留严格的实际批准边界；相关77/77、
+  独立审批复核41/41通过，含真实HTTP模块加载；提交 `1ea1e57`。
+- 章节目录与连续真实时间轴已提交 `94bd7a8`；字号不缩小，章节刻度不人为扩宽。
+  聚焦58/58、真实字体60帧、0.5倍缩放及8种故障拦截已通过；合成局部截图已检查，
+  这不是新的整片或用户视觉验收。
+- 最终实现绑定为 `agent-control-release-v18`，236个路径，SHA-256
+  `416af8a736645b04188cf350c0a3348fa7d03179f034b25e9a2c282c52929732`；
+  每批独立更新版本，旧评测证据失效，`admission.eligible=false` 保持。
+- 上述最终源码 `94bd7a847b235a65001cdd6b1ddbf4afd918026f` 的精确 frozen install、
+  production audit 与完整 `pnpm verify` 已通过：1812/1812，零失败/跳过/取消；
+  433源码语法、35动效、回滚演练、三项合成渲染/真实浏览器smoke、diff检查通过。
+  当前生产依赖没有已知通告；不是无未知漏洞保证。
+- 本轮26个可审代码路径逐项复核，0跳过；授权恢复、审批实际批准边界、导航字体
+  DOM和访问器断言均有独立交叉复核，没有已确认未解决的本轮阻断项。
+  本文档提交仅记录已完成的本地检查，不预先宣称其 hosted CI 通过；须核对
+  [PR #8](https://github.com/zhengjiazhi929-commits/ai-concept-studio/pull/8)
+  的精确 head SHA 和对应 Verify。之前的1793项及旧CI不作为新实现通过证据。
+- machine_status=local_full_verification_passed；technical_status=review_findings_remediated；
+  business_acceptance_status=chapter_navigation_confirmation_pending；
+  release_status=draft_pr_merge_not_authorized。原成片不变，本轮没有新的整片验收。
+- 机器检查、用户视觉确认、视频成片验收及merge分开；详见
+  [PR审查整改说明](49-pr8-review-remediation.md)。
+
+## 2026-10-20 选择性交付历史（不是本轮新实现的验证结果）
+
+### 按依赖整理候选分支
 
 - Zhengjiazhi 已授权筛选累计改动、分批 commit + push；GitHub CI 通过后再确认是否合并。
   不授权创建 PR、合并、部署、付费调用、新成片渲染或 Episode/Gate 变更。
