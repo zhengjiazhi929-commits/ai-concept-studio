@@ -33,8 +33,13 @@ test("retake CLI rejects incomplete, duplicate, broadened and unsafe input", () 
 });
 
 test("retake CLI cannot inject roots, custom authority, getters or inherited dependency overrides", async () => {
-  const getter = {}; Object.defineProperty(getter, "preview", {enumerable: true, get: () => assert.fail("getter executed")});
+  let getterCalls = 0;
+  const getter = {}; Object.defineProperty(getter, "preview", {enumerable: true, get: () => {
+    getterCalls += 1;
+    assert.fail("getter executed");
+  }});
   for (const deps of [null, [], {workspaceRoot: "/tmp"}, {authorize: () => {}}, Object.create({preview: () => {}}), getter]) {
     await assert.rejects(runEditorialVoiceRetakeCli(preview, deps));
   }
+  assert.equal(getterCalls, 0, "rejection must not invoke a dependency accessor");
 });

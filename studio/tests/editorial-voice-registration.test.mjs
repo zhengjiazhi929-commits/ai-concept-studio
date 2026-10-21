@@ -72,8 +72,13 @@ test("editorial voice request is closed and rejects unsafe paths, getters and no
     {...request, candidatePath: "/tmp/file.json"}, {...request, candidatePath: "outputs/../file.json"},
     {...request, candidatePath: "studio/data/file.json"}, {...request, confirmEditorialVoiceRegistration: false},
     Object.create(request)]) assert.throws(() => validateEditorialVoiceRegisterRequest(next));
-  const getter = {...request}; Object.defineProperty(getter, "actor", {enumerable: true, get: () => assert.fail("getter executed")});
+  let getterCalls = 0;
+  const getter = {...request}; Object.defineProperty(getter, "actor", {enumerable: true, get: () => {
+    getterCalls += 1;
+    assert.fail("getter executed");
+  }});
   assert.throws(() => validateEditorialVoiceRegisterRequest(getter));
+  assert.equal(getterCalls, 0, "rejection must not invoke a request accessor");
 });
 
 test("preview reads only and receipt validation never upgrades measured captions into a video approval", async t => {

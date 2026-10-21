@@ -63,8 +63,13 @@ test("retake request is closed and binds current base, repair, source, implement
     r => {r.confirmEditorialVoiceRetake = false;}, r => {r.actor = "human:Other";}, r => {r.actor = "agent:fake";}]) {
     const next = structuredClone(request); edit(next); assert.throws(() => validateEditorialVoiceRetakeRequest(next));
   }
-  const getter = {...request}; Object.defineProperty(getter, "sourceHash", {enumerable: true, get: () => assert.fail("getter executed")});
+  let getterCalls = 0;
+  const getter = {...request}; Object.defineProperty(getter, "sourceHash", {enumerable: true, get: () => {
+    getterCalls += 1;
+    assert.fail("getter executed");
+  }});
   assert.throws(() => validateEditorialVoiceRetakeRequest(getter));
+  assert.equal(getterCalls, 0, "rejection must not invoke a request accessor");
 });
 
 test("retake preview reads only and execution does not register, retime or approve the episode", async t => {

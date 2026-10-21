@@ -67,10 +67,15 @@ test("editorial voice CLI rejects injected authority, roots, accessors and inher
   const deps = [null, [], {root: "/synthetic"}, {authorize: () => {}}, {register: null},
     Object.create({preview: () => {}}), {[Symbol("injected")]: () => {}}];
   const getter = {};
-  Object.defineProperty(getter, "preview", {enumerable: true, get: () => assert.fail("getter executed")});
+  let getterCalls = 0;
+  Object.defineProperty(getter, "preview", {enumerable: true, get: () => {
+    getterCalls += 1;
+    assert.fail("getter executed");
+  }});
   const hidden = {};
   Object.defineProperty(hidden, "preview", {enumerable: false, value: () => {}});
   for (const input of [...deps, getter, hidden]) await assert.rejects(runEditorialVoiceRegisterCli(previewArgs, input));
+  assert.equal(getterCalls, 0, "rejection must not invoke a dependency accessor");
 });
 
 test("editorial voice CLI reports redacted errors without claiming a failed registration completed", async () => {
