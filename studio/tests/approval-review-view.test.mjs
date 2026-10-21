@@ -14,6 +14,7 @@ import {
   safeApprovalMediaUrl
 } from "../src/web/approval-review-view.mjs";
 import { buildHumanApprovalView } from "../src/server/reviews/human-approval-view.mjs";
+import { EDITORIAL_IMPLEMENTATION_VERSION } from "../src/server/production/editorial-code-implementation.mjs";
 import {
   historicalApprovedStoryboardV3Episode
 } from "./historical-approved-storyboard-v3.fixture.mjs";
@@ -258,6 +259,24 @@ test("editorial asset UI shows bounded resource counts and hashes without claimi
   assert.match(html,/&lt;script&gt;bad\(\)&lt;\/script&gt;/u);
   assert.doesNotMatch(html,/<img src=x|<script>bad/u);
   assert.doesNotMatch(renderApprovalReview(assetReview(),"asset-execution"),/本地代码与已绑定资源/u);
+});
+
+test("resource section accepts the current version without relying on a caller-provided plan kind", () => {
+  const review=assetReview();
+  review.content.candidate.localCodeImplementation={schemaVersion:EDITORIAL_IMPLEMENTATION_VERSION,
+    componentId:"EditorialMotionPreview",files:[],font:{files:[]},logo:{files:[]}};
+  assert.equal(renderApprovalReview(review,"asset-execution").includes("本地代码与已绑定资源"),true);
+});
+
+test("plan kind and component name cannot make unsupported resource versions look supported", () => {
+  for (const change of [{schemaVersion:"editorial-code-implementation-v99"},
+    {schemaVersion:null},{componentId:"OtherPreview"}]) {
+    const review=assetReview();
+    review.content.plan.content.kind="editorial-code-asset-plan-v1";
+    review.content.candidate.localCodeImplementation={schemaVersion:EDITORIAL_IMPLEMENTATION_VERSION,
+      componentId:"EditorialMotionPreview",files:[],font:{files:[]},logo:{files:[]},...change};
+    assert.equal(renderApprovalReview(review,"asset-execution").includes("本地代码与已绑定资源"),false,JSON.stringify(change));
+  }
 });
 
 test("摘要没有直批或直退，只提供查看并审批入口", () => {

@@ -23,6 +23,7 @@ import { assetExecutionCheckpointState } from "./asset-execution-checkpoint.mjs"
 import { inspectVisualProofCandidate } from "./visual-proof-checkpoint.mjs";
 import { inspectInlineResearchEvidence } from "./approval-artifact-integrity.mjs";
 import { inspectTimedEditorialEpisode, hasTimedEditorialExecution } from "../production/timed-editorial-content.mjs";
+import { editorialImplementationDisplaySupported } from "../../web/shared/editorial-implementation-version.mjs";
 
 export const HUMAN_APPROVAL_VIEW_VERSION = "human-approval-view-v1";
 
@@ -382,6 +383,7 @@ function executionPolicyView(policy = {}) {
 function assetPlanContentView(content) {
   if (!content || typeof content !== "object") return null;
   return {
+    kind: content.kind ?? null,
     visualSystem: content.visualSystem ?? null,
     visualContractVersion: content.visualContractVersion ?? null,
     visualStyleProfileId: content.visualStyleProfileId ?? null,
@@ -984,8 +986,7 @@ function assetExecutionContent(episode, checkpoint, artifact) {
 
 function assetExecutionCandidateView(candidate = {}) {
   const implementation = candidate.localCodeImplementation;
-  const editorial = implementation?.schemaVersion === "editorial-code-implementation-v1"
-    && implementation.componentId === "EditorialMotionPreview";
+  const editorial = editorialImplementationDisplaySupported(implementation);
   const files = value => Array.isArray(value) ? value.map(item => artifactRecord(item ?? {})) : [];
   return {
     episodeId: candidate.episodeId ?? null,
@@ -1139,6 +1140,13 @@ function buildAssetExecutionView(episode, artifact, previousArtifact = null, pre
   const content = assetExecutionContent(episode, checkpoint, artifact);
   const candidate = checkpoint.currentCandidate;
   const machineReview = checkpoint.machineReview;
+  const implementation = candidate?.localCodeImplementation;
+  const editorialSupported = editorialImplementationDisplaySupported(implementation);
+  const editorial = editorialSupported
+    || content.plan.content?.kind === "editorial-code-asset-plan-v1"
+    || implementation?.componentId === "EditorialMotionPreview"
+    || (typeof implementation?.schemaVersion === "string"
+      && implementation.schemaVersion.startsWith("editorial-code-implementation-"));
   const binding = {
     candidateVersion: candidate?.version ?? null,
     candidateHash: candidate?.candidateHash ?? null,
@@ -1159,10 +1167,9 @@ function buildAssetExecutionView(episode, artifact, previousArtifact = null, pre
     && bindingComplete
     && content.artifactReadable
     && content.candidateMatchesCurrentPlan
+    && (!editorial || editorialSupported)
   );
   const summary = candidate?.summary ?? {};
-  const editorial = content.plan.content?.kind === "editorial-code-asset-plan-v1"
-    || candidate?.localCodeImplementation?.schemaVersion === "editorial-code-implementation-v1";
   const structuralDiff = assetPlanStructuralDiff(
     planArtifactContent(previousArtifact),
     planArtifactContent(artifact) ?? episode.production?.assetPlan?.content ?? null
@@ -1207,6 +1214,10 @@ function buildAssetExecutionView(episode, artifact, previousArtifact = null, pre
   if (editorial) {
     risks.push({level: "boundary", code: "editorial-preparation-not-production",
       message: "本次仅确认代码与资源绑定的素材准备方案；制作仍需显式使用独立零调用入口并重新核验当前绑定，不会自动配音或正式渲染。文件校验不等于逐像素 QA 或视觉验收。"});
+    if (!editorialSupported) {
+      risks.push({level: "blocking", code: "editorial-implementation-version-unsupported",
+        message: "当前编辑素材实现版本或组件不受支持，禁止批准；请重新生成并审核受支持的素材准备候选。"});
+    }
   }
   const path = `/api/episodes/${episode.id}/asset-execution-review`;
   return {

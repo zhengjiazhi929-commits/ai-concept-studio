@@ -1,7 +1,7 @@
 {
   "schemaVersion": 4,
-  "id": "main-agent-control-reference-v16",
-  "version": "16.0.0",
+  "id": "main-agent-control-reference-v17",
+  "version": "17.0.0",
   "policyVersion": "routing-policy-v1",
   "reviewVersion": "review-rubrics-v10",
   "runner": {
@@ -47,8 +47,8 @@
       "hash": "7b9071f728445d58f5a7a5c2b0a08764e386f0a37433a29b14f1bb1de876287b"
     },
     "implementation": {
-      "version": "agent-control-release-v16",
-      "hash": "b85113efcb3b9c329a3ef2c458975370fd010b82b0f9d2e4a87f048503cacd01"
+      "version": "agent-control-release-v17",
+      "hash": "63e748326c7ae423c5443f1118ba05207bbee664b7737575d2c7b3cf9dc8f990"
     }
   },
   "requiredCases": [

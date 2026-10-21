@@ -3,8 +3,9 @@ import { readFile, realpath } from "node:fs/promises";
 import { resolve, relative, sep, extname } from "node:path";
 import { workspaceRoot as defaultWorkspaceRoot } from "../../shared/paths.mjs";
 import {inspectInstalledDependencies, installedDependencyIdentityValid} from "./installed-dependency-integrity.mjs";
+import {EDITORIAL_IMPLEMENTATION_VERSION} from "../../web/shared/editorial-implementation-version.mjs";
 
-export const EDITORIAL_IMPLEMENTATION_VERSION = "editorial-code-implementation-v2";
+export {EDITORIAL_IMPLEMENTATION_VERSION};
 export const EDITORIAL_IMPLEMENTATION_SEEDS = Object.freeze([
   "studio/src/video/index.jsx", "studio/src/video/root.jsx",
   "studio/src/video/episode-preview.jsx", "studio/src/video/editorial-motion-preview.jsx",

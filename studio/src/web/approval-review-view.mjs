@@ -1,3 +1,5 @@
+import { editorialImplementationDisplaySupported } from "./shared/editorial-implementation-version.mjs";
+
 const FORMAL_GATE_TARGETS = new Set([
   "research",
   "script",
@@ -412,10 +414,9 @@ function renderPlanItems(items) {
   }).join("")}</div>` : '<p class="approval-empty">没有制作条目，禁止批准。</p>';
 }
 
-function renderEditorialResourceBindings(candidate, plan, localMaterialization) {
+function renderEditorialResourceBindings(candidate, localMaterialization) {
   const implementation = candidate.localCodeImplementation ?? {};
-  if (plan.kind !== "editorial-code-asset-plan-v1"
-    && implementation.schemaVersion !== "editorial-code-implementation-v1") return "";
+  if (!editorialImplementationDisplaySupported(implementation)) return "";
   const summary = candidate.summary ?? {};
   const font = implementation.font ?? {};
   const logo = implementation.logo ?? {};
@@ -462,7 +463,7 @@ function renderAssetExecution(review) {
   const policy = content.executionPolicy ?? plan.executionPolicy ?? {};
   const calls = asArray(content.prompts ?? policy.externalApiCalls ?? summary.externalApiCalls);
   return `
-    ${renderEditorialResourceBindings(candidate, plan, review?.evidence?.localMaterialization)}
+    ${renderEditorialResourceBindings(candidate, review?.evidence?.localMaterialization)}
     <section class="approval-review-section">
       <div class="approval-section-heading"><h3>全部制作条目</h3><span>${items.length} 项</span></div>
       ${renderPlanItems(items)}

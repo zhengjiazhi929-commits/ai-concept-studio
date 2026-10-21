@@ -310,7 +310,8 @@ test("implementation 指纹覆盖控制链路的最小安全依赖闭包", async
     "src/server/production/editorial-assets-prepare-core.mjs",
     "src/server/production/editorial-assets-prepare.mjs",
     "src/server/production/editorial-asset-plan.mjs",
-    "src/server/production/editorial-code-implementation.mjs"
+    "src/server/production/editorial-code-implementation.mjs",
+    "src/web/shared/editorial-implementation-version.mjs"
   ];
   assert.equal(
     new Set(AGENT_CONTROL_IMPLEMENTATION_PATHS).size,

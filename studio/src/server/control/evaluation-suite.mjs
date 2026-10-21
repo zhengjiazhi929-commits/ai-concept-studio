@@ -23,10 +23,11 @@ export const FORMAL_EVALUATION_RUNNER_ID = "main-agent-offline-reference-runner"
 export const FORMAL_EVALUATION_RUNNER_VERSION = "2.0.0";
 export const INDEPENDENT_JUDGE_ID = "deterministic-action-rubric-judge";
 export const INDEPENDENT_JUDGE_VERSION = "2.0.0";
-export const AGENT_CONTROL_IMPLEMENTATION_VERSION = "agent-control-release-v16";
+export const AGENT_CONTROL_IMPLEMENTATION_VERSION = "agent-control-release-v17";
 export const EFFECTIVE_AI_ROUTING_VERSION = "effective-ai-routing-v1";
 
 export const AGENT_CONTROL_IMPLEMENTATION_PATHS = Object.freeze([
+  "src/web/shared/editorial-implementation-version.mjs",
   "src/shared/screen-editorial-policy.mjs",
   "src/server/production/storyboard-screen-editing.mjs",
   "src/server/security/local-request-boundary.mjs",
