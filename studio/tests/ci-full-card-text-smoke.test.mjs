@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {mkdtemp,access,rm,readFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {cleanupFullCardTextSmoke,validateFullCardTextSmokeAudit} from '../scripts/ci-full-card-text-smoke.mjs';
+import {cleanupFullCardTextSmoke,validateFullCardTextSmokeAudit,validateFullChapterTextSmokeAudit} from '../scripts/ci-full-card-text-smoke.mjs';
+import {fullChapterBrowserFixtures} from './helpers/full-chapter-browser-fixture-data.mjs';
 
 const chapters=['读取资料','核对范围','更新记录','返回结果'];
 const longBody='这里使用完整的中文说明验证卡片能够承载较长内容，流程仍按顺序连接，文字不会被截断，也不会靠缩小字号来勉强放入。';
@@ -34,6 +35,28 @@ test('card DOM smoke attests actual loaded font, preserved short baseline and un
 test('production root binds the real card guard to every frame, not only reveal count',async()=>{
   const source=await readFile(new URL('../src/video/explainer-full-revision/root.jsx',import.meta.url),'utf8');
   assert.match(source,/<FullTextFitGuard key=\{`\$\{scene\.id\}:\$\{frame\}`\} frame=\{frame\} contentRef=\{contentRef\}/u);
+});
+
+test('chapter report validation requires complete text, actual-time tracks, boundary frames and every negative guard',()=>{
+  const report={fontLoaded:true,results:{},sentinels:{},scaled:{labels:fullChapterBrowserFixtures.chinese40.chapters.map(c=>({text:c.label}))}};
+  for(const [name,fixture] of Object.entries(fullChapterBrowserFixtures)){
+    const total=fixture.chapters.at(-1).endFrame;
+    report.results[name]=fixture.frames.map(frame=>({frame,currentId:fixture.chapters.find(c=>frame<c.endFrame).id,
+      fontSizes:Array(4).fill('20px'),labels:fixture.chapters.map(c=>({id:c.id,text:c.label,lines:[{}]})),
+      tracks:fixture.chapters.map(c=>({id:c.id,box:{left:0,right:(c.endFrame-c.startFrame)/total*1704}})),
+      boundaries:fixture.chapters.slice(1).map(c=>({id:c.id,box:{left:108+c.startFrame/total*1704-0.5,right:108+c.startFrame/total*1704+0.5}})),
+      fillAmounts:fixture.chapters.map(c=>Math.max(0,Math.min(1,(frame-c.startFrame)/(c.endFrame-c.startFrame))))}));
+  }
+  for(const [name,code] of Object.entries({overflow:'text-overflow',collision:'label-overlap',outsideCanvas:'text-overflow',caption:'caption-overlap',
+    track:'track-overflow',boundary:'boundary-overflow',hidden:'text-hidden',missing:'missing-navigation'}))report.sentinels[name]={error:`full-chapter-dom-${code}`,handlesAfterUnmount:0};
+  assert.equal(validateFullChapterTextSmokeAudit(report),true);
+  for(const mutate of [r=>r.fontLoaded=false,r=>delete r.results.tiny,r=>r.results.unequal.pop(),r=>r.results.tiny[0].frame++,
+    r=>r.results.tiny[0].currentId='practice',r=>r.results.chinese40[0].labels[0].text='省略',r=>r.results.english40[0].fontSizes[0]='12px',
+    r=>r.results.unequal[0].tracks[0].box.right++,r=>r.results.typical[1].fillAmounts[0]=0,r=>delete r.sentinels.caption,
+    r=>r.sentinels.collision.error='success',r=>r.sentinels.overflow.handlesAfterUnmount=1,r=>r.scaled.labels[0].text='省略',
+    r=>r.results.unequal[0].boundaries[0].box.left++,r=>delete r.sentinels.boundary]){
+    const invalid=structuredClone(report);mutate(invalid);assert.throws(()=>validateFullChapterTextSmokeAudit(invalid));
+  }
 });
 
 test('card smoke cleanup still closes the server and removes proof after browser close rejects',async t=>{

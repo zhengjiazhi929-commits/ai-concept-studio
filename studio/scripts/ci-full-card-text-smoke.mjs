@@ -7,6 +7,39 @@ import {fileURLToPath} from 'node:url';
 import {resolveBrowserExecutable} from '../src/server/renderer.mjs';
 import {openOwnedBrowser} from '../src/server/production/owned-browser-launch.mjs';
 import {fullCardBrowserFixtures} from '../tests/helpers/full-card-browser-fixture-data.mjs';
+import {fullChapterBrowserFixtures} from '../tests/helpers/full-chapter-browser-fixture-data.mjs';
+
+export function validateFullChapterTextSmokeAudit(audit){
+  const requireValue=value=>{if(!value)throw new Error('Incomplete or regressed real-font chapter proof');};
+  requireValue(audit?.fontLoaded===true);
+  requireValue(JSON.stringify(Object.keys(audit.results??{}))===JSON.stringify(Object.keys(fullChapterBrowserFixtures)));
+  for(const [name,fixture] of Object.entries(fullChapterBrowserFixtures)){
+    const actual=audit.results[name];requireValue(Array.isArray(actual)&&actual.length===fixture.frames.length);
+    for(const [i,result] of actual.entries()){
+      const frame=fixture.frames[i],total=fixture.chapters.at(-1).endFrame;
+      requireValue(result.frame===frame&&result.currentId===fixture.chapters.find(c=>frame<c.endFrame).id);
+      requireValue(result.labels?.length===4&&result.tracks?.length===4
+        &&JSON.stringify(result.fontSizes)===JSON.stringify(Array(4).fill('20px')));
+      for(const [j,chapter] of fixture.chapters.entries()){
+        const label=result.labels[j],track=result.tracks[j],expectedWidth=(chapter.endFrame-chapter.startFrame)/total*1704;
+        requireValue(label.id===chapter.id&&label.text===chapter.label&&label.lines.length>=1&&label.lines.length<=2);
+        requireValue(track.id===chapter.id&&Math.abs(track.box.right-track.box.left-expectedWidth)<0.1);
+        // CSSStyleDeclaration serializes percentages with rounded decimals;
+        // this tolerance is under 0.002 composition pixels on the full track.
+        requireValue(Math.abs(result.fillAmounts?.[j]-Math.max(0,Math.min(1,(frame-chapter.startFrame)/(chapter.endFrame-chapter.startFrame))))<1e-6);
+      }
+      requireValue(result.boundaries?.length===3&&result.boundaries.every((boundary,j)=>boundary.id===fixture.chapters[j+1].id
+        &&Math.abs((boundary.box.left+boundary.box.right)/2-(108+fixture.chapters[j+1].startFrame/total*1704))<0.1));
+    }
+  }
+  requireValue(audit.scaled?.labels?.every((label,i)=>label.text===fullChapterBrowserFixtures.chinese40.chapters[i].label));
+  const failures={overflow:'text-overflow',collision:'label-overlap',outsideCanvas:'text-overflow',caption:'caption-overlap',
+    track:'track-overflow',boundary:'boundary-overflow',hidden:'text-hidden',missing:'missing-navigation'};
+  requireValue(JSON.stringify(Object.keys(audit.sentinels??{}))===JSON.stringify(Object.keys(failures)));
+  for(const [name,code] of Object.entries(failures))requireValue(audit.sentinels[name].error.includes(`full-chapter-dom-${code}`)
+    &&audit.sentinels[name].handlesAfterUnmount===0);
+  return true;
+}
 
 export async function cleanupFullCardTextSmoke({browser,server,root,removeProof,primaryFailure}){
   const errors=[];
@@ -67,7 +100,8 @@ export async function runFullCardTextSmoke({keepProof=false}={}){
     await page.goto({url:`http://127.0.0.1:${server.address().port}/`,timeout:30000});
     const audit=await page.evaluate(()=>window.auditCardProof);
     validateFullCardTextSmokeAudit(audit);
-    const report={kind:'synthetic-generic-card-real-font-dom-v2',videoRendered:false,visualAcceptance:false,...audit};
+    validateFullChapterTextSmokeAudit(audit.chapterNavigation);
+    const report={kind:'synthetic-card-and-chapter-real-font-dom-v3',videoRendered:false,visualAcceptance:false,...audit};
     await writeFile(join(root,'report.json'),`${JSON.stringify(report,null,2)}\n`,{flag:'wx'});
     succeeded=true;return {...report,...(keepProof?{proofDirectory:root}:{})};
   }catch(error){primaryFailure=error;throw error;

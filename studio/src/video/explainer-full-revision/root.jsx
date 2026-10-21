@@ -3,13 +3,14 @@ import {AbsoluteFill,Composition,useCurrentFrame,Audio,staticFile} from 'remotio
 import {VIDEO_SANS_FONT_FAMILY} from '../font-system.mjs';
 import {VisualSystemV1AiWatermark} from '../components/visual-system-v1/ai-watermark.jsx';
 import {clamp,orthogonalPoints} from '../explainer-revision/model.mjs';
-import {fullSceneState,layoutScene,progressGeometry,fullSurfaceStyle,sourceReadState,pointOnOrthogonalPath} from './model.mjs';
+import {fullSceneState,layoutScene,fullSurfaceStyle,sourceReadState,pointOnOrthogonalPath} from './model.mjs';
 import {SemanticScene} from './semantic-scenes.jsx';
 import {FullTextFitGuard} from './text-fit-guard.jsx';
+import {FullChapterProgress} from './chapter-progress.jsx';
 
 const C={ink:'#14211D',muted:'#53685E',accent:'#17795D',paper:'#F0F6F2',border:'#89AF9D'};
-function Text({x,y,w,size=34,weight=450,color=C.ink,children,style={}}){
-  return <div data-full-text style={{position:'absolute',left:x,top:y,width:w,fontSize:size,fontWeight:weight,lineHeight:1.4,color,whiteSpace:'pre-line',overflowWrap:'break-word',...style}}>{children}</div>;
+function Text({x,y,w,size=34,weight=450,color=C.ink,children,style={},domRole}){
+  return <div data-full-text data-full-text-role={domRole} style={{position:'absolute',left:x,top:y,width:w,fontSize:size,fontWeight:weight,lineHeight:1.4,color,whiteSpace:'pre-line',overflowWrap:'break-word',...style}}>{children}</div>;
 }
 function Surface({box,active=false,children,style={}}){
   return <div data-full-card style={{...fullSurfaceStyle(box,active),position:'absolute',left:box.x,top:box.y,width:box.w,height:box.h,padding:0,
@@ -78,21 +79,15 @@ export function SceneArt({scene,current,frame}){
 export function ExplainerFullRevision({plan,timing,audioSrc}){
   const contentRef=useRef(null);
   const frame=useCurrentFrame(),{scene,current,caption}=fullSceneState(timing,frame);
-  const progress=progressGeometry(timing.chapters,frame);
   return <AbsoluteFill ref={contentRef} data-full-scene={scene.id} data-full-focus={current.focusIndex} data-full-reveal={current.revealCount}
     style={{background:C.paper,color:C.ink,fontFamily:VIDEO_SANS_FONT_FAMILY,backgroundImage:'radial-gradient(ellipse at 85% 10%,rgba(67,184,145,.08),transparent 48%)'}}>
     <Text x={108} y={59} w={1510} size={25} color={C.accent} weight={500}>AI 直通车 · 上下文工程与 Agent 记忆</Text>
     <Text x={108} y={117} w={1540} size={60} weight={550} style={{letterSpacing:'-.025em',lineHeight:1.25}}>{scene.title}</Text>
     <SceneArt {...{scene,current,frame}}/>
-    <Text x={120} y={928} w={1680} size={38} weight={500} style={{textAlign:'center'}}>{caption}</Text>
-    <div aria-label="全片章节进度">
-      {progress.map(c=><div key={c.id} data-chapter-progress={c.id} style={{position:'absolute',left:c.x,top:1010,width:c.w}}>
-        <div data-chapter-label style={{fontSize:20,lineHeight:'29px',marginBottom:8,fontWeight:500,whiteSpace:'nowrap',color:c.id===current.chapterId?C.accent:C.muted}}>{c.label}</div>
-        <div data-chapter-track style={{height:5,background:'#CDDFD5',borderRadius:4}}><div data-chapter-fill style={{height:5,width:`${c.amount*100}%`,background:C.accent,borderRadius:4}}/></div>
-      </div>)}
-    </div>
+    <Text domRole="caption" x={120} y={928} w={1680} size={38} weight={500} style={{textAlign:'center'}}>{caption}</Text>
+    <FullChapterProgress chapters={timing.chapters} frame={frame}/>
     <VisualSystemV1AiWatermark profile="approved-v013-stable-footprint" motionCadence="continuous"/>
-    <FullTextFitGuard key={`${scene.id}:${frame}`} frame={frame} contentRef={contentRef}/>
+    <FullTextFitGuard key={`${scene.id}:${frame}`} frame={frame} contentRef={contentRef} checkChapterProgress/>
     {audioSrc&&<Audio src={staticFile(audioSrc)}/>}
   </AbsoluteFill>;
 }

@@ -6,6 +6,7 @@ import {VIDEO_SANS_FONT_FAMILY} from '../../src/video/font-system.mjs';
 import {SceneArt} from '../../src/video/explainer-full-revision/root.jsx';
 import {FullTextFitGuard} from '../../src/video/explainer-full-revision/text-fit-guard.jsx';
 import {fullCardBrowserFixtures as fixtures} from './full-card-browser-fixture-data.mjs';
+import {installFullChapterProof} from './full-chapter-browser-fixture.jsx';
 
 const node=document.getElementById('content'),root=createRoot(node),contentRef={current:node};
 let proofFrame=100;
@@ -16,7 +17,7 @@ const settleGuard=async()=>{
 // Remotion's real cancelRender records the error and throws. The negative
 // lifecycle cases intentionally exercise that path, without mocking the guard.
 window.addEventListener('unhandledrejection',event=>{
-  if(String(event.reason?.message).startsWith('full-card-dom-'))event.preventDefault();
+  if(/^full-(?:card|chapter)-dom-/u.test(String(event.reason?.message)))event.preventDefault();
 });
 function clearGuard(){
   flushSync(()=>root.render(null));
@@ -76,7 +77,8 @@ window.auditCardProof=(async()=>{
     sourceArrival:await checkGuardLifecycle('source-arrival')};
   const missed=Object.entries(guardLifecycle).filter(([,result])=>!result.overflowRejected).map(([name])=>name);
   if(missed.length)throw new Error(`Real mounted guard missed ${missed.join(', ')} at unchanged reveal count`);
+  const chapterNavigation=await installFullChapterProof({root,node,contentRef,settleGuard,clearGuard})();
   await window.showCardCase('short');
   return {scope:'generic-card-only',fontLoaded:document.fonts.check('40px "Noto Sans SC Variable"'),results,
-    overflowSentinelRejected:true,guardLifecycle};
+    overflowSentinelRejected:true,guardLifecycle,chapterNavigation};
 })();
