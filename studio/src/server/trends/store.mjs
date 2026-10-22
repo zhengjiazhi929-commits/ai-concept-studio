@@ -1,6 +1,8 @@
 import { hostname } from "node:os";
-import { readFile, rm } from "node:fs/promises";
+import { readFile, readdir, rm } from "node:fs/promises";
 import { basename, resolve } from "node:path";
+import { manualTopicDecisionId } from "../../shared/manual-topic-decision.mjs";
+import { discoverTrendCandidates } from "./engine.mjs";
 import {
   conceptTaxonomyPath,
   trendRadarConfigPath,
@@ -15,6 +17,8 @@ import {
 } from "./schema.mjs";
 import {
   assertNoDurableJsonStoreHooks,
+  assertDurableStorePath,
+  canonicalJsonDocumentContentSha256,
   publishJsonDocumentSet,
   readJsonDocumentOr,
   readJsonDocumentSetPointer,
@@ -209,6 +213,25 @@ function signalContentKey(signal) {
 }
 
 function mergeSignal(existing, incoming) {
+  const existingVerified = existing.collector?.discoveryVersion === 2;
+  const incomingVerified = incoming.collector?.discoveryVersion === 2;
+  // A weaker import cannot relabel already verified facts or refresh their time.
+  if (existingVerified && !incomingVerified) return existing;
+  if (incomingVerified) {
+    if (existing.creatorId !== incoming.creatorId) {
+      throw Object.assign(new Error("已核验发现不能复用其他作者的信号ID"), {
+        code: "trend_discovery_creator_conflict"
+      });
+    }
+    // A v2 batch validates these facts and evidence together. Replace them as a
+    // unit, retaining only the stable id and metrics from the same verified work.
+    const merged = { ...incoming, id: existing.id };
+    if (existingVerified && existing.sourceUrl && existing.sourceUrl === incoming.sourceUrl) {
+      const metrics = { ...(existing.metrics ?? {}), ...(incoming.metrics ?? {}) };
+      if (Object.keys(metrics).length > 0) merged.metrics = metrics;
+    }
+    return merged;
+  }
   return {
     ...incoming,
     ...existing,
@@ -268,6 +291,18 @@ export async function upsertTrendSignals(signals, options = {}) {
       }
       const existing = signalMap.get(matchedId);
       const merged = mergeSignal(existing, signal);
+      if (signal.collector?.discoveryVersion === 2) {
+        const oldKey = signalContentKey(existing);
+        const newKey = signalContentKey(merged);
+        const contentOwner = contentKeyMap.get(newKey);
+        if (contentOwner && contentOwner !== matchedId) {
+          throw Object.assign(new Error("已核验更正后的内容身份已属于另一条信号"), {
+            code: "trend_discovery_content_conflict"
+          });
+        }
+        if (oldKey !== newKey && contentKeyMap.get(oldKey) === matchedId) contentKeyMap.delete(oldKey);
+        contentKeyMap.set(newKey, matchedId);
+      }
       if (JSON.stringify(existing) === JSON.stringify(merged)) unchanged += 1;
       else updated += 1;
       signalMap.set(matchedId, merged);
@@ -328,6 +363,41 @@ export async function readTrendSelection(options = {}) {
   );
 }
 
+async function validateSelectionEligibility(run, candidate, options) {
+  const [signalDocument, sources, taxonomy, config] = await Promise.all([
+    readTrendSignals(options), readTrendSources(), readConceptTaxonomy(), readTrendRadarConfig()
+  ]);
+  // Resolve the clock here, after lock acquisition and input reads. A cached
+  // "formal" label is historical evidence, not current permission to select.
+  const now = new Date(typeof options.now === "function" ? options.now() : options.now ?? Date.now());
+  const refreshRequired = () => Object.assign(
+    new Error("候选证据已过期、变化或不再满足正式门槛，请重新运行热点发现"),
+    { code: "trend_candidate_refresh_required", statusCode: 409 }
+  );
+  if (!Number.isFinite(now.getTime())) throw refreshRequired();
+  const input = { signals: signalDocument.signals, sources, taxonomy, config };
+  const current = discoverTrendCandidates({ ...input, now }).candidates.find((item) => item.id === candidate.id);
+  const evidence = candidate.evidenceSignals;
+  const rawSignals = new Map(signalDocument.signals.map((item) => [item.id, item]));
+  const maximumAge = config.windows.extendedDays * 24 * 60 * 60 * 1000;
+  if (current?.recommendedPool !== "formal_candidate" || !evidence?.length ||
+    evidence.some((summary) => {
+      const signal = rawSignals.get(summary.id);
+      const age = now.getTime() - Date.parse(summary.publishedAt);
+      return !signal || !Number.isFinite(age) || age < 0 || age > maximumAge ||
+        ["creatorId", "title", "sourceUrl", "publishedAt", "datePrecision"].some((key) => signal[key] !== summary[key]);
+    })) {
+    throw refreshRequired();
+  }
+  return {
+    validatedAt: now.toISOString(),
+    recommendedPool: current.recommendedPool,
+    runHash: canonicalJsonDocumentContentSha256(run),
+    candidateHash: canonicalJsonDocumentContentSha256(candidate),
+    inputHash: canonicalJsonDocumentContentSha256(input)
+  };
+}
+
 export async function selectTrendCandidate(candidateId, note = "", options = {}) {
   assertNoDurableJsonStoreHooks(options);
   const paths = resolveTrendDataPaths(options);
@@ -345,7 +415,34 @@ export async function selectTrendCandidate(candidateId, note = "", options = {})
       throw new Error(`候选概念 ${candidate.concept} 还没有通过正式候选门槛`);
     }
 
-    const selectedAt = new Date().toISOString();
+    const currentSelection = await readTrendSelection(options);
+    const manualDirectory = resolve(paths.root, "manual-selections");
+    await assertDurableStorePath(paths.root, manualDirectory);
+    let manualEntries = [];
+    try {manualEntries = await readdir(manualDirectory);} catch (error) {if (error.code !== "ENOENT") throw error;}
+    let manuallyReserved = currentSelection?.selectionMode === "manual" && currentSelection.candidateId === candidateId;
+    for (const entry of manualEntries.filter((name) => /^[a-f0-9]{64}\.json$/u.test(name))) {
+      const decision = await readJsonDocumentOr(resolve(manualDirectory, entry), null, {storeRoot: paths.root});
+      let validDecision = false;
+      try {
+        validDecision = manualTopicDecisionId(decision?.request) === entry.slice(0, -5) &&
+          decision.decisionId === entry.slice(0, -5) &&
+          decision.request.candidateId === decision.selection?.candidateId;
+      } catch { /* Damaged reservations must block both selection paths. */ }
+      if (!validDecision) {
+        throw Object.assign(new Error("人工选题记录无效，停止创建"), {code: "manual_topic_decision_conflict"});
+      }
+      // Prepared reservations survive pointer changes and failed Episode creation.
+      if (decision.request.candidateId === candidateId || decision.selection.candidateId === candidateId) manuallyReserved = true;
+    }
+    if (manuallyReserved) {
+      throw Object.assign(new Error("该概念已经由人工指定进入研究，不重复创建"), {
+        code: "manual_topic_already_in_production", statusCode: 409
+      });
+    }
+
+    const eligibilityValidation = await validateSelectionEligibility(run, candidate, options);
+    const selectedAt = eligibilityValidation.validatedAt;
     run.candidates = run.candidates.map((item) => ({
       ...item,
       selectionStatus: item.id === candidateId ? "selected_for_research" : "not_selected"
@@ -356,6 +453,7 @@ export async function selectTrendCandidate(candidateId, note = "", options = {})
       schemaVersion: 1,
       selectedAt,
       runId: run.id,
+      eligibilityValidation,
       candidateId,
       episodeId: `${candidate.id}-${selectedAt.slice(0, 10).replaceAll("-", "")}`,
       concept: candidate.concept,

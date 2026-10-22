@@ -365,7 +365,7 @@ test("Provider 结果 HTTP 裁决强制使用短期 operator session 与 CSRF，
       method: "POST",
       headers: {
         "content-type": "application/json",
-        origin: `http://127.0.0.1:${config.port}`
+        origin: base
       },
       body: JSON.stringify({ unlockCode: operatorUnlockCode })
     });

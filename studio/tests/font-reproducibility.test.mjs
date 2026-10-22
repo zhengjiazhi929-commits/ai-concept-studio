@@ -94,6 +94,9 @@ test("视频入口统一加载锁定的本地 Noto Sans SC variable font", async
   assert.deepEqual(entrypoints.map(({ relativePath }) => relativePath.split(sep).join("/")).sort(), [
     "agent-skill-long-review-index.jsx",
     "agent-skill-uiverse-motion-proof-index.jsx",
+    "concise-storyboards/index.jsx",
+    "explainer-full-revision/index.jsx",
+    "explainer-revision/index.jsx",
     "glass-card-preview/index.jsx",
     "illustration-storyboards/index.jsx",
     "illustration-system/index.jsx",

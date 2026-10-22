@@ -16,9 +16,17 @@
     "import:trends": "node scripts/import-trend-snapshot.mjs",
     "trends": "node scripts/run-trend-radar.mjs",
     "collect": "node scripts/run-collector.mjs",
+    "discovery:setup": "node scripts/setup-public-discovery.mjs setup",
+    "topic:discover": "node scripts/run-topic-discovery.mjs",
+    "topic:select": "node scripts/select-manual-topic.mjs",
     "import:collector": "node scripts/import-collector-batch.mjs",
     "research": "node scripts/run-research.mjs",
     "import:research": "node scripts/import-research-evidence.mjs",
+    "import:script": "node scripts/import-local-script.mjs",
+    "complete:script": "node scripts/complete-approved-script.mjs",
+    "import:storyboard": "node scripts/import-local-storyboard.mjs",
+    "complete:storyboard": "node scripts/complete-approved-storyboard.mjs",
+    "prepare:editorial-assets": "node scripts/prepare-editorial-assets.mjs",
     "cloud:status": "node scripts/cloud-status.mjs",
     "cloud:backup": "node scripts/run-cloud-backup.mjs",
     "render:preview": "node scripts/render-preview.mjs golden-001",
@@ -43,8 +51,11 @@
     "illustration:catalog": "node scripts/render-illustration-system-proof.mjs",
     "illustration:test": "node --test tests/illustration-system-*.test.mjs tests/editorial-plan.test.mjs tests/editorial-scene.test.mjs tests/illustration-storyboards*.test.mjs tests/glass-card-*.test.mjs",
     "storyboards:proof": "node scripts/render-illustration-storyboard-proof.mjs",
+    "storyboards:concise": "node scripts/render-concise-storyboard-proof.mjs",
     "cards:proof": "node scripts/render-glass-card-proof.mjs",
     "ci:render-smoke": "node scripts/ci-render-smoke.mjs",
+    "ci:editorial-motion-smoke": "node scripts/ci-editorial-motion-smoke.mjs",
+    "ci:full-card-text-smoke": "node scripts/ci-full-card-text-smoke.mjs",
     "scan:secrets": "node scripts/scan-tracked-secrets.mjs",
     "eval:attested": "node scripts/run-attested-evaluation.mjs",
     "rehearse:rollback": "node scripts/rehearse-remediation-rollback.mjs",
@@ -53,7 +64,7 @@
     "precheck": "node --check src/shared/redaction.mjs && node --check src/video/agent-skill-motion-plan.mjs && node --check src/video/agent-skill-full-video-plan.mjs && node --check src/server/reviews/human-approval-view.mjs && node --check src/server/reviews/asset-execution-preflight-runner.mjs && node --check src/server/production/external-assets.mjs && node --check src/server/security/operator-session.mjs && node --check scripts/render-agent-skill-full-video-stills.mjs && node --check scripts/start-studio.mjs",
     "check": "node scripts/check-syntax.mjs",
     "diff:check": "node scripts/check-git-diff.mjs",
-    "verify": "pnpm scan:secrets && pnpm check && pnpm motion:check && pnpm test && pnpm rehearse:rollback && pnpm ci:render-smoke && pnpm diff:check"
+    "verify": "pnpm scan:secrets && pnpm check && pnpm motion:check && pnpm test && pnpm rehearse:rollback && pnpm ci:render-smoke && pnpm ci:editorial-motion-smoke && pnpm ci:full-card-text-smoke && pnpm diff:check"
   },
   "dependencies": {
     "@fontsource-variable/noto-sans-sc": "5.3.0",
@@ -63,7 +74,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "remotion": "4.0.504",
-    "undici": "7.29.0"
+    "undici": "7.29.1"
   },
   "devDependencies": {
     "esbuild": "0.28.1"

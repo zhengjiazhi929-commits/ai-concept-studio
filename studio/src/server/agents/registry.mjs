@@ -339,6 +339,8 @@ export const agents = {
       });
       const entry = versionEntry(generated, {
         assetChecklist: generated.value.assetChecklist,
+        screenEditing: generated.value.screenEditing,
+        screenEditorialRequired: true,
         ...(generated.value.visualContractVersion
           ? { visualContractVersion: generated.value.visualContractVersion }
           : {}),

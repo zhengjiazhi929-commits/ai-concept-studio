@@ -22,6 +22,8 @@ import { reviewPassedForGate } from "../control/policy-engine.mjs";
 import { assetExecutionCheckpointState } from "./asset-execution-checkpoint.mjs";
 import { inspectVisualProofCandidate } from "./visual-proof-checkpoint.mjs";
 import { inspectInlineResearchEvidence } from "./approval-artifact-integrity.mjs";
+import { inspectTimedEditorialEpisode, hasTimedEditorialExecution } from "../production/timed-editorial-content.mjs";
+import { editorialImplementationDisplaySupported } from "../../web/shared/editorial-implementation-version.mjs";
 
 export const HUMAN_APPROVAL_VIEW_VERSION = "human-approval-view-v1";
 
@@ -291,8 +293,21 @@ function scriptContent(episode, artifact) {
 
 function storyboardContent(episode) {
   const draft = episode.production?.storyboardDraft ?? {};
+  const editorial = draft.generationKind === "codex-local-storyboard-import"
+    || draft.storyboardKind === "editorial-cue-plan-v1" || hasTimedEditorialExecution(episode);
+  const editorialPlan = editorial ? safeNestedValue(draft.content ?? null) : null;
+  const timedInspection = hasTimedEditorialExecution(episode) ? inspectTimedEditorialEpisode(episode) : null;
   return {
     draft: currentDraft(draft),
+    ...(editorial ? {
+      editorialPlan,
+      editorialReadiness: timedInspection?.valid ? timedInspection : {
+        timing: "unmeasured",
+        execution: "unimplemented",
+        audioAligned: false,
+        renderReady: false
+      }
+    } : {}),
     // Show exactly the logical storyboard fields covered by Gate 3. Physical
     // asset/audio paths are intentionally reviewed later in the assets Gate.
     scenes: safeNestedValue(storyboardGateScenes(episode.scenes ?? [])),
@@ -304,7 +319,9 @@ function storyboardContent(episode) {
       durationSeconds: episode.render?.durationSeconds ?? null,
       compositionId: episode.render?.compositionId ?? null
     },
-    artifactReadable: (episode.scenes?.length ?? 0) > 0
+    artifactReadable: editorial
+      ? Array.isArray(editorialPlan?.shots) && editorialPlan.shots.length > 0
+      : (episode.scenes?.length ?? 0) > 0
   };
 }
 
@@ -366,6 +383,7 @@ function executionPolicyView(policy = {}) {
 function assetPlanContentView(content) {
   if (!content || typeof content !== "object") return null;
   return {
+    kind: content.kind ?? null,
     visualSystem: content.visualSystem ?? null,
     visualContractVersion: content.visualContractVersion ?? null,
     visualStyleProfileId: content.visualStyleProfileId ?? null,
@@ -579,7 +597,10 @@ function formalEvidence(episode, gate, content) {
       artifact: artifactRecord({ path: content.draft.artifactPath }),
       playablePreview: null,
       sceneCount: content.scenes.length,
-      subtitleCount: content.subtitles.length
+      subtitleCount: content.subtitles.length,
+      ...(content.editorialReadiness ? {
+        editorialShotCount: content.editorialPlan?.shots?.length ?? 0
+      } : {})
     };
   }
   if (gate === "assets") {
@@ -662,6 +683,17 @@ function formalRisks(gate, content, report) {
   }
   if (gate === "storyboard" && !content.artifactReadable) {
     risks.push({ level: "blocking", code: "storyboard-empty", message: "分镜没有可审阅场景" });
+  }
+  if (gate === "storyboard" && content.editorialReadiness) {
+    if (content.editorialReadiness.execution === "implemented-contract") {
+      risks.push({ level: "warning", code: "editorial-estimate-not-audio",
+        message: "当前是可复算的编辑估算与逐拍代码合同；不是配音实测、像素验收或最终成片批准" });
+    } else {
+      risks.push(
+        { level: "blocking", code: "editorial-timing-unmeasured", message: "编辑分镜尚未配音或对齐，没有可审核的镜头与字幕时间轴" },
+        { level: "blocking", code: "editorial-execution-unimplemented", message: "动作仍是编辑计划，尚未实现可执行画面；不能作为完成动画批准" }
+      );
+    }
   }
   if (gate === "assets") {
     for (const [index, risk] of (content.assetPlan.content?.risks ?? []).entries()) {
@@ -746,7 +778,11 @@ function formalContentSummary(gate, content) {
       sceneIds: content.scenes.map((item) => item.id ?? null),
       subtitleCount: content.subtitles.length,
       subtitleIds: content.subtitles.map((item) => item.id ?? null),
-      visualRuleCount: content.draft.visualRules.length
+      visualRuleCount: content.draft.visualRules.length,
+      ...(content.editorialReadiness ? {
+        editorialShotCount: content.editorialPlan?.shots?.length ?? 0,
+        editorialShotIds: (content.editorialPlan?.shots ?? []).map((shot) => shot.id ?? null)
+      } : {})
     };
   }
   if (gate === "assets") {
@@ -816,7 +852,13 @@ function buildFormalView(episode, gate, artifact) {
     && typeof binding.reviewReportId === "string"
     && binding.reviewReportId.trim()
   );
-  const ready = machinePassed && awaitingHuman && completeForHumanReview && bindingComplete;
+  // Readable editorial text is not a timed or implemented storyboard. Keep
+  // approval disabled even if a stale report or a disabled-review legacy state
+  // would otherwise suggest readiness; this contract has no execution timeline.
+  const editorialIncomplete = Boolean(content.editorialReadiness)
+    && content.editorialReadiness.execution !== "implemented-contract";
+  const ready = machinePassed && awaitingHuman && completeForHumanReview && bindingComplete
+    && !editorialIncomplete;
   const rejectAllowed = bindingComplete && (
     awaitingHuman || episode.approvals?.[gate]?.status === "approved"
   );
@@ -842,7 +884,8 @@ function buildFormalView(episode, gate, artifact) {
       bindingComplete,
       readyForHumanApproval: ready,
       needsRevision: Boolean(
-        feedbackAppliesToCurrentVersion
+        editorialIncomplete
+        || feedbackAppliesToCurrentVersion
         || content.research?.needsRevision
         || content.draft?.needsRevision
         || content.assetPlan?.needsRevision
@@ -942,6 +985,9 @@ function assetExecutionContent(episode, checkpoint, artifact) {
 }
 
 function assetExecutionCandidateView(candidate = {}) {
+  const implementation = candidate.localCodeImplementation;
+  const editorial = editorialImplementationDisplaySupported(implementation);
+  const files = value => Array.isArray(value) ? value.map(item => artifactRecord(item ?? {})) : [];
   return {
     episodeId: candidate.episodeId ?? null,
     version: candidate.version ?? null,
@@ -953,7 +999,34 @@ function assetExecutionCandidateView(candidate = {}) {
       schemaVersion: candidate.localCodeImplementation.schemaVersion ?? null,
       componentId: candidate.localCodeImplementation.componentId ?? null,
       sha256: candidate.localCodeImplementation.sha256 ?? null,
-      files: (candidate.localCodeImplementation.files ?? []).map(artifactRecord)
+      files: (candidate.localCodeImplementation.files ?? []).map(artifactRecord),
+      ...(editorial ? {
+        compositionId: implementation.compositionId ?? null,
+        closurePolicy: implementation.closurePolicy ?? null,
+        rendered: implementation.rendered ?? null,
+        visualAcceptance: implementation.visualAcceptance ?? null,
+        font: {
+          status: implementation.font?.status ?? null,
+          packageName: implementation.font?.packageName ?? null,
+          packageVersion: implementation.font?.packageVersion ?? null,
+          family: implementation.font?.family ?? null,
+          license: implementation.font?.license ?? null,
+          licensePath: implementation.font?.licensePath ?? null,
+          portable: implementation.font?.portable ?? null,
+          browserResolutionVerified: implementation.font?.browserResolutionVerified ?? null,
+          files: files(implementation.font?.files)
+        },
+        logo: {
+          profile: implementation.logo?.profile ?? null,
+          cadence: implementation.logo?.cadence ?? null,
+          width: implementation.logo?.width ?? null,
+          height: implementation.logo?.height ?? null,
+          frameCount: implementation.logo?.frameCount ?? null,
+          validation: implementation.logo?.validation ?? null,
+          manifest: implementation.logo?.manifest ? artifactRecord(implementation.logo.manifest) : null,
+          files: files(implementation.logo?.files)
+        }
+      } : {})
     } : null,
     summary: {
       itemCount: candidate.summary?.itemCount ?? null,
@@ -967,7 +1040,15 @@ function assetExecutionCandidateView(candidate = {}) {
       nativeCurrencyCaps: safeNestedValue(candidate.summary?.nativeCurrencyCaps ?? []),
       budgetNormalization: safeNestedValue(candidate.summary?.budgetNormalization ?? null),
       costScope: candidate.summary?.costScope ?? null,
-      pricingConfirmed: candidate.summary?.pricingConfirmed ?? null
+      pricingConfirmed: candidate.summary?.pricingConfirmed ?? null,
+      ...(editorial ? {
+        kind: candidate.summary?.kind ?? null,
+        voiceStatus: candidate.summary?.voiceStatus ?? null,
+        renderAuthorized: candidate.summary?.renderAuthorized ?? null,
+        materializationStatus: candidate.summary?.materializationStatus ?? null,
+        visualAcceptance: candidate.summary?.visualAcceptance ?? null,
+        fontBrowserResolutionVerified: candidate.summary?.fontBrowserResolutionVerified ?? null
+      } : {})
     }
   };
 }
@@ -1059,6 +1140,13 @@ function buildAssetExecutionView(episode, artifact, previousArtifact = null, pre
   const content = assetExecutionContent(episode, checkpoint, artifact);
   const candidate = checkpoint.currentCandidate;
   const machineReview = checkpoint.machineReview;
+  const implementation = candidate?.localCodeImplementation;
+  const editorialSupported = editorialImplementationDisplaySupported(implementation);
+  const editorial = editorialSupported
+    || content.plan.content?.kind === "editorial-code-asset-plan-v1"
+    || implementation?.componentId === "EditorialMotionPreview"
+    || (typeof implementation?.schemaVersion === "string"
+      && implementation.schemaVersion.startsWith("editorial-code-implementation-"));
   const binding = {
     candidateVersion: candidate?.version ?? null,
     candidateHash: candidate?.candidateHash ?? null,
@@ -1079,6 +1167,7 @@ function buildAssetExecutionView(episode, artifact, previousArtifact = null, pre
     && bindingComplete
     && content.artifactReadable
     && content.candidateMatchesCurrentPlan
+    && (!editorial || editorialSupported)
   );
   const summary = candidate?.summary ?? {};
   const structuralDiff = assetPlanStructuralDiff(
@@ -1122,6 +1211,14 @@ function buildAssetExecutionView(episode, artifact, previousArtifact = null, pre
       nativeCurrencyCaps: clone(summary.nativeCurrencyCaps ?? [])
     });
   }
+  if (editorial) {
+    risks.push({level: "boundary", code: "editorial-preparation-not-production",
+      message: "本次仅确认代码与资源绑定的素材准备方案；制作仍需显式使用独立零调用入口并重新核验当前绑定，不会自动配音或正式渲染。文件校验不等于逐像素 QA 或视觉验收。"});
+    if (!editorialSupported) {
+      risks.push({level: "blocking", code: "editorial-implementation-version-unsupported",
+        message: "当前编辑素材实现版本或组件不受支持，禁止批准；请重新生成并审核受支持的素材准备候选。"});
+    }
+  }
   const path = `/api/episodes/${episode.id}/asset-execution-review`;
   return {
     schemaVersion: HUMAN_APPROVAL_VIEW_VERSION,
@@ -1140,10 +1237,12 @@ function buildAssetExecutionView(episode, artifact, previousArtifact = null, pre
     binding,
     approvalObject: {
       kind: "asset-execution-candidate",
-      label: "素材执行与费用授权",
+      label: editorial ? "素材准备方案（不代表视觉验收）" : "素材执行与费用授权",
       version: binding.candidateVersion,
       artifactHash: binding.candidateHash,
-      summary: `审批素材执行候选 v${binding.candidateVersion ?? "?"}，仅授权列明的工具、调用与费用上限`
+      summary: editorial
+        ? `确认素材准备候选 v${binding.candidateVersion ?? "?"} 的代码和资源绑定，不授予生产执行权限`
+        : `审批素材执行候选 v${binding.candidateVersion ?? "?"}，仅授权列明的工具、调用与费用上限`
     },
     content,
     changes: {
@@ -1196,18 +1295,28 @@ function buildAssetExecutionView(episode, artifact, previousArtifact = null, pre
       playablePreview: null,
       candidateArtifact: artifactRecord(candidate?.artifact ?? {}),
       localCodeImplementation: clone(content.candidate.localCodeImplementation),
+      ...(editorial ? {localMaterialization: {
+        state: episode.production?.editorialMaterialization ? "files-registered" : "not-started",
+        receipt: safeNestedValue(episode.production?.editorialMaterialization ?? null),
+        assurance: "Episode登记信息；实际使用前须重新校验完整文件集，不代表视觉验收"
+      }} : {}),
       voice: clone(content.voiceIntegrity)
     },
     risks,
     machineReview: machineReviewView(machineReview),
-    consequences: {
+    consequences: editorial ? {
+      onApprove: ["仅确认当前精确版本的代码与资源绑定素材准备方案", "保留当前候选和机器审核的人审记录，不启动生产"],
+      doesNotHappen: ["不自动制作；素材制作须通过独立零调用入口显式执行，不授权配音或正式渲染",
+        "不会把字体文件绑定视为浏览器字体解析验证，也不会把 Logo 清单和头部检查视为逐像素 QA",
+        "不会批准素材/声音 Gate、视觉验收、最终成片或自动发布"]
+    } : {
       onApprove: ["仅授权当前候选列明的执行器、外部调用次数和费用上限", "允许 Asset Agent 继续执行已批准方案"],
       doesNotHappen: ["不会授权方案之外的模型、请求或费用", "不会批准素材 Gate、最终成片或自动发布"]
     },
     nextActions: [
       {
         id: "approve",
-        label: "批准当前执行方案",
+        label: editorial ? "确认当前素材准备方案" : "批准当前执行方案",
         method: "POST",
         path: `${path}/approve`,
         allowed: ready,

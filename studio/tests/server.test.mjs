@@ -80,7 +80,7 @@ test("本地控制台 API 和视频分段读取可用", async () => {
     const tooLarge = await fetch(`${base}/api/ai/primary`, {
       method: "POST",
       headers: {
-        origin: "http://127.0.0.1:4317",
+        origin: base,
         "content-type": "application/json",
         "x-operator-token": OPERATOR_TOKEN
       },

@@ -59,15 +59,25 @@ flowchart LR
 pnpm import:trends   导入默认公开信号快照
 pnpm collect         检查公开来源并刷新可直读信号
 pnpm import:collector -- <文件名>  导入 Codex 辅助采集批次
-pnpm trends          重新计算热点候选
+pnpm trends          重新计算有效窗口内热点候选（不自动导入旧seed）
+pnpm discovery:setup -- --actor human:Zhengjiazhi --confirm-public-discovery
+pnpm topic:discover  新一期先发现选题，输出Codex续跑任务
+pnpm topic:discover -- --batch <v2文件名.json>  核验原作品后续跑，不自动选题
 pnpm research        为已选概念建立一手资料与事实证据任务
 pnpm import:research -- <文件名>  导入 Codex 辅助研究证据批次
+pnpm import:script -- --episode <ID> --candidate <工作区相对JSON路径>  只读预览本地讲稿入库
 pnpm test            运行回归测试
 pnpm check           检查 JS、JSX、TS、TSX 源码语法
 pnpm verify          运行秘密、源码、动效、测试和固定渲染门禁
 pnpm render:preview  仅在当前上游和素材/声音 Gate 已批准后生成预览
 pnpm qa              仅检查当前 Episode 已登记的有效视频
 ```
+
+本地讲稿入库先取得预览的 candidateSha256/snapshotHash，再增加
+`--candidate-sha256 <SHA> --snapshot <HASH> --actor human:<姓名> --reason <理由> --confirm-local-script-import`。
+这仅登记新脚本版本，不批准内容、不调用模型、不自动制作视频。
+已批准的研究及来源文件必须仍匹配；随后走原机器审核与脚本人审。
+完整边界和恢复说明见 [本地讲稿受控入库](../docs/24-local-script-ingestion.md)。
 
 ## 新视频可复用的视觉模块
 

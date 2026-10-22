@@ -2,7 +2,23 @@ import { PIPELINE_DEFINITIONS } from "../../shared/schema.mjs";
 import { createApprovalMap } from "../../shared/workflow.mjs";
 import { readEpisode, writeEpisode } from "../../shared/store.mjs";
 
+function validatedEligibilityBinding(selection) {
+  if (selection.eligibilityValidation === undefined) return {};
+  const binding = selection.eligibilityValidation;
+  const hashes = ["runHash", "candidateHash", "inputHash"];
+  const keys = ["validatedAt", "recommendedPool", ...hashes];
+  if (!binding || typeof binding !== "object" || Array.isArray(binding) ||
+    Object.keys(binding).length !== keys.length || Object.keys(binding).some((key) => !keys.includes(key)) ||
+    typeof binding.validatedAt !== "string" || binding.validatedAt !== selection.selectedAt ||
+    !Number.isFinite(Date.parse(binding.validatedAt)) || binding.recommendedPool !== "formal_candidate" ||
+    hashes.some((key) => typeof binding[key] !== "string" || !/^[a-f0-9]{64}$/u.test(binding[key]))) {
+    throw Object.assign(new Error("选题时效验证绑定无效"), { code: "trend_selection_validation_invalid" });
+  }
+  return { eligibilityValidation: structuredClone(binding) };
+}
+
 export function buildEpisodeFromTrendSelection(selection, now = new Date()) {
+  const eligibilityBinding = validatedEligibilityBinding(selection);
   const createdAt = now.toISOString();
   return {
     schemaVersion: 1,
@@ -39,6 +55,7 @@ export function buildEpisodeFromTrendSelection(selection, now = new Date()) {
       runId: selection.runId,
       candidateId: selection.candidateId,
       selectedAt: selection.selectedAt,
+      ...eligibilityBinding,
       note: selection.note || "",
       productDecisions: selection.productDecisions,
       primarySources: selection.primarySources,

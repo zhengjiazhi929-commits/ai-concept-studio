@@ -8,6 +8,7 @@ import {
 } from "../../shared/integrity.mjs";
 import {
   ensureInside,
+  resolveExistingPathInside,
   workspaceRelativePath,
   workspaceRoot
 } from "../../shared/paths.mjs";
@@ -31,6 +32,11 @@ import {
   technicalDiagramContractValid
 } from "../../shared/technical-diagram-contract.mjs";
 import { validateExternalRightsDeclaration } from "../../shared/asset-rights.mjs";
+import { EDITORIAL_ASSET_PLAN_KIND, inspectEditorialAssetPlan } from "../production/editorial-asset-plan.mjs";
+import { hasTimedEditorialExecution } from "../production/timed-editorial-content.mjs";
+import { inspectEditorialCodeImplementation, editorialCodeImplementationValid,
+  EDITORIAL_IMPLEMENTATION_VERSION } from "../production/editorial-code-implementation.mjs";
+import { loadApprovedStoryboardBinding } from "../production/approved-storyboard-binding.mjs";
 
 export const ASSET_EXECUTION_CHECKPOINT_VERSION = 1;
 
@@ -99,13 +105,21 @@ function safePlanPath(value) {
   return workspaceRelativePath(value);
 }
 
+export async function resolveEditorialAssetPlanPath(relativePath, root = workspaceRoot) {
+  const absolutePath = ensureInside(root, resolve(root, safePlanPath(relativePath)));
+  return resolveExistingPathInside(root, absolutePath);
+}
+
 async function readStableJson(relativePath, options = {}) {
   const inspect = options.inspectFileIntegrity ?? inspectFileIntegrity;
   const readText = options.readFile ?? readFile;
-  const absolutePath = ensureInside(workspaceRoot, resolve(workspaceRoot, relativePath));
+  const root = options.workspaceRoot ?? workspaceRoot;
+  const absolutePath = ensureInside(root, resolve(root, relativePath));
+  if (options.workspaceRoot) await resolveExistingPathInside(root, absolutePath);
   const before = await inspect(absolutePath);
   const content = await readText(absolutePath, "utf8");
   const after = await inspect(absolutePath);
+  if (options.workspaceRoot) await resolveExistingPathInside(root, absolutePath);
   if (!matchesFileIntegrity(before, after)) {
     const error = new Error("素材方案在审核读取期间发生变化，请重新检查");
     error.code = "asset_execution_evidence_changed";
@@ -268,6 +282,9 @@ function externalPromptContractValid(call) {
 }
 
 export function inspectAssetExecutionPlan(episode, plan, metadata = {}) {
+  if (plan?.kind === EDITORIAL_ASSET_PLAN_KIND || hasTimedEditorialExecution(episode)) {
+    return inspectEditorialAssetPlan(episode, plan, metadata);
+  }
   const items = Array.isArray(plan?.items) ? plan.items : [];
   const executionPolicy = plan?.executionPolicy ?? {};
   const externalApiCalls = Array.isArray(executionPolicy.externalApiCalls)
@@ -664,6 +681,10 @@ export function inspectAssetExecutionPlan(episode, plan, metadata = {}) {
 
 export async function inspectAssetExecutionCandidate(episode, input, options = {}) {
   const planPath = safePlanPath(input?.artifactPath ?? episode.production?.assetPlan?.artifactPath);
+  const expectedEditorial = episode.production?.assetPlan?.content?.kind === EDITORIAL_ASSET_PLAN_KIND
+    || hasTimedEditorialExecution(episode);
+  const evidenceRoot = options.workspaceRoot ?? workspaceRoot;
+  if (expectedEditorial) await resolveEditorialAssetPlanPath(planPath, evidenceRoot);
   const evidence = await readStableJson(planPath, options);
   if (evidence.document.episodeId !== episode.id) {
     const error = new Error("素材方案没有绑定当前 Episode");
@@ -673,16 +694,20 @@ export async function inspectAssetExecutionCandidate(episode, input, options = {
   const plan = evidence.document.plan ?? evidence.document.content ?? evidence.document;
   const version = Number(input?.version ?? episode.production?.assetPlan?.version);
   const inspected = inspectAssetExecutionPlan(episode, plan, { version });
+  const editorial = plan?.kind === EDITORIAL_ASSET_PLAN_KIND || hasTimedEditorialExecution(episode);
+  if (editorial || expectedEditorial) await resolveEditorialAssetPlanPath(planPath, evidenceRoot);
   const localCodeRequired = (plan?.items ?? []).some(
     (item) => item?.productionMethod?.kind === "local-code-animation"
   );
   let localCodeImplementation = null;
   let localCodeImplementationError = null;
   if (localCodeRequired) {
-    const inspectImplementation =
-      options.inspectLocalCodeImplementation ?? inspectLocalCodeImplementation;
+    const inspectImplementation = editorial
+      ? options.inspectEditorialCodeImplementation ?? inspectEditorialCodeImplementation
+      : options.inspectLocalCodeImplementation ?? inspectLocalCodeImplementation;
     const implementationOptions = {
-      ...(options.localCodeImplementationOptions ?? {})
+      ...(options.localCodeImplementationOptions ?? {}),
+      ...(editorial ? {workspaceRoot: options.workspaceRoot ?? workspaceRoot} : {})
     };
     if (options.readLocalCodeImplementationFile) {
       implementationOptions.readFile = options.readLocalCodeImplementationFile;
@@ -693,18 +718,32 @@ export async function inspectAssetExecutionCandidate(episode, input, options = {
       localCodeImplementationError = error?.code ?? "local_code_implementation_inspection_failed";
     }
   }
+  if (editorial) {
+    let sourceBinding = null; let sourceError = null;
+    try {
+      const root = options.workspaceRoot ?? workspaceRoot;
+      const reviewConfig = options.reviewConfig ?? JSON.parse(await readFile(resolve(root,"studio/config/review-rubrics.json"),"utf8"));
+      sourceBinding = await loadApprovedStoryboardBinding({workspaceRoot: root, episode, reviewConfig});
+    } catch (error) { sourceError = error?.code ?? "editorial_source_binding_failed"; }
+    inspected.checks.unshift(reviewCheck("editorial-source-files-binding",
+      "已批分镜及上游产物仍匹配磁盘文件和当前审核配置",
+      sourceBinding && integrityHash(sourceBinding.sourceStoryboard) === integrityHash(plan.sourceStoryboard),
+      sourceError ?? sourceBinding?.sourceStoryboard ?? null,plan.sourceStoryboard));
+  }
   inspected.checks.unshift(
     reviewCheck(
       "local-code-implementation-binding",
       "本地代码素材候选绑定当前实现文件摘要",
-      !localCodeRequired || localCodeImplementationValid(localCodeImplementation),
+      !localCodeRequired || (editorial
+        ? editorialCodeImplementationValid(localCodeImplementation) && integrityHash(plan.implementation) === integrityHash(localCodeImplementation)
+        : localCodeImplementationValid(localCodeImplementation)),
       {
         required: localCodeRequired,
         implementation: localCodeImplementation,
         error: localCodeImplementationError
       },
       localCodeRequired
-        ? `${LOCAL_CODE_IMPLEMENTATION_VERSION} with safe file hashes`
+        ? `${editorial ? EDITORIAL_IMPLEMENTATION_VERSION : LOCAL_CODE_IMPLEMENTATION_VERSION} with safe file hashes`
         : "not applicable",
       "重新读取本地视频组件、时间轴与字幕实现，机器审核通过后再人工批准"
     )
@@ -1850,6 +1889,9 @@ export function assetExecutionApprovalRecordValid(episode) {
 export function assetExecutionApprovalValid(episode) {
   if (!assetExecutionApprovalRecordValid(episode)) return false;
   const currentPlan = episode.production?.assetPlan;
+  if (currentPlan?.content?.kind === EDITORIAL_ASSET_PLAN_KIND || hasTimedEditorialExecution(episode)) {
+    return inspectEditorialAssetPlan(episode,currentPlan?.content,{version:currentPlan?.version}).passed;
+  }
   const currentCalls = currentPlan?.content?.executionPolicy?.externalApiCalls ?? [];
   const externalRightsCurrent = currentCalls.every(
     (call) => validateExternalRightsDeclaration(call?.rightsDeclaration).valid
@@ -1896,6 +1938,11 @@ export function assertAssetExecutionAuthorized(episode, request = {}) {
     throw error;
   }
   const plan = episode.production.assetPlan.content;
+  if (plan.kind === EDITORIAL_ASSET_PLAN_KIND) {
+    const error = new Error("编辑素材当前仅有来源与资源准备方案，尚无获准的素材物化执行入口");
+    error.code = "editorial_asset_materialization_unavailable";
+    throw error;
+  }
   const item = plan.items.find((candidate) => candidate.id === request.itemId);
   if (!item) {
     const error = new Error("请求执行的素材不在已批准方案中");

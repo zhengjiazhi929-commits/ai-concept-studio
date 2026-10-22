@@ -5,6 +5,7 @@ import { renderMedia, selectComposition } from "@remotion/renderer";
 import {
   publicRoot,
   videoRoot,
+  workspaceRoot,
   episodeOutputDirectory
 } from "../shared/paths.mjs";
 import { readConfig } from "../shared/store.mjs";
@@ -25,6 +26,12 @@ import {
   createRendererService,
   createVideoBundleSnapshotCore
 } from "./renderer-core.mjs";
+import {createEditorialMaterializationSnapshotCore} from "./production/editorial-materialization-consumption.mjs";
+
+export async function createEditorialMaterializationSnapshot(episode) {
+  if (arguments.length !== 1) throw new TypeError("Editorial snapshots do not accept overrides");
+  return createEditorialMaterializationSnapshotCore({workspaceRoot, episode});
+}
 
 export function nextRenderFileName(files) {
   const highest = files.reduce((current, file) => {

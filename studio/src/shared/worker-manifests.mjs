@@ -53,7 +53,7 @@ export const WORKER_MANIFESTS = Object.freeze({
     gate: null,
     approvalResetGate: "assets",
     patchFields: ["production", "approvals", "routingHistory", "control", "assets", "scenes", "reviewCheckpoints"],
-    productionFields: ["ai", "assetPlan", "assetPlanDirection", "assetBundleRevision"],
+    productionFields: ["ai", "assetPlan", "assetPlanDirection", "assetBundleRevision", "editorialMaterialization"],
     allowedTools: [
       "artifact.read",
       "artifact.write",

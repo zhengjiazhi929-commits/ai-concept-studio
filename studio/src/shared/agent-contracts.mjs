@@ -2,6 +2,7 @@ import { WORKER_MANIFESTS } from "./worker-manifests.mjs";
 import { createHash } from "node:crypto";
 import { integrityHash } from "./integrity.mjs";
 import { validateApprovedExternalAssetBinding } from "./asset-rights.mjs";
+import { editorialMaterializationRegistrationValid } from "./editorial-materialization-contract.mjs";
 
 export const CONTROL_MODES = new Set(["shadow", "assisted", "active"]);
 export const MAIN_AGENT_ACTIONS = new Set([
@@ -461,7 +462,11 @@ function validateAssetSceneBindings(sourceEpisode, scenes, registeredAssets = so
   return errors;
 }
 
-function validateAssetRegistration(sourceEpisode, assets) {
+function validateAssetRegistration(sourceEpisode, assets, editorialReceipt) {
+  if(sourceEpisode.production?.assetPlan?.content?.kind==='editorial-code-asset-plan-v1'||editorialReceipt!=null){
+    return editorialMaterializationRegistrationValid(sourceEpisode,assets,editorialReceipt)
+      ? [] : ['asset-agent editorial materialization does not match its dedicated approved receipt'];
+  }
   if (!Array.isArray(assets)) return ["asset-agent assets patch must be an array"];
   const errors = [];
   const previous = new Map((sourceEpisode.assets ?? []).map((asset) => [asset.planItemId, asset]));
@@ -728,7 +733,11 @@ export function validateWorkerMutation(sourceEpisode, agentId, result) {
     ));
   }
   if (agentId === "asset-agent" && patch.assets !== undefined) {
-    errors.push(...validateAssetRegistration(sourceEpisode, patch.assets));
+    errors.push(...validateAssetRegistration(sourceEpisode, patch.assets, patch.production?.editorialMaterialization));
+  }
+  if(patch.production?.editorialMaterialization!==undefined &&
+    (agentId!=='asset-agent'||!editorialMaterializationRegistrationValid(sourceEpisode,patch.assets,patch.production.editorialMaterialization))){
+    errors.push('worker editorial materialization receipt requires complete dedicated asset registration');
   }
   if (patch.reviewCheckpoints !== undefined) {
     if (agentId !== "asset-agent") {

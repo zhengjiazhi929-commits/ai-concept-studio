@@ -27,6 +27,8 @@ import {
 import { acquireEpisodeOperation } from
   "../src/server/control/episode-operation-lock.mjs";
 import { createStudioServer } from "../src/server/app.mjs";
+import { EDITORIAL_IMPLEMENTATION_VERSION } from "../src/server/production/editorial-code-implementation.mjs";
+import { renderApprovalReview } from "../src/web/approval-review-view.mjs";
 
 const REPORT_AT = "2026-08-17T08:00:00.000Z";
 const SENSITIVE_MARKER = ["fixture", "marker", "must", "not", "leak"].join("-");
@@ -545,6 +547,117 @@ test("素材执行 dossier 只展示候选 A，Episode 当前方案变成 B 时�
   );
 });
 
+function editorialApprovalEpisode(schemaVersion = EDITORIAL_IMPLEMENTATION_VERSION) {
+  const episode=fixtureEpisode();
+  const plan=episode.production.assetPlan.content;
+  plan.kind="editorial-code-asset-plan-v1";
+  plan.items=plan.items.map(item=>({...item,
+    productionMethod:{kind:"local-code-animation",executor:"EditorialMotionPreview"},
+    estimatedCost:{maximumCostUsd:0}}));
+  plan.executionPolicy={mode:"local-only",externalApiCalls:[],maximumPaidCostUsd:0,
+    currency:"USD",pricingConfirmed:true,costScope:"local-source-and-resource-preparation-only"};
+  const candidate=episode.reviewCheckpoints.assetExecution.currentCandidate;
+  const file=(path)=>({path,bytes:20,sha256:"7".repeat(64)});
+  candidate.localCodeImplementation={schemaVersion,componentId:"EditorialMotionPreview",
+    sha256:"8".repeat(64),files:[file("studio/src/video/editorial-motion-preview.jsx")],
+    rendered:false,visualAcceptance:false,
+    font:{status:"packaged-files-bound",packageName:"@fontsource-variable/noto-sans-sc",packageVersion:"5.3.0",
+      family:"Noto Sans SC Variable",license:"OFL-1.1",licensePath:"font/LICENSE",portable:true,browserResolutionVerified:false,
+      files:[file("font/LICENSE"),file("font/synthetic.woff2")]},
+    logo:{profile:"approved-v013-stable-footprint",cadence:"continuous",width:120,height:120,frameCount:120,
+      validation:"approved-manifest-sha256-and-png-header-only",manifest:file("logo/manifest.json"),files:[file("logo/frame-000.png")]}};
+  Object.assign(candidate.summary,{kind:plan.kind,voiceStatus:"deferred",renderAuthorized:false,
+    materializationStatus:"not-started",visualAcceptance:false,fontBrowserResolutionVerified:false,
+    externalApiCallCount:0,maximumPaidCostUsd:0});
+  candidate.planHash=integrityHash(plan);
+  return episode;
+}
+
+for (const schemaVersion of ["editorial-code-implementation-v1", EDITORIAL_IMPLEMENTATION_VERSION]) {
+test(`editorial ${schemaVersion} dossier preserves resources and preparation-only consequences`, () => {
+  const episode=editorialApprovalEpisode(schemaVersion);
+  const plan=episode.production.assetPlan.content;
+  const before=structuredClone(episode);
+  const view=buildHumanApprovalView(episode,"asset-execution",{artifact:{plan:structuredClone(plan)}});
+  assert.equal(view.content.candidate.localCodeImplementation.font.files.length,2);
+  assert.equal(view.evidence.localCodeImplementation.logo.manifest.sha256,"7".repeat(64));
+  assert.equal(view.content.candidate.localCodeImplementation.rendered,false);
+  assert.equal(view.content.candidate.localCodeImplementation.visualAcceptance,false);
+  assert.equal(view.content.candidate.summary.voiceStatus,"deferred");
+  assert.equal(view.content.candidate.summary.renderAuthorized,false);
+  assert.equal(view.content.candidate.summary.materializationStatus,"not-started");
+  assert.match(view.consequences.onApprove.join(" "),/仅确认.*素材准备方案/u);
+  assert.doesNotMatch(view.consequences.onApprove.join(" "),/允许 Asset Agent 继续执行/u);
+  assert.match(view.consequences.doesNotHappen.join(" "),/独立零调用入口/u);
+  assert.doesNotMatch(view.consequences.doesNotHappen.join(" "),/入口尚未实现/u);
+  assert.ok(view.risks.some(risk=>risk.code==="editorial-preparation-not-production"));
+  assert.deepEqual(episode,before);
+});
+}
+
+test("current emitted editorial version survives the real server-to-HTML approval flow", () => {
+  const episode=editorialApprovalEpisode();
+  const plan=episode.production.assetPlan.content;
+  const before=structuredClone(episode);
+  const view=buildHumanApprovalView(episode,"asset-execution",{artifact:{plan:structuredClone(plan)}});
+  const html=renderApprovalReview(view,"asset-execution");
+  assert.equal(view.content.candidate.localCodeImplementation.schemaVersion,EDITORIAL_IMPLEMENTATION_VERSION);
+  assert.equal(view.content.plan.content.kind,plan.kind);
+  assert.match(html,/本地代码与已绑定资源/u);
+  assert.match(html,/代码\/锁文件 1 个 · 字体文件 2 个 · Logo 帧 1 个/u);
+  for (const text of ["未物化", "声音待做", "未渲染", "未验收", "浏览器字体解析尚未验证", "font/LICENSE", "logo/manifest.json"]) {
+    assert.ok(html.includes(text),text);
+  }
+  assert.equal(view.approvalObject.label,"素材准备方案（不代表视觉验收）");
+  assert.equal(view.nextActions.find(action=>action.id==="approve").label,"确认当前素材准备方案");
+  assert.equal(view.evidence.localMaterialization.state,"not-started");
+  assert.match(html,/不自动制作.*独立零调用入口/u);
+  assert.doesNotMatch(html,/允许 Asset Agent 继续执行/u);
+  assert.deepEqual(episode,before);
+
+  episode.production.editorialMaterialization={manifestSha256:"6".repeat(64)};
+  const registeredBefore=structuredClone(episode);
+  const registered=buildHumanApprovalView(episode,"asset-execution",{artifact:{plan:structuredClone(plan)}});
+  assert.equal(registered.evidence.localMaterialization.state,"files-registered");
+  assert.match(renderApprovalReview(registered,"asset-execution"),/文件已登记，使用前仍须重新核验/u);
+  assert.equal(registered.content.candidate.localCodeImplementation.visualAcceptance,false);
+  assert.deepEqual(episode,registeredBefore);
+});
+
+test("unknown editorial version or component cannot inherit a passed report's approval readiness", () => {
+  for (const changes of [
+    {schemaVersion:"editorial-code-implementation-v99"},
+    {schemaVersion:"other-implementation-v1"},
+    {schemaVersion:null},
+    {componentId:"OtherPreview"}
+  ]) {
+    const episode=editorialApprovalEpisode();
+    Object.assign(episode.reviewCheckpoints.assetExecution.currentCandidate.localCodeImplementation,changes);
+    const before=structuredClone(episode);
+    const view=buildHumanApprovalView(episode,"asset-execution",{artifact:{plan:episode.production.assetPlan.content}});
+    assert.equal(view.status.readyForHumanApproval,false,JSON.stringify(changes));
+    assert.equal(view.nextActions.find(action=>action.id==="approve").allowed,false);
+    assert.ok(view.risks.some(risk=>risk.code==="editorial-implementation-version-unsupported"&&risk.level==="blocking"));
+    assert.equal(view.content.candidate.localCodeImplementation.font,undefined);
+    assert.doesNotMatch(renderApprovalReview(view,"asset-execution"),/本地代码与已绑定资源/u);
+    assert.deepEqual(episode,before);
+  }
+});
+
+test("historical v1 display never rewrites its existing approval or promotes it to v2", () => {
+  const episode=editorialApprovalEpisode("editorial-code-implementation-v1");
+  const checkpoint=episode.reviewCheckpoints.assetExecution;
+  checkpoint.status="approved";
+  checkpoint.humanApproval={decision:"approved",candidateHash:checkpoint.currentCandidate.candidateHash,
+    machineReviewId:checkpoint.machineReview.id,actor:"human:synthetic-history",at:REPORT_AT};
+  const before=structuredClone(episode);
+  const view=buildHumanApprovalView(episode,"asset-execution",{artifact:{plan:episode.production.assetPlan.content}});
+  assert.equal(view.content.candidate.localCodeImplementation.schemaVersion,"editorial-code-implementation-v1");
+  assert.equal(view.status.readyForHumanApproval,false);
+  assert.match(renderApprovalReview(view,"asset-execution"),/字体文件 2 个 · Logo 帧 1 个/u);
+  assert.deepEqual(episode,before);
+});
+
 test("内嵌脚本与素材方案不要求未登记文件摘要，live null metadata 仍可审批", async () => {
   const episode = fixtureEpisode();
   episode.production.scriptDraft.sha256 = null;
@@ -937,6 +1050,39 @@ test("Agent 状态变更锁持有期间人工批准 fail closed 且零副作用"
   } finally {
     releaseOperation();
   }
+});
+
+test("the browser resolves the shared editorial version module as JavaScript through the real HTTP entry", async t => {
+  const {server}=await createStudioServer({recoverOnStart:false,
+    operatorActor:"human:synthetic-module-http",
+    operatorToken:"synthetic-module-http-token-not-a-credential",
+    capabilitySecret:"synthetic-module-http-secret-not-a-credential",
+    readEpisode:async()=>assert.fail("static modules must not read Episode state"),
+    writeEpisode:async()=>assert.fail("static modules must not write Episode state"),
+    appendEvent:async()=>assert.fail("static modules must not write audit events")});
+  t.after(()=>new Promise((done,reject)=>server.close(error=>error?reject(error):done())));
+  server.listen(0,"127.0.0.1");
+  await once(server,"listening");
+  const url=`http://127.0.0.1:${server.address().port}/approval-review-view.mjs`;
+  const response=await fetch(url);
+  assert.equal(response.status,200);
+  assert.match(response.headers.get("content-type"),/^(?:text|application)\/javascript\b/u);
+  const viewSource=await response.text();
+  const specifier=/from ["']([^"']*editorial-implementation-version\.mjs)["']/u.exec(viewSource)?.[1];
+  assert.ok(specifier,"the browser view must use the shared version module");
+  const sharedResponse=await fetch(new URL(specifier,url));
+  assert.equal(sharedResponse.status,200);
+  assert.match(sharedResponse.headers.get("content-type"),/^(?:text|application)\/javascript\b/u);
+  const sharedSource=await sharedResponse.text();
+  assert.match(sharedSource,/export const EDITORIAL_IMPLEMENTATION_VERSION/u);
+  assert.match(sharedSource,/export function editorialImplementationDisplaySupported/u);
+  assert.doesNotMatch(sharedSource,/node:|<html|<!doctype|\bimport\b/iu);
+  const contract=await import(`data:text/javascript;base64,${Buffer.from(sharedSource).toString("base64")}`);
+  assert.equal(contract.EDITORIAL_IMPLEMENTATION_VERSION,EDITORIAL_IMPLEMENTATION_VERSION);
+  assert.equal(contract.editorialImplementationDisplaySupported({schemaVersion:EDITORIAL_IMPLEMENTATION_VERSION,
+    componentId:"EditorialMotionPreview"}),true);
+  assert.equal(contract.editorialImplementationDisplaySupported({schemaVersion:"editorial-code-implementation-v99",
+    componentId:"EditorialMotionPreview"}),false);
 });
 
 test("HTTP 审批单 GET 可读，所有正式缺绑定批准和驳回均返回 409", async () => {

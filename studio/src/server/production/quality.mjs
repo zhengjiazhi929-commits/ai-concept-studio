@@ -1,4 +1,5 @@
 import { productionProfileForEpisode } from "../../shared/production-profiles.mjs";
+import { inspectTimedEditorialEpisode, hasTimedEditorialExecution } from "./timed-editorial-content.mjs";
 import {
   DETERMINISTIC_LAYOUT_SAMPLE_ASSURANCE,
   DETERMINISTIC_LAYOUT_SAMPLE_SCHEMA_VERSION,
@@ -15,6 +16,8 @@ import {
   derivedVisualDirectionFidelity
 } from "./short-script-adapter.mjs";
 import { derivedStoryboardFidelity } from "./short-storyboard-adapter.mjs";
+import {assertGeneratedStoryboardScreenEditing,assertCueStoryboardScreenEditing} from './storyboard-screen-editing.mjs';
+import {requireScreenEditing} from '../../shared/screen-editorial-policy.mjs';
 import {
   subtitleBoundaryReasons as sharedSubtitleBoundaryReasons,
   SUBTITLE_MAXIMUM_CUE_DURATION_SECONDS,
@@ -348,6 +351,72 @@ export function evaluateProductionQuality(episode, options = {}) {
   }
 
   if (hasStage(stage, "storyboard", "voice", "qa")) {
+    const timedEditorial = hasTimedEditorialExecution(episode);
+    const timedInspection = timedEditorial ? inspectTimedEditorialEpisode(episode) : null;
+    const editorialDraft=episode.production?.storyboardDraft;
+    const screenRequired=editorialDraft?.screenEditorialRequired===true
+      ||(editorialDraft?.promptBinding?.id==='acs.worker.storyboard-draft'&&editorialDraft.promptBinding.version==='1.2.0');
+    const screenPolicy=editorialDraft?.content?.screenEditing??editorialDraft?.screenEditing;
+    if(screenRequired||screenPolicy!==undefined){
+      let issue=null;
+      try{
+        if(timedEditorial){
+          requireScreenEditing(screenPolicy,scenes.map(scene=>scene.id),{required:true});
+          if(!timedInspection.valid)throw Object.assign(new Error('逐拍执行内容或屏显策略不匹配'),{code:timedInspection.issues[0]});
+        }else if(editorialDraft?.content?.shots){
+          assertCueStoryboardScreenEditing(editorialDraft.content,{required:true});
+        }else assertGeneratedStoryboardScreenEditing({scenes,screenEditing:screenPolicy},{required:true});
+      }catch(error){issue={code:error?.code??'screen_editorial_invalid',location:error?.location??'production.storyboardDraft.screenEditing',actual:error?.actual??null};}
+      add('screen-editorial-policy','屏显按关键词、真实可见拍和有界阅读特例组织',!issue,'error',issue,
+        '当前版本实际屏显通过编辑预算；不替代视觉人审',issue?'先精简屏显、拆拍或用关系/状态图，不改原旁白、不截断/缩字/扩卡':'',
+        {ownerAgentId:'storyboard-agent',location:issue?.location??'scenes',suggestedFix:'保留事实限定，减少同拍阅读量；必要原文附有界阅读特例并重新送审'});
+    }
+    const editorialStoryboard =
+      (episode.production?.storyboardDraft?.generationKind === "codex-local-storyboard-import"
+      || episode.production?.storyboardDraft?.storyboardKind === "editorial-cue-plan-v1")
+      && !timedInspection?.valid;
+    if (timedEditorial) {
+      add("editorial-execution-contract", "逐拍执行合同与不可变分镜编译结果一致",
+        timedInspection.valid, "error", timedInspection.issues, "可复算估算时码与逐拍状态一致",
+        "估算不是音频对齐，代码合同检查不是视觉验收",
+        {location: "production.storyboardDraft.content.executionPlan", ownerAgentId: "storyboard-agent"});
+      if (stage !== "storyboard") {
+        add("editorial-audio-unmeasured", "估算分镜尚不能证明配音对齐", false, "error",
+          "editorial-estimate", "新版本实测声音对齐证据", "先完成实际音频及新版本对齐，再进入成片审核");
+      }
+    }
+    if (editorialStoryboard) {
+      // Registering a cue-bound editorial plan does not manufacture timestamps
+      // or executable motion. Keep all existing timed checks below in force.
+      add(
+        "editorial-timing-unmeasured",
+        "编辑分镜尚无可审核时间轴",
+        false,
+        "error",
+        "unmeasured",
+        "合法且连续的镜头与字幕时间轴",
+        "当前只有原文触发短语，尚未配音或对齐；不得编造实测时间或拉慢口播通过审核",
+        {
+          ownerAgentId: "storyboard-agent",
+          location: "production.storyboardDraft.content.shots[].timing",
+          suggestedFix: "保留批准原文，完成有明确依据的时间轴方案并重新送审；编辑占位不等于音频实测"
+        }
+      );
+      add(
+        "editorial-execution-unimplemented",
+        "编辑动作尚未实现可执行计划",
+        false,
+        "error",
+        "implementation-required",
+        "与编辑动作一致的可执行视觉计划",
+        "动作、布局和结果仍是编辑要求，不能把保存入库或旧单图计划当作动画已经实现",
+        {
+          ownerAgentId: "storyboard-agent",
+          location: "production.storyboardDraft.content.shots[].beats",
+          suggestedFix: "实现并验证逐拍对象身份、动作和结果时序，再以新版本送审，不复用未适配的旧渲染器冒充完成"
+        }
+      );
+    }
     const generatedStoryboard = Boolean(
       episode.productionProfile
       || episode.production?.storyboardDraft?.artifactPath
@@ -403,13 +472,14 @@ export function evaluateProductionQuality(episode, options = {}) {
         })
       : { passed: true, issues: [] };
     const visualExpressionPassed =
-      !visualExpressionRequired ||
+      (!timedEditorial || timedInspection.valid) &&
+      (!visualExpressionRequired ||
       (
         storyboardVisualContractVersion === VISUAL_EXPRESSION_CONTRACT_VERSION &&
         storyboardVisualStyleProfileId === VISUAL_EXPRESSION_STYLE_PROFILE_ID &&
         deterministicLayoutSampleReview.passed &&
         visualExpressionReview.passed
-      );
+      ));
     if (stage === "qa" && visualExpressionRequired) {
       add(
         "deterministic-layout-samples",
@@ -460,7 +530,7 @@ export function evaluateProductionQuality(episode, options = {}) {
             styleProfileId: storyboardVisualStyleProfileId,
             issueCodes: visualExpressionReview.issues.map((item) => item.code)
           }
-        : "legacy-storyboard",
+        : timedEditorial ? {version: "editorial-execution-v1", passed: timedInspection.valid} : "legacy-storyboard",
       visualExpressionRequired
         ? {
             version: VISUAL_EXPRESSION_CONTRACT_VERSION,

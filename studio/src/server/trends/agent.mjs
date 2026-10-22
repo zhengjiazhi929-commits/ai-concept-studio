@@ -63,7 +63,7 @@ function requireTrendSideEffects(options, fullyInjected, operation, scopes) {
     scopes,
     maxCalls: 0,
     maxCostUsd: 0
-  });
+  }, operation);
 }
 
 async function ensureDefaultTrendSignalsWith(dependencies) {
@@ -97,7 +97,6 @@ export async function runTrendRadarAgent(options = {}) {
     message: "热点概念发现开始运行"
   });
   try {
-    await ensureDefaultTrendSignalsWith(dependencies);
     const [signalDocument, sources, taxonomy, config, episodes] = await Promise.all([
       dependencies.readTrendSignals(),
       dependencies.readTrendSources(),

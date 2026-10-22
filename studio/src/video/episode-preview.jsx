@@ -23,6 +23,7 @@ import { AGENT_SKILL_SHORT_EPISODE_ID } from "./agent-skill-short-plan.mjs";
 import { ProductionSemanticPreview } from "./production-semantic-preview.jsx";
 import { isProductionSemanticScene } from "./production-semantic-preview.mjs";
 import { VIDEO_SANS_FONT_FAMILY } from "./font-system.mjs";
+import { EditorialMotionPreview } from "./editorial-motion-preview.jsx";
 
 function activeItem(items, currentTime) {
   return items.find((item) => currentTime >= item.start && currentTime < item.end);
@@ -304,6 +305,9 @@ export function GenericEpisodePreview({ episode }) {
 }
 
 export function EpisodePreview({ episode }) {
+  if (episode.scenes?.some((scene) => scene.motionPlan != null)) {
+    return <EditorialMotionPreview episode={episode} />;
+  }
   if (episode.scenes?.some((scene) => isProductionSemanticScene(scene))) {
     return <GenericEpisodePreview episode={episode} />;
   }

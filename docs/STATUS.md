@@ -1,5 +1,105 @@
 # AI Concept Studio 当前状态
 
+更新时间：2026-10-22（Asia/Shanghai）
+状态真源版本：77（PR #8 视觉确认及代码合并授权）
+
+## 当前任务：按用户授权通过 PR #8 交付代码
+
+- Zhengjiazhi 已确认章节导航预览符合预期，并选择“合并 PR #8”。该授权取代下方
+  历史记录中的“未授权合并”和“视觉待确认”；不是新的完整视频、生产 Gate、部署
+  或发布批准。不调用付费服务，不渲染新整片，不改真实 Episode 或原工作树。
+- 本轮仅更新这份状态记录，运行代码、依赖、测试和视觉源文件保持已验收版本。
+  开始时隔离工作树干净，分支为 `codex/verified-system-delivery-20261020`，
+  HEAD 为 `8c0333e99032d9c297c12e3def50e64c0c6a1526`，远端 main 仍为
+  `0c2b1cdc993a8c9492ab5a091573d673ac60503d`。
+- 上述精确 HEAD 的 [PR CI](https://github.com/zhengjiazhi929-commits/ai-concept-studio/actions/runs/39559533590)
+  和 [push CI](https://github.com/zhengjiazhi929-commits/ai-concept-studio/actions/runs/39559529475)
+  均已成功。本地完整验证为1812/1812；PR CI为1812项中1807通过、0失败、
+  5项Mac启动器测试因Linux无zsh跳过，这5项已在本地通过。
+- 实现仍为 `agent-control-release-v18`，236个路径，SHA-256
+  `416af8a736645b04188cf350c0a3348fa7d03179f034b25e9a2c282c52929732`。
+  本轮文档更新不提升实现版本或准入级别，`admission.eligible=false` 与 fixed fallback 保持。
+- 合并按R3交付边界执行：文档差异、链接及秘密检查通过；确认新增文档提交的精确
+  HEAD CI成功后，使用匹配HEAD的普通合并，不绕过保护，不删除分支。实际合并时间、
+  merge SHA与合并后CI以 [PR #8](https://github.com/zhengjiazhi929-commits/ai-concept-studio/pull/8)
+  和GitHub main为事实来源，不以旧绿色记录替代新提交验证。
+- 若需回退，以新的反向提交撤销本次合并并重新验证；不得reset原工作树、覆盖
+  已有媒体或撤销人工生产记录。原成片保持不变，本轮没有新的整片验收。
+- machine_status=runtime_verified_document_head_requires_own_ci；
+  technical_status=review_findings_remediated；
+  business_acceptance_status=chapter_navigation_preview_accepted；
+  release_status=code_merge_authorized_live_state_in_pr8。
+
+## 2026-10-21 PR审查整改历史（不是当前授权边界）
+
+- Zhengjiazhi 已授权修复3个已复现P2、补强1个P3测试断言、分批提交并推送现有
+  [草稿 PR #8](https://github.com/zhengjiazhi929-commits/ai-concept-studio/pull/8)。
+  新提交的 hosted CI 通过后再决定合并；本轮不合并、不部署、不调用付费服务、
+  不操作真实 Episode/Gate、不渲染新整片。下方旧“未授权建PR”已被本次授权取代。
+- 在原隔离候选分支 `codex/verified-system-delivery-20261020` 整改；原脏工作树及媒体保持。
+  main 基线仍为 `0c2b1cdc993a8c9492ab5a091573d673ac60503d`。
+- 已补强4项语音访问器测试，27/27通过；提交 `3409d7b`。
+- 已修复人工选题在异步操作后授权过期仍继续写入的问题，相关56/56通过；提交
+  `bf6b3ed`。Episode已提交时保留后续人工状态，以新授权恢复派生指针。
+- 已统一当前v2与历史v1的审批展示合同，保留严格的实际批准边界；相关77/77、
+  独立审批复核41/41通过，含真实HTTP模块加载；提交 `1ea1e57`。
+- 章节目录与连续真实时间轴已提交 `94bd7a8`；字号不缩小，章节刻度不人为扩宽。
+  聚焦58/58、真实字体60帧、0.5倍缩放及8种故障拦截已通过；合成局部截图已检查，
+  这不是新的整片或用户视觉验收。
+- 最终实现绑定为 `agent-control-release-v18`，236个路径，SHA-256
+  `416af8a736645b04188cf350c0a3348fa7d03179f034b25e9a2c282c52929732`；
+  每批独立更新版本，旧评测证据失效，`admission.eligible=false` 保持。
+- 上述最终源码 `94bd7a847b235a65001cdd6b1ddbf4afd918026f` 的精确 frozen install、
+  production audit 与完整 `pnpm verify` 已通过：1812/1812，零失败/跳过/取消；
+  433源码语法、35动效、回滚演练、三项合成渲染/真实浏览器smoke、diff检查通过。
+  当前生产依赖没有已知通告；不是无未知漏洞保证。
+- 本轮26个可审代码路径逐项复核，0跳过；授权恢复、审批实际批准边界、导航字体
+  DOM和访问器断言均有独立交叉复核，没有已确认未解决的本轮阻断项。
+  本文档提交仅记录已完成的本地检查，不预先宣称其 hosted CI 通过；须核对
+  [PR #8](https://github.com/zhengjiazhi929-commits/ai-concept-studio/pull/8)
+  的精确 head SHA 和对应 Verify。之前的1793项及旧CI不作为新实现通过证据。
+- machine_status=local_full_verification_passed；technical_status=review_findings_remediated；
+  business_acceptance_status=chapter_navigation_confirmation_pending；
+  release_status=draft_pr_merge_not_authorized。原成片不变，本轮没有新的整片验收。
+- 机器检查、用户视觉确认、视频成片验收及merge分开；详见
+  [PR审查整改说明](49-pr8-review-remediation.md)。
+
+## 2026-10-20 选择性交付历史（不是本轮新实现的验证结果）
+
+### 按依赖整理候选分支
+
+- Zhengjiazhi 已授权筛选累计改动、分批 commit + push；GitHub CI 通过后再确认是否合并。
+  不授权创建 PR、合并、部署、付费调用、新成片渲染或 Episode/Gate 变更。
+- 从 main `0c2b1cdc993a8c9492ab5a091573d673ac60503d` 在隔离分支
+  `codex/verified-system-delivery-20261020` 组装；原脏工作目录及媒体保持。
+- 第一批包含锁定依赖安全补丁、Host/Origin 边界和相关回归，聚焦测试 62/62 通过。
+  当前生产依赖审计零通告；没有将这个结果说成 hosted CI 或无未知漏洞。
+- 第二批已纳入受控公开发现、人工选题及研究来源绑定；相关测试 164/164 通过。
+  拆分工具曾误裁评测绑定名单，7 项回归正确拦截；修正后完整重跑该组通过，
+  未提交失败版本，也未放宽评测校验。
+- 第三批编辑生产链及屏显规则已组装，相关专项 118/118 通过；新增合成计划
+  代替对私人制作计划的测试读取。参考实现绑定 v15 与原实现一致，
+  `admission.eligible=false` 保持。
+- 第四批三组静态示例及准确字体入口已加入，专项 14/14 通过，未改画法或生成新视频。
+  四批源码提交的最终版本为 `9ba00ec62b2f9d07586df81de15122646601a553`。
+  私人生产计划、运行数据及生成媒体不提交。
+- 每批源码变化使旧评测失效；参考评测保持 `offline-reference-only`，不获得正式准入。
+- 上述源码版本的 exact frozen install、production audit 和 canonical `pnpm verify`
+  已通过：1793/1793，0失败/跳过/取消；429源码语法、35动效、回滚演练、
+  三组真实浏览器 smoke 和 diff 检查通过。新增测试使用合成数据，不读取原制作文件。
+- 提交范围共275路径：273项原源选择加交付文档及合成fixture；23项原本地文件排除。
+  原1199文件、原HEAD/分支及dirty清单核验不变。完整命令与结果保存在本地交付证据中。
+- 本文档提交只记录上述已完成验证，不预先宣称 hosted CI 通过。实时结果须核对
+  [候选分支的 Verify](https://github.com/zhengjiazhi929-commits/ai-concept-studio/actions?query=branch%3Acodex%2Fverified-system-delivery-20261020)
+  与 [候选提交](https://github.com/zhengjiazhi929-commits/ai-concept-studio/tree/codex/verified-system-delivery-20261020)
+  的精确 SHA。main 仍是原基线；PR/merge 需用户另行确认。
+- machine_status=local_full_verification_passed；technical_status=selected_candidate_verified；
+  business_acceptance_status=static_examples_only；release_status=merge_not_authorized。
+  机器检查、静态视觉接受、成片验收和合并分开记录。
+- 交付范围、验收及回退见 [选择性 Git 交付](48-selective-github-delivery.md)。
+
+## 以下是已合并基线的历史记录（不是当前授权或验证结果）
+
 更新时间：2026-09-09（Asia/Shanghai）
 状态真源版本：38
 

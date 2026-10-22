@@ -14,6 +14,7 @@ import {
   safeApprovalMediaUrl
 } from "../src/web/approval-review-view.mjs";
 import { buildHumanApprovalView } from "../src/server/reviews/human-approval-view.mjs";
+import { EDITORIAL_IMPLEMENTATION_VERSION } from "../src/server/production/editorial-code-implementation.mjs";
 import {
   historicalApprovedStoryboardV3Episode
 } from "./historical-approved-storyboard-v3.fixture.mjs";
@@ -225,6 +226,57 @@ test("Asset 审批详情展示全部 items、外部调用、费用、风险、�
   assert.match(html, /先运行零生成预检/u);
   assert.doesNotMatch(html, /<script>bad/u);
   assert.match(html, /provider &lt;unsafe&gt;/u);
+});
+
+test("editorial asset UI shows bounded resource counts and hashes without claiming production or pixel QA", () => {
+  const review=assetReview();
+  review.content.plan.content.kind="editorial-code-asset-plan-v1";
+  const file=(path)=>({path,bytes:16,sha256:HASH_A});
+  review.content.candidate.localCodeImplementation={schemaVersion:"editorial-code-implementation-v1",
+    componentId:"EditorialMotionPreview",sha256:HASH_B,files:[file("source.jsx")],rendered:false,visualAcceptance:false,
+    font:{family:'Noto <img src=x onerror=alert(1)>',packageVersion:"5.3.0",license:"OFL-1.1",
+      status:"packaged-files-bound",browserResolutionVerified:false,files:[file("font.woff2"),file("LICENSE")]},
+    logo:{profile:"approved-v013-stable-footprint",cadence:"continuous",validation:"approved-manifest-sha256-and-png-header-only",
+      manifest:file('logo/<script>bad()</script>.json'),files:[file("frame-000.png")]}};
+  Object.assign(review.content.candidate.summary,{voiceStatus:"deferred",renderAuthorized:false,
+    materializationStatus:"not-started",visualAcceptance:false});
+  const html=renderApprovalReview(review,"asset-execution");
+  assert.match(html,/本地代码与已绑定资源/u);
+  assert.match(html,/代码\/锁文件 1 个 · 字体文件 2 个 · Logo 帧 1 个/u);
+  assert.match(html,/未物化/u); assert.match(html,/声音待做/u);
+  assert.match(html,/未渲染/u); assert.match(html,/未验收/u);
+  assert.match(html,/独立零调用入口.*不会自动配音或正式渲染/u);
+  assert.match(html,/方案编制时素材状态/u);
+  assert.match(html,/尚未登记制作产物/u);
+  review.evidence = {...review.evidence, localMaterialization: {state: "files-registered"}};
+  const registered = renderApprovalReview(review,"asset-execution");
+  assert.match(registered,/文件已登记，使用前仍须重新核验/u);
+  assert.match(registered,/未验收/u);
+  assert.match(html,/不等于逐像素 QA/u);
+  assert.match(html,/浏览器字体解析尚未验证/u);
+  assert.match(html,new RegExp(HASH_A,"u"));
+  assert.match(html,/&lt;img src=x onerror=alert\(1\)&gt;/u);
+  assert.match(html,/&lt;script&gt;bad\(\)&lt;\/script&gt;/u);
+  assert.doesNotMatch(html,/<img src=x|<script>bad/u);
+  assert.doesNotMatch(renderApprovalReview(assetReview(),"asset-execution"),/本地代码与已绑定资源/u);
+});
+
+test("resource section accepts the current version without relying on a caller-provided plan kind", () => {
+  const review=assetReview();
+  review.content.candidate.localCodeImplementation={schemaVersion:EDITORIAL_IMPLEMENTATION_VERSION,
+    componentId:"EditorialMotionPreview",files:[],font:{files:[]},logo:{files:[]}};
+  assert.equal(renderApprovalReview(review,"asset-execution").includes("本地代码与已绑定资源"),true);
+});
+
+test("plan kind and component name cannot make unsupported resource versions look supported", () => {
+  for (const change of [{schemaVersion:"editorial-code-implementation-v99"},
+    {schemaVersion:null},{componentId:"OtherPreview"}]) {
+    const review=assetReview();
+    review.content.plan.content.kind="editorial-code-asset-plan-v1";
+    review.content.candidate.localCodeImplementation={schemaVersion:EDITORIAL_IMPLEMENTATION_VERSION,
+      componentId:"EditorialMotionPreview",files:[],font:{files:[]},logo:{files:[]},...change};
+    assert.equal(renderApprovalReview(review,"asset-execution").includes("本地代码与已绑定资源"),false,JSON.stringify(change));
+  }
 });
 
 test("摘要没有直批或直退，只提供查看并审批入口", () => {

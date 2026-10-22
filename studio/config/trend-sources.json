@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-03T00:00:00+08:00",
+  "updatedAt": "2026-09-09T09:41:58Z",
   "creators": [
     {
       "id": "douyin-user-reference-ai-model-learning",
@@ -49,12 +49,12 @@
     {
       "id": "douyin-sherry",
       "platform": "douyin",
-      "name": "Sherry小水",
+      "name": "Sherry小水（Ai工具学习者）",
       "category": "ai-tools",
       "weight": 1,
       "audienceFit": 0.85,
       "coverageGroup": "sherry",
-      "profileUrl": "https://jingxuan.douyin.com/m/video/7629765089143670080",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7681270887899491200",
       "enabled": true
     },
     {
@@ -131,7 +131,7 @@
       "weight": 1,
       "audienceFit": 1,
       "coverageGroup": "ming-jie",
-      "profileUrl": "https://jingxuan.douyin.com/m/video/7620785929350925631",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7607800723727732010",
       "enabled": true
     },
     {
