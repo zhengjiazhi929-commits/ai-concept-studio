@@ -1,9 +1,36 @@
 # AI Concept Studio 当前状态
 
-更新时间：2026-10-21（Asia/Shanghai）
-状态真源版本：76（PR #8 审查问题整改，验证与合并分别记录）
+更新时间：2026-10-22（Asia/Shanghai）
+状态真源版本：77（PR #8 视觉确认及代码合并授权）
 
-## 当前任务：修复候选 PR 审查问题并重新验证
+## 当前任务：按用户授权通过 PR #8 交付代码
+
+- Zhengjiazhi 已确认章节导航预览符合预期，并选择“合并 PR #8”。该授权取代下方
+  历史记录中的“未授权合并”和“视觉待确认”；不是新的完整视频、生产 Gate、部署
+  或发布批准。不调用付费服务，不渲染新整片，不改真实 Episode 或原工作树。
+- 本轮仅更新这份状态记录，运行代码、依赖、测试和视觉源文件保持已验收版本。
+  开始时隔离工作树干净，分支为 `codex/verified-system-delivery-20261020`，
+  HEAD 为 `8c0333e99032d9c297c12e3def50e64c0c6a1526`，远端 main 仍为
+  `0c2b1cdc993a8c9492ab5a091573d673ac60503d`。
+- 上述精确 HEAD 的 [PR CI](https://github.com/zhengjiazhi929-commits/ai-concept-studio/actions/runs/39559533590)
+  和 [push CI](https://github.com/zhengjiazhi929-commits/ai-concept-studio/actions/runs/39559529475)
+  均已成功。本地完整验证为1812/1812；PR CI为1812项中1807通过、0失败、
+  5项Mac启动器测试因Linux无zsh跳过，这5项已在本地通过。
+- 实现仍为 `agent-control-release-v18`，236个路径，SHA-256
+  `416af8a736645b04188cf350c0a3348fa7d03179f034b25e9a2c282c52929732`。
+  本轮文档更新不提升实现版本或准入级别，`admission.eligible=false` 与 fixed fallback 保持。
+- 合并按R3交付边界执行：文档差异、链接及秘密检查通过；确认新增文档提交的精确
+  HEAD CI成功后，使用匹配HEAD的普通合并，不绕过保护，不删除分支。实际合并时间、
+  merge SHA与合并后CI以 [PR #8](https://github.com/zhengjiazhi929-commits/ai-concept-studio/pull/8)
+  和GitHub main为事实来源，不以旧绿色记录替代新提交验证。
+- 若需回退，以新的反向提交撤销本次合并并重新验证；不得reset原工作树、覆盖
+  已有媒体或撤销人工生产记录。原成片保持不变，本轮没有新的整片验收。
+- machine_status=runtime_verified_document_head_requires_own_ci；
+  technical_status=review_findings_remediated；
+  business_acceptance_status=chapter_navigation_preview_accepted；
+  release_status=code_merge_authorized_live_state_in_pr8。
+
+## 2026-10-21 PR审查整改历史（不是当前授权边界）
 
 - Zhengjiazhi 已授权修复3个已复现P2、补强1个P3测试断言、分批提交并推送现有
   [草稿 PR #8](https://github.com/zhengjiazhi929-commits/ai-concept-studio/pull/8)。
