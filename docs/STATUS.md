@@ -1,9 +1,27 @@
 # AI Concept Studio 当前状态
 
-更新时间：2026-10-23（Asia/Shanghai）
-状态真源版本：95（用户停止本期新视频制作；可复用代码完成提交前审查和隔离验证，交付工作分支）
+更新时间：2026-10-24（Asia/Shanghai）
+状态真源版本：96（核对旧备份分支交付；通用内容已进入 main，补交对账文档，不合并最新工作分支）
 
-## 当前执行：停止本期制作，选择性提交代码
+## 当前执行：旧备份分支交付核对
+
+- Zhengjiazhi 选择逐项核查旧提交、补传仍有价值的代码和文档，排除视频内容、运行数据及敏感文件，不合并 main。
+  范围是两条旧备份分支的 13 个唯一提交；不代表其他旧工作树未提交文件已全部审计。
+- 旧范围共 186 个路径：181 个与已合入拆分快照 857a4a2 的 blob 完全相同，4 个差异已逐项解释，
+  1 个 live golden Episode 状态刻意排除；范围内 185/185 完成交付核对，没有发现缺失的通用代码/文档。
+  旧 commit ID 不在远端祖先链上，不等于代码漏传；不重复 cherry-pick、不恢复旧批准、不删除备份分支。
+- 本轮只补交[核对报告](26-legacy-branch-reconciliation.md)、[逐路径证据](evidence/legacy-branch-reconciliation-20261024.json)及本状态记录。
+  风险 R0，运行代码、依赖与 v22 实现指纹均不变；五份已有运行数据及本期内容继续保留本机。
+- 核对基线：origin/main=000a990；工作分支 codex/video-discovery-20261022=374a878，后者已在 GitHub 但尚未合入 main。
+  精确绑定 374a878 的 [GitHub Verify 39976068022](https://github.com/zhengjiazhi929-commits/ai-concept-studio/actions/runs/39976068022)
+  已核实 completed/success。此前干净 clone 2084/2084 是该代码基线证据，不冒充新文档提交的 CI。
+- 本轮 R0 核验通过：186 路径清单唯一且完整、744 个 blob 比对、22 项祖先关系、4 个本地链接、秘密扫描和 diff 检查。
+  现有视觉测试 36/36、CI 治理测试 3/3 通过，0 失败/跳过。文档审查 3/3，0 跳过；未重跑全量 verify 或生产渲染。
+  没有新视频验收、PR 或合并；本次文档提交的新 CI 需 push 后按实际 HEAD 核对，本期制作继续停止。
+- machine_status=historical_delivery_reconciled_r0_checks_passed；technical_status=no_missing_reusable_changes_found；
+  business_acceptance_status=episode_production_stopped_by_user；release_status=documentation_branch_delivery_only_not_merged。
+
+## 先前阶段：停止本期制作，选择性提交代码（v95历史）
 
 - Zhengjiazhi最新要求“这个新视频先不做了，把该提交的提交上去就行”，覆盖下方历史继续制作计划。
   本轮只整理可复用源码、配置、回归测试与开发文档，提交至`codex/video-discovery-20261022`；不自动建PR或合并main。
