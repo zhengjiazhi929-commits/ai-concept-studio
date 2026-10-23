@@ -48,6 +48,8 @@ presence of an output file alone.
 ## Local Setup and Verification
 
 The project pins Node.js `24.19.0` and pnpm `11.19.0`.
+For a fresh computer, see [new-machine setup](docs/new-machine-setup.md), including
+the pinned Python QA environment and the boundary between source code and local production data.
 
 From [`studio/`](./studio/), run:
 

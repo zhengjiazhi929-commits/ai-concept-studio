@@ -1,10 +1,19 @@
 import { access } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
-import { appendEvent, listEpisodes, readEpisode, writeEpisode } from "../shared/store.mjs";
+import { appendEvent, listEpisodes, readEpisode, writeEpisode, readEpisodeCommitStatus } from "../shared/store.mjs";
 import { ensureInside, workspaceRoot } from "../shared/paths.mjs";
 import { APPROVAL_GATES } from "../shared/schema.mjs";
 import { workerManifest } from "../shared/worker-manifests.mjs";
+import {assertLocalResearchEpisode, localResearchCapabilitySpec, localResearchSnapshotHash, localResearchError} from "../shared/local-research-request.mjs";
+import {readResearchConfig} from "./research/store.mjs";
+import {issueLocalResearchDispatch} from "./research/local-research-dispatch.mjs";
+import {assertLocalResearchConfigBinding,assertLocalResearchPackRecord} from "./research/local-research-inputs.mjs";
+import {createLocalScriptReviewRunner} from "./reviews/local-script-review-runner.mjs";
+import {createLocalStoryboardReviewRunner} from "./reviews/local-storyboard-review-runner.mjs";
+import {readCurrentEvaluationRuntimeBindings} from "./control/evaluation-suite.mjs";
+import {localScriptReviewError, validateLocalScriptReviewRequest} from "../shared/local-script-review-request.mjs";
+import {localStoryboardReviewError, validateLocalStoryboardReviewRequest} from "../shared/local-storyboard-review-request.mjs";
 import {
   inspectFileIntegrity,
   isSha256,
@@ -337,6 +346,35 @@ export function routeReviewRevision(sourceEpisode, currentAgentId, review) {
 }
 
 export async function recheckGateReview(episodeId, gate, options = {}) {
+  if (Object.hasOwn(options, "localStoryboardReviewRequest")) {
+    if (![null, Object.prototype].includes(Object.getPrototypeOf(options)) ||
+      Reflect.ownKeys(options).some(key => {
+        const descriptor = Object.getOwnPropertyDescriptor(options, key);
+        return !["localStoryboardReviewRequest", "sideEffectGrant"].includes(key) ||
+          !descriptor.enumerable || !Object.hasOwn(descriptor, "value");
+      }) || gate !== "storyboard") {
+      throw localStoryboardReviewError("local_storyboard_review_options_invalid");
+    }
+    const request = validateLocalStoryboardReviewRequest(options.localStoryboardReviewRequest);
+    if (request.episodeId !== episodeId) throw localStoryboardReviewError("local_storyboard_review_options_invalid");
+    return localStoryboardReviewRunner(request, {sideEffectGrant: options.sideEffectGrant});
+  }
+  if (Object.hasOwn(options, "localScriptReviewRequest")) {
+    if (![null, Object.prototype].includes(Object.getPrototypeOf(options)) ||
+      Reflect.ownKeys(options).some(key => {
+        const descriptor = Object.getOwnPropertyDescriptor(options, key);
+        return !["localScriptReviewRequest", "sideEffectGrant"].includes(key) ||
+          !descriptor.enumerable || !Object.hasOwn(descriptor, "value");
+      }) || gate !== "script") {
+      throw localScriptReviewError("local_script_review_options_invalid");
+    }
+    const request = validateLocalScriptReviewRequest(options.localScriptReviewRequest);
+    if (request.episodeId !== episodeId) throw localScriptReviewError("local_script_review_options_invalid");
+    return localScriptReviewRunner(request, {sideEffectGrant: options.sideEffectGrant});
+  }
+  if (Object.hasOwn(options, "sideEffectGrant") || Object.hasOwn(options, "authorizeSideEffect")) {
+    throw localScriptReviewError("local_script_review_request_required");
+  }
   const readState = options.readEpisode ?? readEpisode;
   const writeState = options.writeEpisode ?? writeEpisode;
   const recordEvent = options.appendEvent ?? appendEvent;
@@ -452,6 +490,18 @@ export async function recheckGateReview(episodeId, gate, options = {}) {
   }
 }
 
+const localScriptReviewRunner = createLocalScriptReviewRunner({
+  workspaceRoot, readEpisode, writeEpisode, readEpisodeCommitStatus, appendEvent, readReviewConfig,
+  readImplementationFingerprint: async () => (await readCurrentEvaluationRuntimeBindings()).implementation,
+  reviewCandidateOutput, routeReviewRevision
+});
+
+const localStoryboardReviewRunner = createLocalStoryboardReviewRunner({
+  workspaceRoot, readEpisode, writeEpisode, readEpisodeCommitStatus, appendEvent, readReviewConfig,
+  readImplementationFingerprint: async () => (await readCurrentEvaluationRuntimeBindings()).implementation,
+  reviewCandidateOutput, routeReviewRevision
+});
+
 export async function replayPendingWorkerAuditEvents(episodeId, options = {}) {
   const readState = options.readEpisode ?? readEpisode;
   const writeState = options.writeEpisode ?? writeEpisode;
@@ -486,8 +536,25 @@ export async function replayPendingWorkerAuditEvents(episodeId, options = {}) {
 
 export async function runAgent(episodeId, agentId, options = {}) {
   const readState = options.readEpisode ?? readEpisode;
-  const writeState = options.writeEpisode ?? writeEpisode;
-  const recordEvent = options.appendEvent ?? appendEvent;
+  const writeStateImpl = options.writeEpisode ?? writeEpisode;
+  const recordEventImpl = options.appendEvent ?? appendEvent;
+  let localGuard = () => {};
+  let localResearchBinding = null;
+  const recheckLocalResearchInputs=async()=>{
+    localGuard();
+    if(localResearchBinding){
+      const {request,sourceEpisode}=localResearchBinding;
+      const [researchConfig,reviewConfig]=await Promise.all([readResearchConfig(),readReviewConfig()]);
+      assertLocalResearchConfigBinding(request,sourceEpisode,researchConfig,reviewConfig);
+      if(sourceEpisode.research?.packPath){
+        const path=ensureInside(resolve(workspaceRoot,'studio/data/research/runs'),resolve(workspaceRoot,sourceEpisode.research.packPath));
+        assertLocalResearchPackRecord(sourceEpisode,await (options.inspectFileIntegrity??inspectFileIntegrity)(path));
+      }
+    }
+    localGuard();
+  };
+  const writeState = async (...args) => {await recheckLocalResearchInputs(); return writeStateImpl(...args);};
+  const recordEvent = async (...args) => {await recheckLocalResearchInputs(); return recordEventImpl(...args);};
   const releaseOperation = acquireEpisodeOperation(episodeId, `worker:${agentId}`, {
     conflictMessage: "这一期已有 Agent 正在运行，请等待它完成"
   });
@@ -540,6 +607,19 @@ export async function runAgent(episodeId, agentId, options = {}) {
 
   try {
     const initialEpisode = ensureAgentArchitecture(await readState(episodeId));
+    if (options.localResearchRequest) {
+      const request = options.localResearchRequest;
+      if (agentId !== "research-agent" || request.action !== "run" || options.capabilityOperation ||
+        options.aiClient || options.review || options.authorizeSideEffect ||
+        Object.hasOwn(options, "localResearchDispatch")) throw localResearchError("local_research_options_invalid");
+      assertLocalResearchEpisode(request, initialEpisode, {initial: true});
+      const [researchConfig, reviewConfig] = await Promise.all([readResearchConfig(), readReviewConfig()]);
+      if (reviewConfig.stages.research.semanticReview !== false) throw localResearchError("local_research_paid_review_forbidden");
+      if (localResearchSnapshotHash(initialEpisode, researchConfig, reviewConfig) !== request.snapshotHash) throw localResearchError("local_research_snapshot_changed");
+      localGuard = () => requireSideEffectGrant(options, localResearchCapabilitySpec(request), "worker:research-agent");
+      localGuard();
+      localResearchBinding = {request: structuredClone(request), sourceEpisode: structuredClone(initialEpisode), researchConfig, reviewConfig};
+    }
     const initialStep = initialEpisode.pipeline.find((step) => step.agent === agentId);
     if (!initialStep) throw new Error(`Episode has no step for ${agentId}`);
     assertWorkerRunAllowed(initialEpisode, agentId, { initiator: options.initiator });
@@ -563,11 +643,12 @@ export async function runAgent(episodeId, agentId, options = {}) {
     }
     let sideEffectGrant = options.sideEffectGrant ?? null;
     if (capabilityRequired) {
-      sideEffectGrant = requireSideEffectGrant(options, workerSideEffectCapabilitySpec(
+      sideEffectGrant = requireSideEffectGrant(options, options.localResearchRequest
+        ? localResearchCapabilitySpec(options.localResearchRequest) : workerSideEffectCapabilitySpec(
         initialEpisode,
         agentId,
         options
-      ));
+      ), `worker:${agentId}`);
     }
     if (agentId === "render-agent") {
       await assertCurrentAssetBundleIntegrity(initialEpisode, {
@@ -633,6 +714,9 @@ export async function runAgent(episodeId, agentId, options = {}) {
 
       let workerResult;
       try {
+        localGuard();
+        const localResearchDispatch = localResearchBinding
+          ? issueLocalResearchDispatch({...localResearchBinding, episode, sideEffectGrant}) : undefined;
         workerResult = await agent.run(episode, {
           reviewFeedback: revisionFeedback,
           aiClient: options.aiClient ?? null,
@@ -645,6 +729,8 @@ export async function runAgent(episodeId, agentId, options = {}) {
           inspectFileIntegrity: options.inspectFileIntegrity ?? null,
           externalAssetOptions: workerExternalAssetOptions(options.externalAssetOptions),
           sideEffectGrant,
+          localResearchRequest: options.localResearchRequest ?? undefined,
+          localResearchDispatch,
           now: options.now ?? null,
           onProgress: reportProgress
         });
@@ -677,6 +763,7 @@ export async function runAgent(episodeId, agentId, options = {}) {
         });
       }
 
+      await recheckLocalResearchInputs();
       const evaluated = await reviewCandidateOutput(
         {
           sourceEpisode: persisted,
@@ -686,9 +773,12 @@ export async function runAgent(episodeId, agentId, options = {}) {
         },
         {
           ...(options.review ?? {}),
-          expectedReviewProfile: options.reviewProfile ?? null
+          expectedReviewProfile: options.reviewProfile ?? null,
+          ...(localResearchBinding?{config:localResearchBinding.reviewConfig,
+            expectedReviewProfile:localResearchBinding.reviewConfig.stages.research.version}:{})
         }
       );
+      await recheckLocalResearchInputs();
       const output = evaluated.output;
       episode = evaluated.episode;
       const finalStepIndex = episode.pipeline.findIndex((item) => item.agent === agentId);

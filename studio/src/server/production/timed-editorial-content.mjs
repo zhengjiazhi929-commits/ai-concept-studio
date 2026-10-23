@@ -27,7 +27,8 @@ export function compileTimedEditorialContent(content) {
   closed(content, ["title", "globalStyle", "timingPolicy", "implementationBoundary", "shots", "executionPlan",
     ...(Object.hasOwn(content,'screenEditing')?['screenEditing']:[])]);
   const execution = content.executionPlan;
-  closed(execution, ["version", "timingPolicy", "sceneGroups", "motionPlans"]);
+  closed(execution, ["version", "timingPolicy", "sceneGroups", "motionPlans",
+    ...(Object.hasOwn(execution,'chapterPlan')?['chapterPlan']:[])]);
   if (execution.version !== EDITORIAL_EXECUTION_VERSION
     || digest(content.globalStyle?.canvas) !== digest([1920, 1080])) fail();
   const timeline = compileEditorialTimeline({shots: content.shots,
@@ -44,7 +45,7 @@ export function compileTimedEditorialContent(content) {
       || digest(item.plan.canvas) !== digest({width: 1920, height: 1080})
       || item.plan.events.length < 2
       || !item.plan.events.some(event => ["reveal", "copy", "summarize", "transfer", "save", "reset-scope", "temporary-override", "invalidate"].includes(event.op))) fail();
-    for (const event of item.plan.events) {
+    for (const event of [...item.plan.events,...(item.plan.tracks??[]).flatMap(track=>track.states)]) {
       // Chained copy/transfer/arrival may follow one spoken cue. It may not
       // precede that cue or float arbitrarily far away from it.
       const cueFrame = cueFrameForNarration(scene.narration, event.cue, execution.timingPolicy);
@@ -54,12 +55,13 @@ export function compileTimedEditorialContent(content) {
       ...(scene.type === "evidence" ? {label: "来源支持的概念示意（非项目实测）",
         assetHint: "依照已登记事实来源制作的代码插画；声音和最终素材仍需单独验收"} : {})};
   });
-  const compiled = {...timeline, scenes};
+  const compiled = {...timeline, scenes,
+    ...(Object.hasOwn(execution,'chapterPlan')?{editorialChapterPlan:structuredClone(execution.chapterPlan)}:{})};
   const renderInput = compileEditorialMotionRenderEpisode(compiled, execution.timingPolicy.fps);
   const samples = new Set();
   for (const scene of scenes) {
     samples.add(scene.startFrame); samples.add(scene.endFrame - 1);
-    for (const event of scene.motionPlan.events) {
+    for (const event of [...scene.motionPlan.events,...(scene.motionPlan.tracks??[]).flatMap(track=>track.states)]) {
       const start = scene.startFrame + event.atFrame;
       const end = start + event.durationFrames;
       for (const frame of [start - 1, start, Math.floor((start + end) / 2), end - 1, end, end + 1]) {
@@ -96,6 +98,9 @@ export function inspectTimedEditorialEpisode(episode) {
       || draft.storyboardKind !== TIMED_EDITORIAL_KIND || draft.timingStatus !== "editorial-estimate"
       || draft.executionStatus !== "implemented-contract") fail();
     const compiled = compileTimedEditorialContent(draft.content);
+    // Validate navigation against the bound draft as well as the scene fields.
+    // An extra top-level plan or a pre-filled derived plan cannot replace it.
+    compileEditorialMotionRenderEpisode(episode, draft.content.executionPlan.timingPolicy.fps);
     // Physical assets can be materialized later without changing logical
     // storyboard content; every compiled field must still match exactly.
     const logicalScenes = (episode.scenes ?? []).map((scene, index) =>

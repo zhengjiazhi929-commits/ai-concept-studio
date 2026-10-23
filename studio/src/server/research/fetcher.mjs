@@ -82,6 +82,7 @@ export async function inspectPrimarySource(source, options) {
       const fetched = await fetchPublicHttps(source.url, {
         fetchImpl: options.fetchImpl,
         lookupImpl: options.lookupImpl,
+        beforeRequest: options.beforeRequest,
         init: {
           signal: controller.signal,
           headers: {
@@ -168,6 +169,7 @@ export async function inspectPrimarySource(source, options) {
         title: titleMatch ? decodeTitle(titleMatch[1]).slice(0, 240) : null
       });
     } catch (error) {
+      if (error?.code?.startsWith("side_effect_capability_") || error?.code?.startsWith("local_research_")) throw error;
       lastError = error;
       if (error?.unsafeNetworkTarget) {
         return accessResult(source, {

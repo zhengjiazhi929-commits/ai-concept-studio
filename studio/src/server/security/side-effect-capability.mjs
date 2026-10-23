@@ -415,6 +415,44 @@ export function requireSideEffectGrant(options = {}, spec = {}, sinkOperation) {
   // Use verified canonical claims. Caller-supplied operation overrides cannot
   // identify the actual sink, which must declare its own constant separately.
   const claims = grantMetadata.get(grant).claims;
+  if (claims.episodeId.startsWith("local-storyboard-review/")) {
+    if (claims.maxCalls !== 0 || claims.maxCostUsd !== 0) {
+      throw authorizationError("本地分镜审核必须零费用", "local_storyboard_review_budget_forbidden");
+    }
+    if (claims.scopes.length !== 1 || claims.scopes[0] !== "state.write") {
+      throw authorizationError("本地分镜审核只能写审核状态", "local_storyboard_review_scope_forbidden");
+    }
+    if (claims.operation !== "review:storyboard" || sinkOperation !== "review:storyboard") {
+      throw authorizationError("本地分镜审核不能进入其他副作用入口", "local_storyboard_review_sink_forbidden");
+    }
+  }
+  if (claims.episodeId.startsWith("local-script-review/")) {
+    if (claims.maxCalls !== 0 || claims.maxCostUsd !== 0) {
+      throw authorizationError("本地讲稿审核必须零费用", "local_script_review_budget_forbidden");
+    }
+    if (claims.scopes.length !== 1 || claims.scopes[0] !== "state.write") {
+      throw authorizationError("本地讲稿审核只能写审核状态", "local_script_review_scope_forbidden");
+    }
+    if (claims.operation !== "review:script" || sinkOperation !== "review:script") {
+      throw authorizationError("本地讲稿审核不能进入其他副作用入口", "local_script_review_sink_forbidden");
+    }
+  }
+  if (claims.episodeId.startsWith("local-research/") && (claims.maxCalls !== 0 || claims.maxCostUsd !== 0)) {
+    throw authorizationError("本地研究 Capability 必须保持零付费", "local_research_budget_forbidden");
+  }
+  if (claims.episodeId.startsWith("local-research/")) {
+    const allowed = claims.operation === "worker:research-agent"
+      ? ["filesystem.write", "network.request", "state.write"] : ["filesystem.write", "state.write"];
+    if (claims.scopes.length !== allowed.length || claims.scopes.some(scope => !allowed.includes(scope))) {
+      throw authorizationError("本地研究 Capability 范围不可扩大", "local_research_scope_forbidden");
+    }
+  }
+  if (claims.episodeId.startsWith("local-research/") && !(
+    (claims.operation === "worker:research-agent" && ["worker:research-agent", "research:run"].includes(sinkOperation)) ||
+    (claims.operation === "research:import-evidence" && sinkOperation === "research:import-evidence")
+  )) {
+    throw authorizationError("本地研究 Capability 不允许进入当前副作用入口", "local_research_sink_forbidden");
+  }
   for (const [prefix, operation] of [["editorial-voice/", "voice:register-editorial"],
     ["editorial-voice-generation/", "voice:generate-editorial"],
     ["editorial-voice-retake/", "voice:retake-editorial"]]) {

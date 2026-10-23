@@ -23,10 +23,35 @@ export const FORMAL_EVALUATION_RUNNER_ID = "main-agent-offline-reference-runner"
 export const FORMAL_EVALUATION_RUNNER_VERSION = "2.0.0";
 export const INDEPENDENT_JUDGE_ID = "deterministic-action-rubric-judge";
 export const INDEPENDENT_JUDGE_VERSION = "2.0.0";
-export const AGENT_CONTROL_IMPLEMENTATION_VERSION = "agent-control-release-v18";
+export const AGENT_CONTROL_IMPLEMENTATION_VERSION = "agent-control-release-v22";
 export const EFFECTIVE_AI_ROUTING_VERSION = "effective-ai-routing-v1";
 
 export const AGENT_CONTROL_IMPLEMENTATION_PATHS = Object.freeze([
+  "scripts/local-storyboard-review.mjs",
+  "src/shared/local-storyboard-review-request.mjs",
+  "src/server/reviews/local-storyboard-review-binding.mjs",
+  "src/server/reviews/local-storyboard-review-core.mjs",
+  "src/server/reviews/local-storyboard-review-runner.mjs",
+  "src/server/reviews/local-storyboard-review.mjs",
+  "src/shared/editorial-chapters.mjs",
+  "src/shared/editorial-tracks.mjs",
+  "src/shared/editorial-illustration-contract.mjs",
+  "src/video/editorial-illustration-shapes.jsx",
+  "scripts/local-script-review.mjs",
+  "src/shared/local-script-review-request.mjs",
+  "src/server/reviews/local-script-review-binding.mjs",
+  "src/server/reviews/local-script-review-core.mjs",
+  "src/server/reviews/local-script-review-runner.mjs",
+  "src/server/reviews/local-script-review.mjs",
+  "scripts/local-research.mjs",
+  "scripts/run-research.mjs",
+  "scripts/import-research-evidence.mjs",
+  "src/shared/local-research-request.mjs",
+  "src/server/research/local-research-core.mjs",
+  "src/server/research/local-research-inputs.mjs",
+  "src/server/research/local-research-dispatch.mjs",
+  "src/server/research/local-research.mjs",
+  "config/research.json",
   "src/video/explainer-full-revision/chapter-progress.mjs",
   "src/video/explainer-full-revision/chapter-progress.jsx",
   "src/video/explainer-full-revision/chapter-progress-guard.mjs",

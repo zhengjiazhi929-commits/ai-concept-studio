@@ -174,6 +174,7 @@ export async function fetchPublicHttps(value, options = {}) {
     const { url } = await assertPublicHttpsTarget(currentUrl, {
       lookupImpl: options.lookupImpl
     });
+    await options.beforeRequest?.();
     const response = await fetchImpl(url.href, {
       ...options.init,
       redirect: "manual",

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-09T09:41:58Z",
+  "updatedAt": "2026-10-22T07:11:55Z",
   "creators": [
     {
       "id": "douyin-user-reference-ai-model-learning",
@@ -198,6 +198,83 @@
       "audienceFit": 0.8,
       "coverageGroup": "shangguigu",
       "profileUrl": "https://www.bilibili.com/video/BV1RPET6tEp2/",
+      "enabled": true
+    },
+    {
+      "id": "bilibili-sean",
+      "platform": "bilibili",
+      "name": "肖恩君Sean",
+      "category": "engineering",
+      "weight": 1,
+      "audienceFit": 0.9,
+      "coverageGroup": "sean-waku",
+      "profileUrl": "https://space.bilibili.com/479332937/",
+      "enabled": true
+    },
+    {
+      "id": "bilibili-ai-architect-leo",
+      "platform": "bilibili",
+      "name": "AI架构师Leo",
+      "category": "engineering",
+      "weight": 1,
+      "audienceFit": 0.9,
+      "coverageGroup": "ai-architect-leo",
+      "profileUrl": "https://space.bilibili.com/518390923/",
+      "enabled": true
+    },
+    {
+      "id": "douyin-jiutian-hector",
+      "platform": "douyin",
+      "name": "九天Hector",
+      "category": "engineering",
+      "weight": 1,
+      "audienceFit": 0.9,
+      "coverageGroup": "jiutian-hector",
+      "profileUrl": "https://jingxuan.douyin.com/m/video/7690507069723577643",
+      "enabled": true
+    },
+    {
+      "id": "bilibili-kunpeng-talk",
+      "platform": "bilibili",
+      "name": "鲲鹏Talk",
+      "category": "engineering",
+      "weight": 1,
+      "audienceFit": 0.9,
+      "coverageGroup": "kunpeng-talk",
+      "profileUrl": "https://space.bilibili.com/18052876/",
+      "enabled": true
+    },
+    {
+      "id": "bilibili-ai-product-sniper",
+      "platform": "bilibili",
+      "name": "AI产品狙击手",
+      "category": "ai-tools",
+      "weight": 1,
+      "audienceFit": 0.85,
+      "coverageGroup": "ai-product-sniper",
+      "profileUrl": "https://space.bilibili.com/596541619/",
+      "enabled": true
+    },
+    {
+      "id": "bilibili-ai-super-domain",
+      "platform": "bilibili",
+      "name": "AI超元域",
+      "category": "engineering",
+      "weight": 1,
+      "audienceFit": 0.9,
+      "coverageGroup": "ai-super-domain",
+      "profileUrl": "https://space.bilibili.com/3493277319825652/",
+      "enabled": true
+    },
+    {
+      "id": "bilibili-haianyu",
+      "platform": "bilibili",
+      "name": "海安雨",
+      "category": "paper-explainer",
+      "weight": 1,
+      "audienceFit": 0.9,
+      "coverageGroup": "haianyu",
+      "profileUrl": "https://space.bilibili.com/2071007724/",
       "enabled": true
     }
   ]

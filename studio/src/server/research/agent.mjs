@@ -5,6 +5,11 @@ import { workspaceRoot } from "../../shared/paths.mjs";
 import { canonicalJsonDocumentContentSha256 } from "../../shared/durable-json-store.mjs";
 import { appendEvent, readEpisode, writeEpisode } from "../../shared/store.mjs";
 import { requireSideEffectGrant } from "../security/side-effect-capability.mjs";
+import {assertLocalResearchEpisode, validateLocalResearchRequest, localResearchCapabilitySpec,
+  localResearchError} from "../../shared/local-research-request.mjs";
+import {readReviewConfig} from "../reviews/coordinator.mjs";
+import {consumeLocalResearchDispatch} from "./local-research-dispatch.mjs";
+import {readBoundLocalResearchInputs,readLocalResearchRecord} from "./local-research-inputs.mjs";
 import {
   latestReviewFeedback,
   resetApprovalForVersion
@@ -55,6 +60,13 @@ async function fileRecord(path) {
 }
 
 function requireResearchSideEffects(options, fullyInjected, operation, scopes) {
+  if (options.localResearchRequest) {
+    const request = validateLocalResearchRequest(options.localResearchRequest);
+    if (request.episodeId !== options.episodeId || (request.action === "run" ? "research:run" : "research:import-evidence") !== operation) {
+      throw localResearchError("local_research_episode_mismatch");
+    }
+    return requireSideEffectGrant(options, localResearchCapabilitySpec(request), operation);
+  }
   // Test-only seam: every side-effect dependency must be injected, and an
   // explicit capability requirement always wins. Default/HTTP paths cannot
   // enter this branch because at least one production dependency remains.
@@ -65,7 +77,7 @@ function requireResearchSideEffects(options, fullyInjected, operation, scopes) {
     scopes,
     maxCalls: 0,
     maxCostUsd: 0
-  });
+  }, operation);
 }
 
 function researchRunDependencies(options = {}) {
@@ -87,6 +99,8 @@ function researchRunDependencies(options = {}) {
       readResearchPackAtPath:
         injected.readResearchPackAtPath ?? readResearchPackAtPath,
       readResearchConfig: injected.readResearchConfig ?? readResearchConfig,
+      readReviewConfig: injected.readReviewConfig ?? readReviewConfig,
+      readLocalResearchRecord: injected.readLocalResearchRecord ?? readLocalResearchRecord,
       writeResearchAssistTask:
         injected.writeResearchAssistTask ?? writeResearchAssistTask,
       writeResearchPack: injected.writeResearchPack ?? writeResearchPack
@@ -108,15 +122,18 @@ function researchImportDependencies(options = {}) {
     readLatestResearchPack,
     readResearchPackAtPath,
     readResearchConfig,
+    readReviewConfig,
+    readLocalResearchRecord,
     publishResearchPackRevision,
     writeEpisode,
     writeResearchEvidenceBatch,
     writeResearchPackRevision
   };
-  const names = Object.keys(defaults);
+  // Legacy fully-injected tests do not use the local, bound input reader.
+  const names = Object.keys(defaults).filter(name=>!['readReviewConfig','readLocalResearchRecord'].includes(name));
   return {
     values: Object.fromEntries(
-      names.map((name) => [name, injected[name] ?? defaults[name]])
+      Object.keys(defaults).map((name) => [name, injected[name] ?? defaults[name]])
     ),
     fullyInjected: names.every((name) => typeof injected[name] === "function")
   };
@@ -169,8 +186,9 @@ function researchImportEvent({ batch, pack, ready, publication }) {
   };
 }
 
-async function appendResearchImportAudit(dependencies, context) {
+async function appendResearchImportAudit(dependencies, context, guard = () => {}) {
   try {
+    await guard();
     const record = await dependencies.appendEvent(researchImportEvent(context));
     return {
       status: "committed",
@@ -196,8 +214,9 @@ function researchImportCommitStatus(publication, audit, idempotent = false) {
   return idempotent ? "already_committed" : "committed";
 }
 
-async function publishResearchRevision(dependencies, pack, runPath) {
+async function publishResearchRevision(dependencies, pack, runPath, guard = () => {}) {
   try {
+    await guard();
     await dependencies.publishResearchPackRevision(pack, runPath);
     return { status: "published", errorCode: null };
   } catch (error) {
@@ -242,29 +261,47 @@ export function researchStepAfterEvidenceImport(step, pack) {
 
 export async function runEpisodeResearchAgent(episode, options = {}) {
   const { values: dependencies, fullyInjected } = researchRunDependencies(options);
-  requireResearchSideEffects(
+  const guard = () => requireResearchSideEffects(
     { ...options, episodeId: episode.id },
     fullyInjected,
     "research:run",
     ["filesystem.write", "network.request"]
   );
-  const config = await dependencies.readResearchConfig();
+  guard();
+  let sourceEpisode=null;
+  if (options.localResearchRequest) {
+    assertLocalResearchEpisode(options.localResearchRequest, episode);
+    ({sourceEpisode}=consumeLocalResearchDispatch(options.localResearchDispatch, options.localResearchRequest, episode, options.sideEffectGrant));
+    // Freeze the consumed inputs logically: caller mutation across later awaits
+    // must not replace the source list authorized by the Kernel handoff.
+    episode = structuredClone(episode);
+  }
+  const boundGuard=async()=>{
+    guard();
+    const inputs=sourceEpisode?await readBoundLocalResearchInputs(options.localResearchRequest,sourceEpisode,dependencies):null;
+    guard();return inputs;
+  };
+  const inputs=await boundGuard();
+  const config = inputs?.researchConfig??await dependencies.readResearchConfig();
   const now = options.now instanceof Date ? options.now : new Date(options.now ?? Date.now());
   const fresh = buildResearchPlan({ episode, config, now });
-  const current = assertResearchPackEpisode(episode.research?.packPath
+  const current = inputs?inputs.pack:assertResearchPackEpisode(episode.research?.packPath
     ? await dependencies.readResearchPackAtPath(episode.research.packPath)
-    : await dependencies.readLatestResearchPack(episode.id), episode.id, "研究规划");
+    : options.localResearchRequest ? null : await dependencies.readLatestResearchPack(episode.id), episode.id, "研究规划");
   let pack = reconcileResearchPack(current, fresh, config);
   const inspections = await mapWithConcurrency(
     pack.sources,
     config.maxConcurrency,
-    (source) =>
-      dependencies.inspectPrimarySource(source, {
+    async(source) => {
+      await boundGuard();
+      return dependencies.inspectPrimarySource(source, {
         config,
         now,
         fetchImpl: options.fetchImpl,
-        lookupImpl: options.lookupImpl
-      })
+        lookupImpl: options.lookupImpl,
+        beforeRequest: boundGuard
+      });
+    }
   );
   pack = mergeSourceInspections(pack, inspections, config, now);
   const reviewFeedback =
@@ -277,7 +314,9 @@ export async function runEpisodeResearchAgent(episode, options = {}) {
     ...buildResearchAssistTask(pack, config, now),
     reviewFeedback: reviewFeedback || null
   };
+  await boundGuard();
   const runPath = await dependencies.writeResearchPack(pack);
+  await boundGuard();
   const assistTaskPath = await dependencies.writeResearchAssistTask(assistTask);
   return {
     pack,
@@ -293,13 +332,14 @@ export async function runEpisodeResearchAgent(episode, options = {}) {
 
 export async function importResearchEvidenceBatch(batch, options = {}) {
   const { values: dependencies, fullyInjected } = researchImportDependencies(options);
-  requireResearchSideEffects(
+  const guard = () => requireResearchSideEffects(
     { ...options, episodeId: batch?.episodeId ?? "studio" },
     fullyInjected,
     "research:import-evidence",
     ["state.write", "filesystem.write"]
   );
-  const config = await dependencies.readResearchConfig();
+  guard();
+  let config = await dependencies.readResearchConfig();
   const validation = validateResearchEvidenceBatch(batch, config);
   if (!validation.valid) throw new Error(validation.errors.join("; "));
   // Episode CAS is the authoritative commit. Read it before deriving the next
@@ -308,9 +348,27 @@ export async function importResearchEvidenceBatch(batch, options = {}) {
     await dependencies.readEpisode(batch.episodeId),
     batch.episodeId
   );
-  const current = assertResearchPackEpisode(episode.research?.packPath
+  const sourceEpisode=options.localResearchRequest?structuredClone(episode):null;
+  const boundGuard=async()=>{
+    guard();
+    const inputs=sourceEpisode?await readBoundLocalResearchInputs(options.localResearchRequest,sourceEpisode,dependencies):null;
+    guard();return inputs;
+  };
+  let inputs=null;
+  if (options.localResearchRequest) {
+    const request = options.localResearchRequest;
+    assertLocalResearchEpisode(request, episode, {initial: true});
+    inputs=await boundGuard();config=inputs.researchConfig;
+    if (canonicalJsonDocumentContentSha256(inputs.candidate) !== canonicalJsonDocumentContentSha256(batch)) {
+      throw localResearchError("local_research_candidate_changed");
+    }
+    batch=structuredClone(inputs.candidate);
+    const boundValidation = validateResearchEvidenceBatch(batch, config);
+    if (!boundValidation.valid) throw new Error(boundValidation.errors.join("; "));
+  }
+  const current = inputs?inputs.pack:assertResearchPackEpisode(episode.research?.packPath
     ? await dependencies.readResearchPackAtPath(episode.research.packPath)
-    : await dependencies.readLatestResearchPack(batch.episodeId), batch.episodeId, "证据导入");
+    : options.localResearchRequest ? null : await dependencies.readLatestResearchPack(batch.episodeId), batch.episodeId, "证据导入");
   if (!current) throw new Error(`还没有 ${batch.episodeId} 的研究计划，请先运行研究 Agent`);
   const batchSha256 = canonicalJsonDocumentContentSha256(batch);
   const priorImport = findImportedBatch(current, batch.batchId);
@@ -322,14 +380,14 @@ export async function importResearchEvidenceBatch(batch, options = {}) {
   }
   if (priorImport?.batchSha256 === batchSha256) {
     const paths = importedBatchPaths(episode, batch.batchId);
-    const publication = await publishResearchRevision(dependencies, current, paths.runPath);
+    const publication = await publishResearchRevision(dependencies, current, paths.runPath, boundGuard);
     const ready = current.readiness.readyForFactApproval;
     const audit = await appendResearchImportAudit(dependencies, {
       batch,
       pack: current,
       ready,
       publication
-    });
+    }, boundGuard);
     return {
       pack: current,
       episode,
@@ -345,9 +403,11 @@ export async function importResearchEvidenceBatch(batch, options = {}) {
   const pack = mergeEvidenceBatch(current, batch, config, now);
   const importedBatch = findImportedBatch(pack, batch.batchId);
   if (importedBatch) importedBatch.batchSha256 = batchSha256;
+  await boundGuard();
   const batchPath = await dependencies.writeResearchEvidenceBatch(batch);
   // Materialize immutable inputs before the CAS, but do not advance any latest
   // pointer. A losing CAS may leave an orphan revision, never a published one.
+  await boundGuard();
   const runPath = await dependencies.writeResearchPackRevision(pack);
   const [batchRecord, packRecord] = await Promise.all([
     dependencies.fileRecord(batchPath),
@@ -391,15 +451,16 @@ export async function importResearchEvidenceBatch(batch, options = {}) {
     type: "research-evidence-import",
     message: `导入 ${batch.sources.length} 份来源和 ${batch.claims.length} 条主张`
   });
+  await boundGuard();
   await dependencies.writeEpisode(episode);
 
-  const publication = await publishResearchRevision(dependencies, pack, runPath);
+  const publication = await publishResearchRevision(dependencies, pack, runPath, boundGuard);
   const audit = await appendResearchImportAudit(dependencies, {
     batch,
     pack,
     ready,
     publication
-  });
+  }, boundGuard);
   return {
     pack,
     episode,

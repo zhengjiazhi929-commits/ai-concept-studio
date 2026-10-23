@@ -2,6 +2,22 @@
   "schemaVersion": 1,
   "concepts": [
     {
+      "id": "agent-harness",
+      "name": "Agent Harness",
+      "aliases": ["agent harness", "harness engineering"],
+      "parent": "Agent 工程栈",
+      "brandIndependent": true,
+      "crossProductExamples": ["Anthropic Managed Agents", "LangChain Deep Agents"],
+      "productDecisions": ["模型、循环与运行环境的职责边界", "工具权限、人工审批和状态恢复", "业务完成核验与预算停止条件"],
+      "primarySources": [
+        {"label": "Anthropic Managed Agents architecture", "url": "https://www.anthropic.com/research/managed-agents"},
+        {"label": "LangChain Deep Agents overview", "url": "https://docs.langchain.com/oss/python/deepagents/overview"},
+        {"label": "LangGraph interrupts and side effects", "url": "https://docs.langchain.com/oss/python/langgraph/interrupts"}
+      ],
+      "halfLifeDays": 21,
+      "recommendedTitle": "Agent Harness是什么？从“会回答”到“把业务办完”，还缺什么？"
+    },
+    {
       "id": "agent-skill",
       "name": "Agent Skill",
       "aliases": ["agent skill", "agent skills", "skill 架构", "skills 架构", "skill和sub agent", "skill 和 sub agent", "mcp 和 skills", "mcp与skills", "内容生成 skill", "海量skill", "skill加载"],

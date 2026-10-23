@@ -206,6 +206,8 @@ export const agents = {
       const result = await runEpisodeResearchAgent(episode, {
         reviewFeedback: context.reviewFeedback,
         sideEffectGrant: context.sideEffectGrant ?? undefined,
+        localResearchRequest: context.localResearchRequest ?? undefined,
+        localResearchDispatch: context.localResearchDispatch ?? undefined,
         requireSideEffectCapability: Boolean(context.sideEffectGrant),
         capabilityOperation: "worker:research-agent",
         episodeId: episode.id,

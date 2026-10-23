@@ -1,13 +1,15 @@
 // Bounded data-only motion. Source data, context membership and screen geometry
 // are deliberately separate; no callbacks, expressions or executable strings.
+import {validEditorialIllustration} from './editorial-illustration-contract.mjs';
+import {normalizeEditorialTracks,resolveEditorialTracks} from './editorial-tracks.mjs';
 export const EDITORIAL_MOTION_VERSION = 'editorial-motion-v1';
 export const EDITORIAL_MOTION_SAFE_RECT = Object.freeze({ x: 96, y: 300, width: 1728, height: 580 });
 const compiledPlans = new WeakMap();
 
-const KINDS = new Set(['card', 'page', 'window', 'store', 'label']);
+const KINDS = new Set(['card', 'page', 'window', 'store', 'tray', 'region', 'label', 'illustration']);
 const OPS = new Set(['reveal', 'retire', 'focus', 'copy', 'summarize', 'transfer', 'arrive',
-  'check', 'save', 'reset-scope', 'temporary-override', 'invalidate']);
-const CONTAINERS = new Set(['window', 'store']);
+  'check', 'save', 'reset-scope', 'temporary-override', 'invalidate', 'present', 'connect', 'reposition']);
+const CONTAINERS = new Set(['window', 'store', 'tray']);
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,95}$/;
 const fail = (code) => { throw new Error(code); };
 const check = (condition, code) => { if (!condition) fail(code); };
@@ -32,6 +34,7 @@ function dataTree(value, seen = new Set(), budget = { left: 20000 }) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     check(Object.hasOwn(descriptor, 'value'), 'motion-accessor-field');
     if (Array.isArray(value) && key === 'length') continue;
+    check(descriptor.enumerable, 'motion-hidden-field');
     dataTree(descriptor.value, seen, budget);
   }
   if (Array.isArray(value)) {
@@ -39,6 +42,10 @@ function dataTree(value, seen = new Set(), budget = { left: 20000 }) {
     check(Object.keys(value).every((key, index) => key === String(index)), 'motion-array-fields');
   }
   seen.delete(value);
+}
+
+export function assertEditorialRenderData(value) {
+  dataTree(value,new Set(),{left:250000});
 }
 
 function fields(value, required, optional = []) {
@@ -63,7 +70,7 @@ function textFits(object, effectiveValue = null) {
   const width = object.width - padding * 2;
   check(width >= titleSize, 'motion-text-width');
   const detail = effectiveValue !== null && effectiveValue !== object.label ? effectiveValue : object.detail;
-  const height = padding * 2 + lineCount(object.label, titleSize, width) * titleSize * 1.3
+  const height = padding * 2 + (object.kind === 'illustration' ? 170 : 0) + (object.label?lineCount(object.label, titleSize, width) * titleSize * 1.3:0)
     + (detail ? 8 + lineCount(detail, bodySize, width) * bodySize * 1.4 : 0);
   check(height <= object.height, 'motion-text-overflow');
 }
@@ -78,7 +85,7 @@ function inside(child, parent, position = child) {
 
 function normalize(plan, { narration, durationInFrames } = {}) {
   dataTree(plan);
-  fields(plan, ['version', 'canvas', 'objects', 'events']);
+  fields(plan, ['version', 'canvas', 'objects', 'events'], ['tracks']);
   check(plan.version === EDITORIAL_MOTION_VERSION, 'motion-version');
   fields(plan.canvas, ['width', 'height']);
   check(plan.canvas.width === 1920 && plan.canvas.height === 1080, 'motion-canvas');
@@ -89,9 +96,12 @@ function normalize(plan, { narration, durationInFrames } = {}) {
   const objects = new Map();
   for (const object of plan.objects) {
     fields(object, ['id', 'kind', 'label', 'detail', 'x', 'y', 'width', 'height', 'scopeId', 'sourceId', 'initiallyVisible'],
-      ['value', 'scopeMode', 'containerId', 'summaryFields', 'transformation']);
+      ['value', 'scopeMode', 'containerId', 'summaryFields', 'transformation', 'illustration', 'regionId']);
     check(id(object.id) && !objects.has(object.id) && KINDS.has(object.kind) && id(object.scopeId), 'motion-object-identity');
-    check(text(object.label) && text(object.detail, true), 'motion-object-text');
+    check(object.kind === 'illustration' ? validEditorialIllustration(object.illustration)
+      && object.width>=300 && object.sourceId === null && !object.containerId : !Object.hasOwn(object,'illustration'), 'motion-illustration-kind');
+    check(!object.regionId || id(object.regionId), 'motion-region-id');
+    check(text(object.label,['illustration','tray'].includes(object.kind)) && text(object.detail, true), 'motion-object-text');
     check(typeof object.initiallyVisible === 'boolean', 'motion-object-visibility');
     check(object.sourceId === null || id(object.sourceId), 'motion-source-id');
     check(!Object.hasOwn(object, 'scopeMode') || ['local', 'shared'].includes(object.scopeMode), 'motion-scope-mode');
@@ -153,6 +163,8 @@ function normalize(plan, { narration, durationInFrames } = {}) {
       check(inside(object, container), 'motion-initial-containment');
       check(object.scopeId === container.scopeId || object.scopeMode === 'shared', 'motion-container-scope');
     }
+    if(object.regionId) check(objects.get(object.regionId)?.kind==='region' && object.regionId!==object.id,
+      'motion-region-parent');
   }
   const prior = new Map();
   let previousFrame = -1;
@@ -174,12 +186,42 @@ function normalize(plan, { narration, durationInFrames } = {}) {
     for (const dependency of event.requires) check(id(dependency) && prior.has(dependency)
       && prior.get(dependency) <= event.atFrame, 'motion-unfinished-dependency');
     check(event.op === 'reset-scope' ? event.objectId === null : objects.has(event.objectId), 'motion-event-object');
-    const targeted = ['copy', 'summarize', 'transfer', 'arrive', 'save'].includes(event.op);
+    const targeted = ['copy', 'summarize', 'transfer', 'arrive', 'save', 'connect'].includes(event.op);
     check(targeted ? objects.has(event.targetId) : event.targetId === null, 'motion-event-target');
-    check(event.op === 'transfer' ? event.durationFrames > 0 : event.durationFrames === 0, 'motion-event-duration');
+    check(['transfer','connect','reposition'].includes(event.op) ? event.durationFrames > 0 : event.durationFrames === 0, 'motion-event-duration');
     if (event.op === 'transfer') {
       fields(event.value, ['x', 'y']);
       check(integer(event.value.x, 0, 8192) && integer(event.value.y, 0, 8192), 'motion-transfer-position');
+    } else if (event.op === 'reposition') {
+      fields(event.value,['x','y']);
+      const subject=objects.get(event.objectId);
+      check(['page','label'].includes(subject.kind) && subject.sourceId===null && !subject.containerId
+        && !subject.regionId && ![...objects.values()].some(item=>item.sourceId===subject.id), 'motion-reposition-root');
+      check(integer(event.value.x,96,1824) && integer(event.value.y,300,880)
+        && event.durationFrames<=90, 'motion-reposition-position');
+    } else if (event.op === 'connect') {
+      fields(event.value,['route']);
+      check(['direct','return'].includes(event.value.route) && event.objectId !== event.targetId
+        && event.durationFrames <= 60, 'motion-relationship-route');
+    } else if (event.op === 'present') {
+      fields(event.value,['label','detail','variant'],['box','regionId']);
+      const subject=objects.get(event.objectId);
+      check(text(event.value.label,['illustration','tray'].includes(subject.kind)) && text(event.value.detail,true)
+        && (subject.kind === 'illustration' ? validEditorialIllustration(subject.illustration,event.value.variant)
+          : event.value.variant === 'neutral'), 'motion-presentation-copy');
+      // Presentation edits cannot rewrite a source later used by copy/save.
+      check(subject.sourceId === null && subject.value === subject.label && !subject.summaryFields
+        && ![...objects.values()].some(item=>item.sourceId === subject.id), 'motion-presentation-source');
+      if(event.value.box){
+        fields(event.value.box,['x','y','width','height']);
+        check(Object.values(event.value.box).every(v=>integer(v,1,1920)), 'motion-presentation-box');
+        const b=event.value.box;
+        check(b.x>=96 && b.y>=300 && b.x+b.width<=1824 && b.y+b.height<=880
+          && (subject.kind!=='illustration' || b.width>=300), 'motion-presentation-safe-area');
+      }
+      if(Object.hasOwn(event.value,'regionId')) check(event.value.regionId===null
+        || objects.get(event.value.regionId)?.kind==='region' && event.value.regionId!==subject.id, 'motion-region-parent');
+      textFits({...subject,...event.value.box,label:event.value.label,detail:event.value.detail});
     } else if (event.op === 'reset-scope') {
       fields(event.value, ['scopeId', 'keepIds']);
       check(id(event.value.scopeId) && [...objects.values()].some((object) => object.scopeId === event.value.scopeId), 'motion-reset-scope');
@@ -191,7 +233,9 @@ function normalize(plan, { narration, durationInFrames } = {}) {
     prior.set(event.id, event.atFrame + event.durationFrames);
     previousFrame = event.atFrame;
   }
-  return { canvas: { ...plan.canvas }, objects, events: plan.events };
+  const tracks=Object.hasOwn(plan,'tracks')?normalizeEditorialTracks(plan.tracks,
+    {narration,durationInFrames,safeRect:EDITORIAL_MOTION_SAFE_RECT}):[];
+  return { canvas: { ...plan.canvas }, objects, events: plan.events, tracks };
 }
 
 function initial(object) {
@@ -199,12 +243,18 @@ function initial(object) {
     information: { value: object.value, status: object.containerId ? 'included' : 'idle',
       containerId: object.containerId, recallActive: true, checkStatus: null },
     presentation: { x: object.x, y: object.y, opacity: object.initiallyVisible ? 1 : 0, inTransit: false },
-    created: object.sourceId === null, persisted: false, transfer: null };
+    created: object.sourceId === null, persisted: false, transfer: null, move: null };
 }
 
 function run(normalized, frame, { inspect = true } = {}) {
   const states = new Map([...normalized.objects].map(([key, object]) => [key, initial(object)]));
   let focusId = null;
+  const relationships = new Map();
+  const retireRelationships = objectId => {
+    for (const [key, relation] of relationships) {
+      if (relation.fromId === objectId || relation.toId === objectId) relationships.delete(key);
+    }
+  };
   const warnings = new Map();
   const show = (object, visible) => { object.visible = visible; object.presentation.opacity = visible ? 1 : 0; };
   const positionAt = (transfer, atFrame) => {
@@ -217,6 +267,12 @@ function run(normalized, frame, { inspect = true } = {}) {
   };
   const advance = (atFrame) => {
     for (const object of states.values()) {
+      if(object.move){
+        const {x,y,progress}=positionAt(object.move,atFrame);
+        object.x=x;object.y=y;object.presentation.x=x;object.presentation.y=y;
+        object.presentation.inTransit=progress<1;
+        if(progress===1)object.move=null;
+      }
       if (!object.transfer) continue;
       const transfer = object.transfer;
       const { x, y, progress } = positionAt(transfer, atFrame);
@@ -235,24 +291,38 @@ function run(normalized, frame, { inspect = true } = {}) {
     || a.information.containerId === b.id || b.information.containerId === a.id
     || a.transfer?.targetId === b.id || b.transfer?.targetId === a.id
     || ((a.information.status === 'copied' || a.presentation.inTransit) && originContainer(a) === b.id)
-    || ((b.information.status === 'copied' || b.presentation.inTransit) && originContainer(b) === a.id);
+    || ((b.information.status === 'copied' || b.presentation.inTransit) && originContainer(b) === a.id)
+    || withinRegion(a,b) || withinRegion(b,a);
+  const withinRegion=(child,parent)=>{
+    const visited=new Set([child.id]);let next=child.regionId;
+    while(next){check(!visited.has(next),'motion-region-cycle');visited.add(next);
+      if(next===parent.id)return true;next=states.get(next)?.regionId;}
+    return false;
+  };
   const inspectVisibility = () => {
     if (!inspect) return;
     const visible = [...states.values()].filter((object) => object.visible);
     for (const object of visible) {
       if (object.information.containerId) check(states.get(object.information.containerId)?.visible, 'motion-member-without-container');
+      if(object.regionId){
+        const parent=states.get(object.regionId);
+        check(parent?.visible && parent.kind==='region','motion-region-hidden');
+        check(!withinRegion(parent,object),'motion-region-cycle');
+        check(inside(object,{...parent,...parent.presentation.copy}), 'motion-region-containment');
+      }
     }
     for (let first = 0; first < visible.length; first += 1) {
       for (let second = first + 1; second < visible.length; second += 1) {
         const a = visible[first]; const b = visible[second];
         if (related(a, b) || !overlaps(a, b)) continue;
+        check(!a.move && !b.move, 'motion-reposition-overlap');
         check(a.presentation.inTransit || b.presentation.inTransit, 'motion-static-object-overlap');
       }
     }
   };
   const inspectSweep = (object, untilFrame) => {
     if (!inspect) return;
-    const transfer = object.transfer;
+    const transfer = object.transfer??object.move;
     const to = positionAt(transfer, untilFrame);
     const horizontal = { x: Math.min(object.x, to.x), y: object.y,
       width: Math.abs(to.x - object.x) + object.width, height: object.height };
@@ -261,6 +331,7 @@ function run(normalized, frame, { inspect = true } = {}) {
     for (const other of states.values()) {
       if (!other.visible || other.id === object.id || related(object, other)) continue;
       if (overlaps(horizontal, other) || overlaps(vertical, other)) {
+        check(!object.move, 'motion-reposition-overlap');
         const key = `${transfer.id}:${other.id}`;
         warnings.set(key, { code: 'motion-unsafe-transfer-overlap', eventId: transfer.id, objectIds: [object.id, other.id] });
       }
@@ -293,6 +364,7 @@ function run(normalized, frame, { inspect = true } = {}) {
         }
         states.get(current.id).transfer = null;
         show(states.get(current.id), false);
+        retireRelationships(current.id);
         if (focusId === current.id) focusId = null;
       }
       finishFrame(eventIndex);
@@ -304,6 +376,29 @@ function run(normalized, frame, { inspect = true } = {}) {
       check(!object.presentation.inTransit, 'motion-retire-during-transfer');
       object.transfer = null;
       show(object, false); if (focusId === object.id) focusId = null;
+      retireRelationships(object.id);
+    } else if (event.op === 'present') {
+      check(object.visible && !object.presentation.inTransit, 'motion-presentation-hidden');
+      object.presentation.copy={label:event.value.label,detail:event.value.detail};
+      object.presentation.variant=event.value.variant;
+      if(event.value.box){Object.assign(object,event.value.box);Object.assign(object.presentation,{x:object.x,y:object.y});}
+      if(Object.hasOwn(event.value,'regionId'))object.regionId=event.value.regionId;
+    } else if (event.op === 'connect') {
+      check(object.visible && target.visible, 'motion-relationship-hidden-endpoint');
+      relationships.set(`${object.id}:${target.id}`,{id:event.id,fromId:object.id,toId:target.id,
+        route:event.value.route,atFrame:event.atFrame,durationFrames:event.durationFrames});
+    } else if (event.op === 'reposition') {
+      check(object.visible && !object.presentation.inTransit && !object.transfer && !object.move
+        && !object.information.containerId && !object.regionId, 'motion-reposition-state');
+      // Independent display movement has one bounded sweep. Do not claim
+      // concurrent trajectory safety using another moving object's start box.
+      check(![...states.values()].some(other=>other.id!==object.id && other.presentation.inTransit),
+        'motion-reposition-concurrent');
+      check((event.value.x===object.x)!==(event.value.y===object.y), 'motion-reposition-axis');
+      check(event.value.x+object.width<=1824 && event.value.y+object.height<=880, 'motion-reposition-safe-area');
+      object.move={id:event.id,atFrame:event.atFrame,durationFrames:event.durationFrames,
+        from:{x:object.x,y:object.y},to:{...event.value}};
+      object.presentation.inTransit=true;
     } else if (event.op === 'focus') {
       check(object.visible, 'motion-focus-hidden'); focusId = object.id;
     } else if (event.op === 'copy' || event.op === 'summarize') {
@@ -320,6 +415,7 @@ function run(normalized, frame, { inspect = true } = {}) {
       target.presentation.x = object.x; target.presentation.y = object.y;
       show(target, true);
     } else if (event.op === 'transfer') {
+      check(![...states.values()].some(other=>other.move), 'motion-reposition-concurrent');
       check(object.sourceId !== null && object.created && object.visible && !object.transfer
         && ['copied', 'summarized'].includes(object.information.status), 'motion-transfer-needs-fresh-copy');
       check(object.information.checkStatus !== 'rejected', 'motion-transfer-rejected');
@@ -362,6 +458,11 @@ function run(normalized, frame, { inspect = true } = {}) {
   advance(frame);
   inspectVisibility();
   const connections = [];
+  for (const relation of relationships.values()) {
+    if (!states.get(relation.fromId)?.visible || !states.get(relation.toId)?.visible) continue;
+    connections.push({...relation,status:'explanatory',
+      progress:Math.min(1,Math.max(0,(frame-relation.atFrame)/relation.durationFrames))});
+  }
   for (const object of states.values()) {
     if (!object.visible || !object.transfer || !states.get(object.sourceId)?.visible) continue;
     const transfer = object.transfer;
@@ -374,8 +475,9 @@ function run(normalized, frame, { inspect = true } = {}) {
       status: object.presentation.inTransit ? 'moving' : 'arrived',
       progress: Math.max(0, Math.min(1, (frame - transfer.atFrame) / transfer.durationFrames)) });
   }
-  const objects = [...states.values()].map(({ created: _created, transfer: _transfer, persisted: _persisted, ...object }) => object);
+  const objects = [...states.values()].map(({ created: _created, transfer: _transfer, move: _move, persisted: _persisted, ...object }) => object);
   return { frame, canvas: normalized.canvas, objects, visibleObjects: objects.filter((object) => object.visible), connections, focusId,
+    tracks:resolveEditorialTracks(normalized.tracks,frame),
     ...(warnings.size ? { warnings: [...warnings.values()] } : {}) };
 }
 

@@ -1,10 +1,12 @@
-import {resolveEditorialMotionFrame,compileEditorialMotionPlan,EDITORIAL_MOTION_SAFE_RECT} from '../shared/editorial-motion.mjs';
+import {resolveEditorialMotionFrame,compileEditorialMotionPlan,EDITORIAL_MOTION_SAFE_RECT,assertEditorialRenderData} from '../shared/editorial-motion.mjs';
 import {visualSystemV1EstimateContentTextWidthPx} from './components/visual-system-v1/content-layout.mjs';
 import {frostedCardStyle} from './glass-card-preview/material.mjs';
+import {compileEditorialChapterPlan,resolveEditorialChapterFrame} from '../shared/editorial-chapters.mjs';
+import {EDITORIAL_TIMING_POLICY} from '../shared/editorial-timing.mjs';
 
 const stage={left:EDITORIAL_MOTION_SAFE_RECT.x,top:EDITORIAL_MOTION_SAFE_RECT.y,right:EDITORIAL_MOTION_SAFE_RECT.x+EDITORIAL_MOTION_SAFE_RECT.width,bottom:EDITORIAL_MOTION_SAFE_RECT.y+EDITORIAL_MOTION_SAFE_RECT.height};
 const compiledEpisodes=new WeakMap();
-const containers=new Set(['window','store']);
+const containers=new Set(['window','store','tray','region']);
 const fail=code=>{throw new Error(`editorial-renderer-${code}`);};
 
 // This deterministic width estimate rejects overflow before drawing. It is a
@@ -32,7 +34,7 @@ function stateLabel(information,containerKind,sourceId,transformation) {
   if(information.status==='stored') return '已保存';
   if(information.checkStatus==='rejected') return '核对未通过';
   if(information.checkStatus==='passed' && transformation==='summary') return '核对通过';
-  if(information.status==='included' && containerKind==='store') {
+  if(information.status==='included' && ['store','tray'].includes(containerKind)) {
     if(information.checkStatus==='passed') return '核对通过，待保存';
     return sourceId===null?'存储记录':'已放入记录区';
   }
@@ -50,21 +52,22 @@ function objectModel(object,focusId,allObjects) {
   if(object.presentation.opacity!==1) fail('visible-object-opacity');
   const padding=kind==='card'?46:22;
   // A page fold and a store's top ellipse are geometry, not text decorations.
-  const insetTop=kind==='store'?72:padding;
+  const insetTop=kind==='illustration'?192:kind==='store'?72:padding;
   const textWidth=width-padding*2-(kind==='page'?24:0);
-  const title=textBlock(object.label,{width:textWidth,fontSize:kind==='card'?48:44,fontWeight:550,maxHeight:height-insetTop-padding});
+  const display=object.presentation.copy??{label:object.label,detail:object.detail};
+  const title=textBlock(display.label,{width:textWidth,fontSize:kind==='card'?48:44,fontWeight:550,maxHeight:height-insetTop-padding});
   const value=object.information.value;
   if(value!==null && value!==undefined && typeof value!=='string') fail('object-value');
-  const bodyText=value && value!==object.label?value:object.detail;
+  const bodyText=value && value!==object.label?value:display.detail;
   const bodyTop=insetTop+title.height+(bodyText?14:0);
   const body=textBlock(bodyText,{width:textWidth,fontSize:kind==='card'?36:32,fontWeight:450,lineHeight:1.4,maxHeight:height-bodyTop-padding});
   // State text is a real layout row, never a badge floated over the content.
   const stateY=bodyText?bodyTop+body.height+12:insetTop+title.height+12;
   const containerKind=allObjects.find(item=>item.id===object.information.containerId)?.kind;
   const stateText=textBlock(stateLabel(object.information,containerKind,object.sourceId,object.transformation),{width:textWidth,fontSize:28,fontWeight:450,lineHeight:1.3,maxHeight:Math.max(0,height-stateY-padding)});
-  return {id:object.id,kind,x,y,width,height,padding,cardStyle,stateText:{...stateText,x:padding,y:stateY},title:{...title,x:padding,y:insetTop},body:{...body,x:padding,y:bodyTop},
+  return {id:object.id,kind,illustration:object.illustration,variant:object.presentation.variant??'neutral',x,y,width,height,padding,cardStyle,stateText:{...stateText,x:padding,y:stateY},title:{...title,x:padding,y:insetTop},body:{...body,x:padding,y:bodyTop},
     headerBottom:Math.max(72,stateText.text?stateY+stateText.height:bodyText?bodyTop+body.height:insetTop+title.height),
-    status:object.information.status,containerId:object.information.containerId,sourceId:object.sourceId,
+    status:object.information.status,containerId:object.information.containerId,regionId:object.regionId??null,sourceId:object.sourceId,
     focus:focusId===object.id,recallActive:object.information.recallActive,checkStatus:object.information.checkStatus,
     inTransit:object.presentation.inTransit};
 }
@@ -76,7 +79,14 @@ export function buildEditorialMotionConnectionModel(connection,objects) {
   const from=parent??source;
   if(from.id===to.id) return null; // Internal movement is already shown by the copy.
   const gap=12;let points;let direction;
-  if(from.x+from.width+gap*2<to.x || to.x+to.width+gap*2<from.x) {
+  if(connection.route==='return') {
+    if(!(from.x+from.width+gap*2<to.x || to.x+to.width+gap*2<from.x)) fail('return-no-clear-corridor');
+    const y=Math.max(from.y+from.height,to.y+to.height)+42;
+    if(y>stage.bottom-10) fail('return-safe-area');
+    points=[{x:from.x+from.width/2,y:from.y+from.height+gap},
+      {x:from.x+from.width/2,y},{x:to.x+to.width/2,y},
+      {x:to.x+to.width/2,y:to.y+to.height+gap}];direction='up';
+  } else if(from.x+from.width+gap*2<to.x || to.x+to.width+gap*2<from.x) {
     const forward=from.x<to.x;
     const a={x:forward?from.x+from.width+gap:from.x-gap,y:from.y+from.height/2};
     const b={x:forward?to.x-gap:to.x+to.width+gap,y:to.y+to.height/2};
@@ -101,6 +111,17 @@ export function buildEditorialMotionConnectionModel(connection,objects) {
   } else fail('connection-no-clear-corridor');
   points=points.filter((point,index,all)=>index===0 || point.x!==all[index-1].x || point.y!==all[index-1].y);
   const excluded=new Set([source.id,from.id,to.id,connection.objectId]);
+  // Region fills are behind the route. Exclude each endpoint's full ancestry,
+  // not unrelated regions or foreground objects sharing the same parent.
+  for(const endpoint of [source,from,to]) {
+    const visited=new Set([endpoint.id]);let regionId=endpoint.regionId;
+    while(regionId) {
+      if(visited.has(regionId))fail('region-cycle');visited.add(regionId);
+      const region=objects.find(object=>object.id===regionId);
+      if(!region || region.kind!=='region')fail('region-parent');
+      excluded.add(region.id);regionId=region.regionId;
+    }
+  }
   const obstacles=objects.filter(object=>!excluded.has(object.id) && !object.inTransit
     && object.containerId!==from.id && object.containerId!==to.id);
   // Include shaft/head clearance. We reject an occluded route instead of
@@ -126,17 +147,32 @@ function frameRange(value,fps) {
 // A frozen per-episode snapshot is reusable across frame seeks. Raw mutable
 // episode objects are never memoized: source edits must not reuse stale plans.
 export function compileEditorialMotionRenderEpisode(episode,fps) {
+  assertEditorialRenderData(episode);
   if(!episode || !Array.isArray(episode.scenes) || !episode.scenes.length || !Number.isFinite(fps) || fps<=0) fail('input');
+  if(Object.hasOwn(episode,'editorialChapters')) fail('derived-chapters-input');
   const snapshot=structuredClone(episode);
   for(const scene of snapshot.scenes) {
     const range=frameRange(scene,fps);
     scene.motionPlan=compileEditorialMotionPlan(scene.motionPlan,{narration:scene.narration,durationInFrames:range.end-range.start});
   }
+  const hasDraft=snapshot.production!=null && Object.hasOwn(snapshot.production,'storyboardDraft');
+  const execution=snapshot.production?.storyboardDraft?.content?.executionPlan;
+  const hasBound=execution!=null && Object.hasOwn(execution,'chapterPlan');
+  const hasTop=Object.hasOwn(snapshot,'editorialChapterPlan');
+  if(hasDraft && hasTop && !hasBound) fail('chapter-binding');
+  const options={scenes:snapshot.scenes,timingPolicy:EDITORIAL_TIMING_POLICY};
+  const bound=hasBound?compileEditorialChapterPlan(execution.chapterPlan,options):null;
+  const top=hasTop?compileEditorialChapterPlan(snapshot.editorialChapterPlan,options):null;
+  const canonical=value=>JSON.stringify(value,(_key,item)=>item && typeof item==='object' && !Array.isArray(item)
+    ?Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])):item);
+  if(hasBound && hasTop && canonical(execution.chapterPlan)!==canonical(snapshot.editorialChapterPlan)) fail('chapter-binding');
+  if(hasBound || hasTop) snapshot.editorialChapters=bound??top;
   const freeze=value=>{if(value && typeof value==='object') {Object.values(value).forEach(freeze);Object.freeze(value);}};
   freeze(snapshot);compiledEpisodes.set(snapshot,fps);return snapshot;
 }
 
 export function buildEditorialMotionRenderModel(episode,frame,fps) {
+  if(!compiledEpisodes.has(episode))assertEditorialRenderData(episode);
   if(!episode || !Array.isArray(episode.scenes) || !episode.scenes.length || !Number.isSafeInteger(frame) || frame<0 || !Number.isFinite(fps) || fps<=0) fail('input');
   if(compiledEpisodes.has(episode) && compiledEpisodes.get(episode)!==fps) fail('compiled-fps');
   const snapshot=compiledEpisodes.has(episode)?episode:compileEditorialMotionRenderEpisode(episode,fps);
@@ -149,13 +185,34 @@ export function buildEditorialMotionRenderModel(episode,frame,fps) {
   const objects=resolved.visibleObjects.map(object=>objectModel(object,resolved.focusId,resolved.objects));
   // Draw every parent background before every foreground object. Membership is
   // never inferred from screen position; it comes only from the state resolver.
-  objects.sort((a,b)=>Number(!containers.has(a.kind))-Number(!containers.has(b.kind)));
+  const regionDepth=object=>{let depth=0,parent=object.regionId;const visited=new Set([object.id]);
+    while(parent){if(visited.has(parent))fail('region-cycle');visited.add(parent);
+      const ancestor=objects.find(value=>value.id===parent);if(!ancestor || ancestor.kind!=='region')fail('region-parent');
+      depth++;parent=ancestor.regionId;}
+    return depth;};
+  const maxDepth=Math.max(0,...objects.filter(object=>object.kind==='region').map(regionDepth));
+  const layer=object=>object.kind==='region'?regionDepth(object):containers.has(object.kind)?maxDepth+1:maxDepth+2;
+  objects.sort((a,b)=>layer(a)-layer(b));
   for(const child of objects.filter(object=>object.containerId)) {
     const parent=objects.find(object=>object.id===child.containerId);
     if(!parent || child.x<parent.x+24 || child.y<parent.y+parent.headerBottom+16 || child.x+child.width>parent.x+parent.width-24 || child.y+child.height>parent.y+parent.height-24) fail('container-text-overlap');
+    if(parent.kind==='tray' && child.y+Math.max(child.title.y+child.title.height,child.body.y+child.body.height,
+      child.stateText.text?child.stateText.y+child.stateText.height:0)>parent.y+parent.height-64) fail('tray-front-text-overlap');
   }
   const connections=resolved.connections.map(connection=>buildEditorialMotionConnectionModel({...connection,
     objectId:plan.events.find(event=>event.id===connection.id)?.objectId},objects)).filter(Boolean);
+  // A text-free track has no endpoints attached to business objects. Keep its
+  // complete current route clear of all visible object geometry, including the
+  // highlighted stop. Never hide an obstructed route underneath a filled card.
+  for(const track of resolved.tracks){
+    for(let index=1;index<track.points.length;index++){
+      const a=track.points[index-1],b=track.points[index],clearance=8;
+      if(objects.some(object=>Math.min(a.x,b.x)-clearance<object.x+object.width
+        && Math.max(a.x,b.x)+clearance>object.x
+        && Math.min(a.y,b.y)-clearance<object.y+object.height
+        && Math.max(a.y,b.y)+clearance>object.y))fail('track-obstructed');
+    }
+  }
   const title=textBlock(scene.title,{width:1520,fontSize:72,fontWeight:550,lineHeight:1.2,maxHeight:178});
   const captions=(snapshot.subtitles??[]).map(cue=>({cue,range:frameRange(cue,fps)})).filter(({range:cueRange})=>frame>=cueRange.start && frame<cueRange.end);
   if(captions.length>1) fail('caption-overlap');
@@ -164,6 +221,7 @@ export function buildEditorialMotionRenderModel(episode,frame,fps) {
   // transcription confidence or measured alignment for an estimated timeline.
   const caption=current?{...textBlock(current.cue.text,{width:1680,fontSize:44,fontWeight:450,lineHeight:1.35,maxHeight:66}),
     startMs:current.range.start/fps*1000,endMs:current.range.end/fps*1000,timestampMs:null,confidence:null}:null;
-  return {sceneId:scene.id,frame,localFrame,canvas:{width:1920,height:1080},title,caption,objects,connections,
+  const chapters=snapshot.editorialChapters?resolveEditorialChapterFrame(snapshot.editorialChapters,frame):null;
+  return {sceneId:scene.id,frame,localFrame,canvas:{width:1920,height:1080},title,caption,objects,connections,chapters,tracks:resolved.tracks,
     assurance:'deterministic-semantic-geometry-only-not-pixel-acceptance'};
 }

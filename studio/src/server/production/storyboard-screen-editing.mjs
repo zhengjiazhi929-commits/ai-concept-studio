@@ -89,7 +89,11 @@ export function assertTimedStoryboardScreenEditing(content,compiled,renderInput,
     if(entry.panels!==null)fail('screen_editorial_unimplemented_visibility',`${entry.id}.panels`);
     const duration=scene.endFrame-scene.startFrame;
     const boundaries=new Set([0,duration]);
-    for(const event of scene.motionPlan.events){
+    for(const chapter of renderInput.editorialChapters?.chapters??[]){
+      const point=chapter.revealFrame-scene.startFrame;
+      for(const frame of [point-1,point,point+1])if(frame>=0&&frame<duration)boundaries.add(frame);
+    }
+    for(const event of [...scene.motionPlan.events,...(scene.motionPlan.tracks??[]).flatMap(track=>track.states)]){
       for(const point of [event.atFrame,event.atFrame+event.durationFrames]){
         for(const frame of [point-1,point,point+1])if(frame>=0&&frame<duration)boundaries.add(frame);
       }
@@ -100,6 +104,8 @@ export function assertTimedStoryboardScreenEditing(content,compiled,renderInput,
       // count, hidden/retired objects do not. A short declared summary cannot hide prose.
       const model=buildEditorialMotionRenderModel(renderInput,scene.startFrame+frame,30);
       const elements=[element('scene:title','scene','heading',model.title.text)];
+      if(model.chapters) elements.push(element('chrome:chapters','chrome:chapters','detail',
+        model.chapters.chapters.filter(chapter=>chapter.visible).map(chapter=>chapter.label).join(' · ')));
       for(const object of model.objects){
         for(const [field,role] of [['title','label'],['body','detail'],['stateText','label']]){
           if(object[field].text)elements.push(element(`${object.id}:${field}`,object.id,role,object[field].text));
